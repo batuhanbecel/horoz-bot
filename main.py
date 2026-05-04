@@ -24,6 +24,7 @@ COGS = [
     "cogs.utility",
     "cogs.custom_commands",
     "cogs.log_events",
+    "cogs.emoji",
 ]
 
 

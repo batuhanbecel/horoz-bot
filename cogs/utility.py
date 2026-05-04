@@ -148,15 +148,19 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     # /komuttazele
-    @app_commands.command(name="komuttazele", description="Slash komutlarını Discord ile senkronize eder.")
+    @app_commands.command(name="komuttazele", description="Slash komutlarını Discord ile senkronize eder (eski komutları siler).")
     @app_commands.checks.has_permissions(administrator=True)
     async def komuttazele(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        # Önce bu sunucuya özel kayıtlı komutları temizle (eski/artık olmayan komutlar kalır aksi halde)
+        self.bot.tree.clear_commands(guild=interaction.guild)
+        await self.bot.tree.sync(guild=interaction.guild)
+        # Sonra global komutları senkronize et
         synced = await self.bot.tree.sync()
         await interaction.followup.send(
             embed=util_embed(
                 "Komutlar Tazelendi",
-                f"**{len(synced)}** slash komutu Discord ile senkronize edildi.",
+                f"**{len(synced)}** global slash komutu senkronize edildi.\nSunucuya özel eski komutlar temizlendi.",
                 discord.Color.green(),
             ),
             ephemeral=True,

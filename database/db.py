@@ -48,6 +48,15 @@ async def init_db():
             )
         """)
 
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS guild_settings (
+                guild_id    INTEGER NOT NULL,
+                key         TEXT NOT NULL,
+                value       TEXT NOT NULL,
+                PRIMARY KEY (guild_id, key)
+            )
+        """)
+
         await db.commit()
 
 
@@ -127,3 +136,25 @@ async def get_command_names(guild_id: int):
         )
         rows = await cursor.fetchall()
         return [row["name"] for row in rows]
+
+
+# --- Guild Settings ---
+
+async def get_setting(guild_id: int, key: str) -> str | None:
+    async with await get_db() as db:
+        cursor = await db.execute(
+            "SELECT value FROM guild_settings WHERE guild_id=? AND key=?",
+            (guild_id, key),
+        )
+        row = await cursor.fetchone()
+        return row["value"] if row else None
+
+
+async def set_setting(guild_id: int, key: str, value: str):
+    async with await get_db() as db:
+        await db.execute(
+            "INSERT INTO guild_settings (guild_id, key, value) VALUES (?, ?, ?)"
+            " ON CONFLICT(guild_id, key) DO UPDATE SET value=excluded.value",
+            (guild_id, key, value),
+        )
+        await db.commit()

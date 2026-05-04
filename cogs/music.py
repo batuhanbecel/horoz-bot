@@ -573,7 +573,7 @@ class Music(commands.Cog):
         embed.timestamp = discord.utils.utcnow()
         await interaction.response.send_message(embed=embed)
 
-    @music.command(name="sıra-temizle", description="Müzik sırasını temizler.")
+    @music.command(name="sıra-sil", description="Müzik sırasını temizler.")
     async def sira_temizle(self, interaction: discord.Interaction):
         p = self.get_player(interaction.guild_id)
         count = len(p.queue)
@@ -605,7 +605,7 @@ class Music(commands.Cog):
             embed=music_embed("🔁 Döngü", f"Döngü modu **{durum}**.", discord.Color.green())
         )
 
-    @music.command(name="şimdi-çalıyor", description="Şu an çalan şarkıyı gösterir.")
+    @music.command(name="şimdi", description="Şu an çalan şarkıyı gösterir.")
     async def simdi_caliyor(self, interaction: discord.Interaction):
         p = self.get_player(interaction.guild_id)
         if not p.current:

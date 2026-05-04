@@ -10,13 +10,14 @@ def parse_duration(text: str) -> timedelta | None:
     match = re.fullmatch(r"(\d+)([smhd])", text.strip().lower())
     if not match:
         return None
-    value, unit = int(match.group(1)), match.group(2)
-    return {"s": timedelta(seconds=value), "m": timedelta(minutes=value),
-            "h": timedelta(hours=value), "d": timedelta(days=value)}[unit]
+    v, u = int(match.group(1)), match.group(2)
+    return {"s": timedelta(seconds=v), "m": timedelta(minutes=v),
+            "h": timedelta(hours=v),   "d": timedelta(days=v)}[u]
 
 
-def mod_embed(title: str, description: str = "", color: discord.Color = discord.Color.red()) -> discord.Embed:
-    e = discord.Embed(title=title, description=description, color=color)
+def _emb(title: str, desc: str = "", color: discord.Color = discord.Color.red()) -> discord.Embed:
+    e = discord.Embed(title=title, description=desc, color=color)
+    e.set_footer(text="Horoz Bot • Moderasyon")
     e.timestamp = discord.utils.utcnow()
     return e
 
@@ -25,9 +26,9 @@ def hierarchy_ok(interaction: discord.Interaction, target: discord.Member) -> st
     if target == interaction.user:
         return "Kendinize bu işlemi yapamazsınız."
     if target.top_role >= interaction.user.top_role:
-        return "Bu üyeye işlem yapamazsınız (rol hiyerarşisi)."
+        return "Bu üyenin rolü sizin rolünüzden yüksek veya eşit."
     if target.top_role >= interaction.guild.me.top_role:
-        return "Botun rolü bu üyenin rolünden düşük, işlem yapılamaz."
+        return "Bu üyenin rolü botun rolünden yüksek veya eşit."
     return None
 
 
@@ -35,12 +36,10 @@ class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # default_member_permissions=None → komutlar tüm üyelere görünür,
-    # yetki kontrolü her komutun içinde manuel yapılır.
     mod = app_commands.Group(
         name="moderatör",
         description="Moderasyon komutları",
-        default_member_permissions=None,
+        default_member_permissions=None,   # tüm üyelere görünür, yetki içeride kontrol edilir
     )
 
     # /moderatör temizle
@@ -49,46 +48,42 @@ class Moderation(commands.Cog):
     async def temizle(self, interaction: discord.Interaction, miktar: app_commands.Range[int, 1, 100]):
         if not interaction.user.guild_permissions.manage_messages:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Mesajları Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir."), ephemeral=True
             )
         await interaction.response.defer(ephemeral=True)
         deleted = await interaction.channel.purge(limit=miktar)
         await interaction.followup.send(
-            embed=mod_embed("Temizlendi", f"{len(deleted)} mesaj silindi.", discord.Color.green()),
+            embed=_emb("🧹 Temizlendi", f"**{len(deleted)}** mesaj silindi.", discord.Color.green()),
             ephemeral=True,
         )
 
     # /moderatör uyar
-    @mod.command(name="uyar", description="Bir üyeye uyarı verir (infraction kaydı oluşturur).")
+    @mod.command(name="uyar", description="Bir üyeye uyarı verir.")
     @app_commands.describe(üye="Uyarılacak üye", sebep="Uyarı sebebi")
     async def uyar(self, interaction: discord.Interaction, üye: discord.Member, sebep: str = "Belirtilmedi"):
         if not interaction.user.guild_permissions.manage_messages:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Mesajları Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir."), ephemeral=True
             )
-        err = hierarchy_ok(interaction, üye)
-        if err:
-            return await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
+        if err := hierarchy_ok(interaction, üye):
+            return await interaction.response.send_message(embed=_emb("❌ Hiyerarşi Hatası", err), ephemeral=True)
 
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "warn")
         rows = await db.get_infractions(interaction.guild_id, üye.id)
-        await interaction.response.send_message(
-            embed=mod_embed(
-                "Uyarıldı",
-                f"{üye.mention} uyarıldı. Toplam ihlal: **{len(rows)}**\n**Sebep:** {sebep}",
-                discord.Color.yellow(),
-            )
-        )
+
+        embed = _emb("⚠️ Uyarı Verildi", color=discord.Color.yellow())
+        embed.add_field(name="Üye",          value=üye.mention,         inline=True)
+        embed.add_field(name="Moderatör",    value=interaction.user.mention, inline=True)
+        embed.add_field(name="Toplam İhlal", value=str(len(rows)),       inline=True)
+        embed.add_field(name="Sebep",        value=sebep,                inline=False)
+        embed.set_thumbnail(url=üye.display_avatar.url)
+        await interaction.response.send_message(embed=embed)
+
         try:
-            await üye.send(
-                embed=mod_embed(
-                    f"⚠️ {interaction.guild.name} sunucusunda uyarı aldınız",
-                    f"**Sebep:** {sebep}\nToplam ihlal sayınız: **{len(rows)}**",
-                    discord.Color.yellow(),
-                )
-            )
+            dm = _emb(f"⚠️ Uyarı — {interaction.guild.name}", color=discord.Color.yellow())
+            dm.add_field(name="Sebep",        value=sebep,          inline=False)
+            dm.add_field(name="Toplam İhlal", value=str(len(rows)), inline=True)
+            await üye.send(embed=dm)
         except discord.Forbidden:
             pass
 
@@ -98,18 +93,20 @@ class Moderation(commands.Cog):
     async def at(self, interaction: discord.Interaction, üye: discord.Member, sebep: str = "Belirtilmedi"):
         if not interaction.user.guild_permissions.kick_members:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Üye At** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Üye At** yetkisi gereklidir."), ephemeral=True
             )
-        err = hierarchy_ok(interaction, üye)
-        if err:
-            return await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
+        if err := hierarchy_ok(interaction, üye):
+            return await interaction.response.send_message(embed=_emb("❌ Hiyerarşi Hatası", err), ephemeral=True)
 
         await üye.kick(reason=f"{interaction.user}: {sebep}")
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "kick")
-        await interaction.response.send_message(
-            embed=mod_embed("Atıldı", f"{üye.mention} sunucudan atıldı.\n**Sebep:** {sebep}", discord.Color.orange())
-        )
+
+        embed = _emb("👢 Üye Atıldı", color=discord.Color.orange())
+        embed.add_field(name="Üye",       value=f"{üye} (`{üye.id}`)", inline=False)
+        embed.add_field(name="Moderatör", value=interaction.user.mention, inline=True)
+        embed.add_field(name="Sebep",     value=sebep,                   inline=True)
+        embed.set_thumbnail(url=üye.display_avatar.url)
+        await interaction.response.send_message(embed=embed)
 
     # /moderatör yasakla
     @mod.command(name="yasakla", description="Bir üyeyi kalıcı olarak yasaklar.")
@@ -123,134 +120,130 @@ class Moderation(commands.Cog):
     ):
         if not interaction.user.guild_permissions.ban_members:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Üye Yasakla** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Üye Yasakla** yetkisi gereklidir."), ephemeral=True
             )
-        err = hierarchy_ok(interaction, üye)
-        if err:
-            return await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
+        if err := hierarchy_ok(interaction, üye):
+            return await interaction.response.send_message(embed=_emb("❌ Hiyerarşi Hatası", err), ephemeral=True)
 
         await üye.ban(reason=f"{interaction.user}: {sebep}", delete_message_days=mesaj_sil)
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "ban")
-        await interaction.response.send_message(
-            embed=mod_embed("Yasaklandı", f"{üye.mention} yasaklandı.\n**Sebep:** {sebep}")
-        )
+
+        embed = _emb("🔨 Üye Yasaklandı")
+        embed.add_field(name="Üye",           value=f"{üye} (`{üye.id}`)", inline=False)
+        embed.add_field(name="Moderatör",     value=interaction.user.mention, inline=True)
+        embed.add_field(name="Mesaj Silindi", value=f"{mesaj_sil} gün",        inline=True)
+        embed.add_field(name="Sebep",         value=sebep,                    inline=False)
+        embed.set_thumbnail(url=üye.display_avatar.url)
+        await interaction.response.send_message(embed=embed)
 
     # /moderatör sustur
     @mod.command(name="sustur", description="Bir üyeyi timeout ile susturur.")
-    @app_commands.describe(üye="Susturulacak üye", süre="Süre (örn: 10m, 2h, 1d)", sebep="Susturma sebebi")
-    async def sustur(
-        self,
-        interaction: discord.Interaction,
-        üye: discord.Member,
-        süre: str,
-        sebep: str = "Belirtilmedi",
-    ):
+    @app_commands.describe(üye="Susturulacak üye", süre="Süre (10m, 2h, 1d)", sebep="Susturma sebebi")
+    async def sustur(self, interaction: discord.Interaction, üye: discord.Member, süre: str, sebep: str = "Belirtilmedi"):
         if not interaction.user.guild_permissions.moderate_members:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Üyeleri Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Üyeleri Yönet** yetkisi gereklidir."), ephemeral=True
             )
-        err = hierarchy_ok(interaction, üye)
-        if err:
-            return await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
+        if err := hierarchy_ok(interaction, üye):
+            return await interaction.response.send_message(embed=_emb("❌ Hiyerarşi Hatası", err), ephemeral=True)
 
         delta = parse_duration(süre)
         if not delta:
             return await interaction.response.send_message(
-                embed=mod_embed("Hata", "Geçersiz süre. Örnek: `10m`, `2h`, `1d`"), ephemeral=True
+                embed=_emb("❌ Geçersiz Süre", "Format: `10m` · `2h` · `1d` · `30s`"), ephemeral=True
             )
         if delta > timedelta(days=28):
             return await interaction.response.send_message(
-                embed=mod_embed("Hata", "Maksimum susturma süresi 28 gündür."), ephemeral=True
+                embed=_emb("❌ Hata", "Maksimum susturma süresi **28 gün**dür."), ephemeral=True
             )
 
         await üye.timeout(delta, reason=f"{interaction.user}: {sebep}")
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "mute")
-        await interaction.response.send_message(
-            embed=mod_embed(
-                "Susturuldu",
-                f"{üye.mention} **{süre}** süreyle susturuldu.\n**Sebep:** {sebep}",
-                discord.Color.yellow(),
-            )
-        )
 
-    # /moderatör sustur-kaldır
-    @mod.command(name="sustur-kaldır", description="Bir üyenin susturmasını kaldırır.")
+        embed = _emb("🔇 Susturuldu", color=discord.Color.yellow())
+        embed.add_field(name="Üye",       value=üye.mention,             inline=True)
+        embed.add_field(name="Süre",      value=süre,                    inline=True)
+        embed.add_field(name="Moderatör", value=interaction.user.mention, inline=True)
+        embed.add_field(name="Sebep",     value=sebep,                   inline=False)
+        embed.set_thumbnail(url=üye.display_avatar.url)
+        await interaction.response.send_message(embed=embed)
+
+    # /moderatör sus-kaldır
+    @mod.command(name="sus-kaldır", description="Bir üyenin susturmasını kaldırır.")
     @app_commands.describe(üye="Susturması kaldırılacak üye")
-    async def sustu_kaldir(self, interaction: discord.Interaction, üye: discord.Member):
+    async def sus_kaldir(self, interaction: discord.Interaction, üye: discord.Member):
         if not interaction.user.guild_permissions.moderate_members:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Üyeleri Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Üyeleri Yönet** yetkisi gereklidir."), ephemeral=True
             )
         if not üye.is_timed_out():
             return await interaction.response.send_message(
-                embed=mod_embed("Hata", "Bu üye zaten susturulmuş değil."), ephemeral=True
+                embed=_emb("⚠️ Hata", "Bu üye zaten susturulmuş değil."), ephemeral=True
             )
         await üye.timeout(None)
-        await interaction.response.send_message(
-            embed=mod_embed("Susturma Kaldırıldı", f"{üye.mention} artık konuşabilir.", discord.Color.green())
-        )
+        embed = _emb("🔊 Susturma Kaldırıldı", color=discord.Color.green())
+        embed.add_field(name="Üye",       value=üye.mention,             inline=True)
+        embed.add_field(name="Moderatör", value=interaction.user.mention, inline=True)
+        embed.set_thumbnail(url=üye.display_avatar.url)
+        await interaction.response.send_message(embed=embed)
 
     # /moderatör yavaşmod
-    @mod.command(name="yavaşmod", description="Kanalda yavaş mod süresini ayarlar.")
-    @app_commands.describe(saniye="Mesajlar arası bekleme süresi (0 = kapalı, max 21600)", kanal="Kanal (boş = mevcut kanal)")
+    @mod.command(name="yavaşmod", description="Kanal yavaş modunu ayarlar (0 = kapalı).")
+    @app_commands.describe(saniye="Bekleme süresi saniye (0-21600)", kanal="Kanal (boş = mevcut)")
     async def yavaşmod(
         self,
         interaction: discord.Interaction,
-        saniye: app_commands.Range[int, 0, 21600],
+        saniye: app_commands.Range[int, 0, 21600],  # type: ignore[type-arg]
         kanal: discord.TextChannel = None,
     ):
         if not interaction.user.guild_permissions.manage_channels:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Kanalları Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Kanalları Yönet** yetkisi gereklidir."), ephemeral=True
             )
         target = kanal or interaction.channel
         await target.edit(slowmode_delay=saniye)
-        desc = f"{target.mention} kanalında yavaş mod {'**%d saniye** olarak ayarlandı.' % saniye if saniye else 'kapatıldı.'}"
-        color = discord.Color.green() if saniye == 0 else discord.Color.orange()
-        await interaction.response.send_message(embed=mod_embed("Yavaş Mod", desc, color), ephemeral=True)
+        if saniye == 0:
+            embed = _emb("🕐 Yavaş Mod Kapatıldı", f"{target.mention} kanalında yavaş mod kaldırıldı.", discord.Color.green())
+        else:
+            embed = _emb("🕐 Yavaş Mod Açıldı", f"{target.mention} kanalında **{saniye} saniye** yavaş mod uygulandı.", discord.Color.orange())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # /moderatör kilitle
     @mod.command(name="kilitle", description="Kanalı kilitler, üyeler mesaj gönderemez.")
-    @app_commands.describe(kanal="Kilitlenecek kanal (boş = mevcut kanal)", sebep="Kilitleme sebebi")
-    async def kilitle(
-        self,
-        interaction: discord.Interaction,
-        kanal: discord.TextChannel = None,
-        sebep: str = "Belirtilmedi",
-    ):
+    @app_commands.describe(kanal="Kilitlenecek kanal (boş = mevcut)", sebep="Kilitleme sebebi")
+    async def kilitle(self, interaction: discord.Interaction, kanal: discord.TextChannel = None, sebep: str = "Belirtilmedi"):
         if not interaction.user.guild_permissions.manage_channels:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Kanalları Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Kanalları Yönet** yetkisi gereklidir."), ephemeral=True
             )
         target = kanal or interaction.channel
-        overwrite = target.overwrites_for(interaction.guild.default_role)
-        overwrite.send_messages = False
-        await target.set_permissions(interaction.guild.default_role, overwrite=overwrite, reason=f"{interaction.user}: {sebep}")
-        await interaction.response.send_message(
-            embed=mod_embed("🔒 Kanal Kilitlendi", f"{target.mention} kilitlendi.\n**Sebep:** {sebep}")
-        )
+        ow = target.overwrites_for(interaction.guild.default_role)
+        ow.send_messages = False
+        await target.set_permissions(interaction.guild.default_role, overwrite=ow, reason=f"{interaction.user}: {sebep}")
 
-    # /moderatör kilidi-kaldır
-    @mod.command(name="kilidi-kaldır", description="Kilitli kanalın kilidini açar.")
-    @app_commands.describe(kanal="Kilidi açılacak kanal (boş = mevcut kanal)")
-    async def kilidi_kaldir(self, interaction: discord.Interaction, kanal: discord.TextChannel = None):
+        embed = _emb("🔒 Kanal Kilitlendi")
+        embed.add_field(name="Kanal",     value=target.mention,          inline=True)
+        embed.add_field(name="Moderatör", value=interaction.user.mention, inline=True)
+        embed.add_field(name="Sebep",     value=sebep,                   inline=False)
+        await interaction.response.send_message(embed=embed)
+
+    # /moderatör kilit-aç
+    @mod.command(name="kilit-aç", description="Kilitli kanalın kilidini açar.")
+    @app_commands.describe(kanal="Kilidi açılacak kanal (boş = mevcut)")
+    async def kilit_ac(self, interaction: discord.Interaction, kanal: discord.TextChannel = None):
         if not interaction.user.guild_permissions.manage_channels:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Kanalları Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Kanalları Yönet** yetkisi gereklidir."), ephemeral=True
             )
         target = kanal or interaction.channel
-        overwrite = target.overwrites_for(interaction.guild.default_role)
-        overwrite.send_messages = None
-        await target.set_permissions(interaction.guild.default_role, overwrite=overwrite)
-        await interaction.response.send_message(
-            embed=mod_embed("🔓 Kanal Kilidi Açıldı", f"{target.mention} artık açık.", discord.Color.green())
-        )
+        ow = target.overwrites_for(interaction.guild.default_role)
+        ow.send_messages = None
+        await target.set_permissions(interaction.guild.default_role, overwrite=ow)
+
+        embed = _emb("🔓 Kilit Açıldı", color=discord.Color.green())
+        embed.add_field(name="Kanal",     value=target.mention,          inline=True)
+        embed.add_field(name="Moderatör", value=interaction.user.mention, inline=True)
+        await interaction.response.send_message(embed=embed)
 
     # /moderatör ihlaller
     @mod.command(name="ihlaller", description="Bir üyenin ihlal geçmişini gösterir.")
@@ -258,50 +251,56 @@ class Moderation(commands.Cog):
     async def ihlaller(self, interaction: discord.Interaction, üye: discord.Member):
         if not interaction.user.guild_permissions.manage_messages:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Mesajları Yönet** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir."), ephemeral=True
             )
         rows = await db.get_infractions(interaction.guild_id, üye.id)
         if not rows:
             return await interaction.response.send_message(
-                embed=mod_embed("İhlaller", f"{üye.mention} için kayıtlı ihlal yok.", discord.Color.green()),
+                embed=_emb("✅ Temiz Geçmiş", f"{üye.mention} için kayıtlı ihlal bulunamadı.", discord.Color.green()),
                 ephemeral=True,
             )
         embed = discord.Embed(
-            title=f"{üye.display_name} — İhlaller ({len(rows)})",
+            title=f"📋 İhlal Geçmişi — {üye.display_name}",
+            description=f"Toplam **{len(rows)}** ihlal",
             color=discord.Color.orange(),
         )
+        embed.set_thumbnail(url=üye.display_avatar.url)
+        embed.set_footer(text="Horoz Bot • Moderasyon")
+        embed.timestamp = discord.utils.utcnow()
+
+        TYPE_EMOJI = {"warn": "⚠️", "kick": "👢", "ban": "🔨", "mute": "🔇"}
         for i, row in enumerate(rows[:10], 1):
             mod = interaction.guild.get_member(row["mod_id"])
             mod_name = mod.display_name if mod else f"ID:{row['mod_id']}"
+            emoji    = TYPE_EMOJI.get(row["type"], "•")
             embed.add_field(
-                name=f"#{i} — {row['type'].upper()} ({row['created_at'][:10]})",
-                value=f"**Mod:** {mod_name}\n**Sebep:** {row['reason'] or 'Yok'}",
-                inline=False,
+                name=f"{emoji} #{i} — {row['type'].upper()}",
+                value=f"**Tarih:** {row['created_at'][:10]}\n**Mod:** {mod_name}\n**Sebep:** {row['reason'] or 'Belirtilmedi'}",
+                inline=True,
             )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    # /moderatör ihlal-temizle
-    @mod.command(name="ihlal-temizle", description="Bir üyenin tüm ihlallerini temizler.")
+    # /moderatör ihlal-sil
+    @mod.command(name="ihlal-sil", description="Bir üyenin tüm ihlallerini temizler.")
     @app_commands.describe(üye="İhlalleri temizlenecek üye")
-    async def ihlal_temizle(self, interaction: discord.Interaction, üye: discord.Member):
+    async def ihlal_sil(self, interaction: discord.Interaction, üye: discord.Member):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
-                embed=mod_embed("Yetki Hatası", "Bu komut için **Yönetici** yetkisi gereklidir."),
-                ephemeral=True,
+                embed=_emb("❌ Yetersiz Yetki", "Bu komut için **Yönetici** yetkisi gereklidir."), ephemeral=True
             )
         await db.clear_infractions(interaction.guild_id, üye.id)
-        await interaction.response.send_message(
-            embed=mod_embed("Temizlendi", f"{üye.mention} tüm ihlalleri silindi.", discord.Color.green()),
-            ephemeral=True,
-        )
+        embed = _emb("🗑️ İhlaller Temizlendi", color=discord.Color.green())
+        embed.add_field(name="Üye",    value=üye.mention,              inline=True)
+        embed.add_field(name="İşlem",  value="Tüm ihlaller silindi",   inline=True)
+        embed.set_thumbnail(url=üye.display_avatar.url)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
         if isinstance(error, app_commands.BotMissingPermissions):
-            await send(embed=mod_embed("Bot Yetki Hatası", "Botun bu işlem için yeterli yetkisi yok."), ephemeral=True)
+            await send(embed=_emb("❌ Bot Yetki Hatası", "Botun bu işlem için yeterli yetkisi yok."), ephemeral=True)
         else:
-            await send(embed=mod_embed("Hata", str(error)), ephemeral=True)
+            await send(embed=_emb("❌ Hata", str(error)), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

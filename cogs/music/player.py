@@ -87,10 +87,13 @@ class Music(commands.Cog):
 
         try:
             info = await loop.run_in_executor(None, _fetch)
-        except Exception:
+        except Exception as e:
+            print(f"[fetch_playlist] Hata: {e}")
             return []
 
-        entries = info.get("entries", [])[:MAX_PLAYLIST]
+        if not info:
+            return []
+        entries = (info.get("entries") or [])[:MAX_PLAYLIST]
         tracks = []
         for e in entries:
             if not e:

@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 SEKIZ_TOP_YANIT = [
@@ -16,11 +16,44 @@ SEKIZ_TOP_YANIT = [
     "Çok şüpheli.", "Pek sanmıyorum.", "Kesinlikle hayır.",
 ]
 
+TÜRKÇE_AYLAR = {
+    "ocak": 1, "şubat": 2, "mart": 3, "nisan": 4,
+    "mayıs": 5, "haziran": 6, "temmuz": 7, "ağustos": 8,
+    "eylül": 9, "ekim": 10, "kasım": 11, "aralık": 12,
+}
+
 
 def fun_embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
     e = discord.Embed(title=title, description=description, color=color)
     e.timestamp = discord.utils.utcnow()
     return e
+
+
+def parse_datetime(tarih: str, saat: str) -> datetime | None:
+    """'25 Mayıs 2025' veya '25.05.2025' + '20:00' → UTC datetime"""
+    tarih = tarih.strip()
+    saat = saat.strip()
+
+    # DD.MM.YYYY HH:MM
+    for fmt in ("%d.%m.%Y %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(f"{tarih} {saat}", fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+
+    # "25 Mayıs 2025"
+    parts = tarih.split()
+    if len(parts) == 3:
+        gun, ay_str, yil = parts
+        ay = TÜRKÇE_AYLAR.get(ay_str.lower())
+        if ay:
+            try:
+                h, m = (int(x) for x in (saat.split(":") + ["0"])[:2])
+                return datetime(int(yil), ay, int(gun), h, m, tzinfo=timezone.utc)
+            except (ValueError, IndexError):
+                pass
+
+    return None
 
 
 class PollView(discord.ui.View):
@@ -62,34 +95,6 @@ class PollButton(discord.ui.Button):
         self.poll.votes[uid] = self.index
         self.poll.counts[self.index] += 1
         await interaction.response.edit_message(embed=self.poll.build_embed(), view=self.poll)
-
-
-class EventView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.attendees: set[int] = set()
-
-    @discord.ui.button(label="✅ Katılıyorum", style=discord.ButtonStyle.success)
-    async def katılıyorum(self, interaction: discord.Interaction, button: discord.ui.Button):
-        uid = interaction.user.id
-        if uid in self.attendees:
-            self.attendees.discard(uid)
-            await interaction.response.send_message("Katılımınız iptal edildi.", ephemeral=True)
-        else:
-            self.attendees.add(uid)
-            await interaction.response.send_message(
-                f"Etkinliğe katılım kaydınız alındı! Toplam: **{len(self.attendees)}** kişi.", ephemeral=True
-            )
-
-    @discord.ui.button(label="👥 Katılımcılar", style=discord.ButtonStyle.secondary)
-    async def katılımcılar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.attendees:
-            await interaction.response.send_message("Henüz katılımcı yok.", ephemeral=True)
-            return
-        mentions = [f"<@{uid}>" for uid in self.attendees]
-        await interaction.response.send_message(
-            f"**Katılımcılar ({len(self.attendees)}):**\n" + ", ".join(mentions), ephemeral=True
-        )
 
 
 class Fun(commands.Cog):
@@ -160,16 +165,18 @@ class Fun(commands.Cog):
         embed.set_footer(text=f"Anketi oluşturan: {interaction.user.display_name} | Toplam oy: 0")
         await interaction.response.send_message(embed=embed, view=view)
 
-    # /etkinlik
-    @app_commands.command(name="etkinlik", description="Sunucuda bir etkinlik duyurusu oluşturur.")
+    # /etkinlik — Discord Scheduled Event oluşturur
+    @app_commands.command(name="etkinlik", description="Discord sunucu etkinliği oluşturur ve isteğe bağlı duyurur.")
     @app_commands.describe(
         başlık="Etkinlik başlığı",
         açıklama="Etkinlik açıklaması",
-        tarih="Tarih (örn: 25 Mayıs 2025)",
-        saat="Saat (örn: 20:00)",
-        ses_kanalı="Etkinliğin gerçekleşeceği ses kanalı (sunucudan seç)",
-        konum="Yazılı konum / adres (ses kanalı seçilmezse)",
-        resim="Etkinlik görseli (dosya yükle)",
+        tarih="Başlangıç tarihi (örn: 25 Mayıs 2025 veya 25.05.2025)",
+        saat="Başlangıç saati — UTC (örn: 20:00)",
+        bitiş_saati="Bitiş saati — UTC (örn: 22:00). Dış konumlar için zorunlu.",
+        ses_kanalı="Etkinliğin gerçekleşeceği ses kanalı",
+        konum="Yazılı konum / adres (ses kanalı yoksa)",
+        resim="Etkinlik kapak görseli (dosya yükle)",
+        duyuru_kanalı="Etkinlik bağlantısı bu kanala gönderilir (örn: #duyuru)",
     )
     @app_commands.checks.has_permissions(manage_events=True)
     async def etkinlik(
@@ -179,48 +186,150 @@ class Fun(commands.Cog):
         açıklama: str,
         tarih: str,
         saat: str,
+        bitiş_saati: str | None = None,
         ses_kanalı: discord.VoiceChannel | None = None,
         konum: str | None = None,
         resim: discord.Attachment | None = None,
+        duyuru_kanalı: discord.TextChannel | None = None,
     ):
-        embed = discord.Embed(
-            title=f"📅 {başlık}",
-            description=açıklama,
-            color=discord.Color.purple(),
-            timestamp=datetime.now(timezone.utc),
-        )
-        embed.add_field(name="📆 Tarih", value=tarih, inline=True)
-        embed.add_field(name="🕐 Saat", value=saat, inline=True)
+        await interaction.response.defer(ephemeral=True)
 
-        if ses_kanalı:
-            embed.add_field(name="🔊 Ses Kanalı", value=ses_kanalı.mention, inline=True)
-        elif konum:
-            embed.add_field(name="📍 Konum", value=konum, inline=True)
+        start_time = parse_datetime(tarih, saat)
+        if start_time is None:
+            await interaction.followup.send(
+                embed=fun_embed(
+                    "Hata",
+                    "Tarih formatı tanınamadı.\n"
+                    "Desteklenen formatlar:\n"
+                    "• `25 Mayıs 2025` `20:00`\n"
+                    "• `25.05.2025` `20:00`",
+                    discord.Color.red(),
+                ),
+                ephemeral=True,
+            )
+            return
 
-        if resim:
-            if resim.content_type and resim.content_type.startswith("image/"):
-                embed.set_image(url=resim.url)
-            else:
-                await interaction.response.send_message(
-                    embed=fun_embed("Hata", "Yüklenen dosya bir resim olmalıdır.", discord.Color.red()),
+        if start_time <= discord.utils.utcnow():
+            await interaction.followup.send(
+                embed=fun_embed("Hata", "Başlangıç zamanı geçmişte olamaz.", discord.Color.red()),
+                ephemeral=True,
+            )
+            return
+
+        end_time: datetime | None = None
+        if bitiş_saati:
+            end_time = parse_datetime(tarih, bitiş_saati)
+            if end_time is None:
+                await interaction.followup.send(
+                    embed=fun_embed("Hata", "Bitiş saati formatı tanınamadı. Örn: `22:00`", discord.Color.red()),
                     ephemeral=True,
                 )
                 return
 
+        # Dış konum için Discord, bitiş saati zorunlu kılar
+        if ses_kanalı is None and end_time is None:
+            end_time = start_time + timedelta(hours=1)
+
+        # Kapak görseli bytes olarak indir
+        image_bytes: bytes | None = None
+        if resim:
+            if not (resim.content_type and resim.content_type.startswith("image/")):
+                await interaction.followup.send(
+                    embed=fun_embed("Hata", "Yüklenen dosya bir resim olmalıdır.", discord.Color.red()),
+                    ephemeral=True,
+                )
+                return
+            image_bytes = await resim.read()
+
+        # Scheduled Event oluştur
+        event_kwargs: dict = dict(
+            name=başlık,
+            description=açıklama,
+            start_time=start_time,
+            privacy_level=discord.PrivacyLevel.guild_only,
+        )
+
+        if ses_kanalı:
+            event_kwargs["entity_type"] = discord.EntityType.voice
+            event_kwargs["channel"] = ses_kanalı
+            if end_time:
+                event_kwargs["end_time"] = end_time
+        else:
+            event_kwargs["entity_type"] = discord.EntityType.external
+            event_kwargs["location"] = konum or "Belirtilmedi"
+            event_kwargs["end_time"] = end_time
+
+        if image_bytes:
+            event_kwargs["image"] = image_bytes
+
+        try:
+            scheduled_event = await interaction.guild.create_scheduled_event(**event_kwargs)
+        except discord.HTTPException as exc:
+            await interaction.followup.send(
+                embed=fun_embed("Hata", f"Etkinlik oluşturulamadı: {exc}", discord.Color.red()),
+                ephemeral=True,
+            )
+            return
+
+        event_url = f"https://discord.com/events/{interaction.guild.id}/{scheduled_event.id}"
+
+        # Özet embed
+        embed = discord.Embed(
+            title=f"📅 {başlık}",
+            description=açıklama,
+            color=discord.Color.purple(),
+            url=event_url,
+            timestamp=start_time,
+        )
+        embed.add_field(name="📆 Başlangıç", value=f"<t:{int(start_time.timestamp())}:F>", inline=True)
+        if end_time:
+            embed.add_field(name="🏁 Bitiş", value=f"<t:{int(end_time.timestamp())}:t>", inline=True)
+        if ses_kanalı:
+            embed.add_field(name="🔊 Ses Kanalı", value=ses_kanalı.mention, inline=True)
+        elif konum:
+            embed.add_field(name="📍 Konum", value=konum, inline=True)
+        embed.add_field(name="🔗 Etkinlik Bağlantısı", value=f"[Discord'da Aç]({event_url})", inline=False)
+        if resim and image_bytes:
+            embed.set_image(url=resim.url)
         embed.set_footer(
             text=f"Oluşturan: {interaction.user.display_name}",
             icon_url=interaction.user.display_avatar.url,
         )
-        view = EventView()
-        await interaction.response.send_message(embed=embed, view=view)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+        # Duyuru kanalına gönder
+        if duyuru_kanalı:
+            duyuru_embed = discord.Embed(
+                title=f"📣 Yeni Etkinlik: {başlık}",
+                description=f"{açıklama}\n\n[**→ Etkinliğe Git**]({event_url})",
+                color=discord.Color.purple(),
+                url=event_url,
+                timestamp=start_time,
+            )
+            duyuru_embed.add_field(name="📆 Başlangıç", value=f"<t:{int(start_time.timestamp())}:F>", inline=True)
+            if ses_kanalı:
+                duyuru_embed.add_field(name="🔊 Ses Kanalı", value=ses_kanalı.mention, inline=True)
+            elif konum:
+                duyuru_embed.add_field(name="📍 Konum", value=konum, inline=True)
+            if resim and image_bytes:
+                duyuru_embed.set_image(url=resim.url)
+            duyuru_embed.set_footer(
+                text=f"Oluşturan: {interaction.user.display_name}",
+                icon_url=interaction.user.display_avatar.url,
+            )
+            try:
+                await duyuru_kanalı.send(embed=duyuru_embed)
+            except discord.Forbidden:
+                pass  # kanal yazma izni yoksa sessizce geç
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message(
-                "Bu komutu kullanmak için gerekli yetkiye sahip değilsiniz.", ephemeral=True
-            )
+        msg = "Bu komutu kullanmak için gerekli yetkiye sahip değilsiniz." \
+            if isinstance(error, app_commands.MissingPermissions) else str(error)
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=fun_embed("Hata", msg, discord.Color.red()), ephemeral=True)
         else:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(embed=fun_embed("Hata", msg, discord.Color.red()), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

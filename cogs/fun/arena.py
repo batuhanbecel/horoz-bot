@@ -2,20 +2,18 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import random
-from ._shared import fun_embed
+import math
 
-# ── Hasar Hesaplama ─────────────────────────────────────────────────────────────
-# Eylemler: "kılıç" | "büyü" | "kalkan"
-# Kılıç:  20-35 dmg, %100 isabet, Kalkan tamamen bloklar
-# Büyü:   30-45 dmg, %80 isabet, Kalkan'ı %55 oranında deler
-# Kalkan: Kılıcı tamamen engeller, büyüden %55 azaltır
+# ── Sabitler ────────────────────────────────────────────────────────────────────
 
 _EYLEM_EMOJI = {"kılıç": "⚔️", "büyü": "🔮", "kalkan": "🛡️"}
 _EYLEM_LABEL = {"kılıç": "Kılıç", "büyü": "Büyü", "kalkan": "Kalkan"}
 
-MAKS_HP   = 150
-MAKS_TUR  = 20
+MAKS_HP  = 150
+MAKS_TUR = 20
 
+
+# ── Yardımcı fonksiyonlar ────────────────────────────────────────────────────────
 
 def _hasar(saldirgan: str, savunmaci: str) -> tuple[int, str]:
     """Saldırganın eylemi → savunmacıya verilen (hasar, açıklama)."""
@@ -33,7 +31,7 @@ def _hasar(saldirgan: str, savunmaci: str) -> tuple[int, str]:
 
     # büyü
     if random.random() > 0.80:
-        return 0, "🔮 Büyü ıskaldı!"
+        return 0, "🔮 Büyü ıskaladı!"
     dmg = random.randint(30, 45)
     if savunmaci == "kalkan":
         dmg = int(dmg * 0.45)
@@ -44,11 +42,12 @@ def _hasar(saldirgan: str, savunmaci: str) -> tuple[int, str]:
     return dmg, f"🔮 Büyü **{dmg}** hasar verdi"
 
 
-def _hp_bar(hp: int) -> str:
-    hp = max(0, hp)
-    filled = round(hp / MAKS_HP * 12)
-    bar = "█" * filled + "░" * (12 - filled)
-    return f"`{bar}` **{hp}/{MAKS_HP}**"
+def _kalp(hp: int) -> str:
+    """150 HP → 5 kalp (❤️ dolu, 💔 kırık)."""
+    if hp <= 0:
+        return "💔💔💔💔💔"
+    full = min(5, math.ceil(hp / MAKS_HP * 5))
+    return "❤️" * full + "💔" * (5 - full)
 
 
 # ── Tekrar Oyna ─────────────────────────────────────────────────────────────────
@@ -95,31 +94,42 @@ class ArenaView(discord.ui.View):
 
     def _embed(self, son_log: str = "") -> discord.Embed:
         p1, p2 = self.oyuncular
+
         e = discord.Embed(
-            title=f"⚔️ Arena Dövüşü — Tur {self.tur}/{MAKS_TUR}",
-            color=discord.Color.dark_red(),
+            title="⚔️  A R E N A  D Ö V Ü Ş Ü",
+            color=discord.Color.from_rgb(180, 30, 30),
         )
-        e.add_field(
-            name=f"❤️ {p1.display_name}",
-            value=_hp_bar(self.hp[0]),
-            inline=False,
-        )
-        e.add_field(
-            name=f"❤️ {p2.display_name}",
-            value=_hp_bar(self.hp[1]),
-            inline=False,
-        )
+
+        # ── Oyuncu kalpleri (3 inline field → yan yana) ──────────────────────
+        e.add_field(name=f"🗡️ {p1.display_name}", value=_kalp(self.hp[0]), inline=True)
+        e.add_field(name=f"Tur {self.tur} / {MAKS_TUR}",  value="⚔️",               inline=True)
+        e.add_field(name=f"🗡️ {p2.display_name}", value=_kalp(self.hp[1]), inline=True)
+
+        # ── Seçim durumu ─────────────────────────────────────────────────────
+        durum = []
+        for oyuncu in self.oyuncular:
+            if oyuncu.id in self.seçimler:
+                durum.append(f"✅  **{oyuncu.display_name}** seçimini yaptı")
+            else:
+                durum.append(f"⏳  **{oyuncu.display_name}** bekleniyor...")
+        e.add_field(name="─────────────────────────────", value="\n".join(durum), inline=False)
+
+        # ── Tur özeti ────────────────────────────────────────────────────────
         if son_log:
             e.add_field(name=f"Tur {self.tur - 1} Özeti", value=son_log, inline=False)
 
-        beklenenler = []
-        for idx, oyuncu in enumerate(self.oyuncular):
-            if oyuncu.id in self.seçimler:
-                beklenenler.append(f"✅ {oyuncu.display_name}")
-            else:
-                beklenenler.append(f"⏳ {oyuncu.display_name}")
-        e.add_field(name="Durum", value="\n".join(beklenenler), inline=False)
-        e.set_footer(text="Eylemini seç • Kılıç: güvenli | Büyü: güçlü | Kalkan: savunma")
+        e.set_footer(text="⚔️ Kılıç: güvenli  •  🔮 Büyü: güçlü  •  🛡️ Kalkan: savunma")
+        e.timestamp = discord.utils.utcnow()
+        return e
+
+    def _embed_bitis(self, başlık: str, renk: discord.Color, son_log: str) -> discord.Embed:
+        p1, p2 = self.oyuncular
+        e = discord.Embed(title=başlık, color=renk)
+        e.add_field(name=f"🗡️ {p1.display_name}", value=_kalp(self.hp[0]), inline=True)
+        e.add_field(name="─ ⚔️ ─",                value="Son Durum",        inline=True)
+        e.add_field(name=f"🗡️ {p2.display_name}", value=_kalp(self.hp[1]), inline=True)
+        if son_log:
+            e.add_field(name="Son Tur", value=son_log, inline=False)
         e.timestamp = discord.utils.utcnow()
         return e
 
@@ -174,23 +184,17 @@ class ArenaView(discord.ui.View):
                 c.disabled = True
 
             if self.hp[0] <= 0 and self.hp[1] <= 0:
-                başlık, renk = "⚔️ Berabere! İkiniz de yıkıldınız.", discord.Color.greyple()
+                başlık, renk = "🤝 Berabere! İkiniz de yıkıldınız.", discord.Color.greyple()
             elif self.hp[0] <= 0:
-                başlık, renk = f"💀 {p2n} kazandı!", discord.Color.green()
+                başlık, renk = f"🏆 {p2n} kazandı!", discord.Color.green()
             elif self.hp[1] <= 0:
-                başlık, renk = f"💀 {p1n} kazandı!", discord.Color.green()
+                başlık, renk = f"🏆 {p1n} kazandı!", discord.Color.green()
             else:
                 kazanan = p1n if self.hp[0] > self.hp[1] else p2n
-                başlık, renk = f"⏱️ Süre bitti! {kazanan} daha fazla HP'yle kazandı.", discord.Color.gold()
-
-            e = discord.Embed(title=başlık, color=renk)
-            e.add_field(name=f"❤️ {p1n}", value=_hp_bar(self.hp[0]), inline=False)
-            e.add_field(name=f"❤️ {p2n}", value=_hp_bar(self.hp[1]), inline=False)
-            e.add_field(name=f"Son Tur", value=son_log, inline=False)
-            e.timestamp = discord.utils.utcnow()
+                başlık, renk = f"⏱️ {kazanan} daha fazla canla hayatta kaldı!", discord.Color.gold()
 
             tekrar = ArenaTekrarView(self.oyuncular[0], self.oyuncular[1])
-            await self.msg.edit(embed=e, view=tekrar)
+            await self.msg.edit(embed=self._embed_bitis(başlık, renk, son_log), view=tekrar)
             tekrar.msg = self.msg
             return
 
@@ -201,8 +205,7 @@ class ArenaView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                e = self._embed("⏰ Süre doldu, dövüş iptal!")
-                e.color = discord.Color.greyple()
+                e = self._embed_bitis("⏰ Süre Doldu — Dövüş İptal!", discord.Color.greyple(), "")
                 await self.msg.edit(embed=e, view=self)
             except discord.HTTPException:
                 pass
@@ -238,11 +241,9 @@ class Arena(commands.Cog):
         view = ArenaView(p1, rakip)
         e    = view._embed()
         e.description = (
-            f"⚔️ **{p1.mention}** vs **{rakip.mention}**\n\n"
-            f"Her tur her ikisi de aynı anda eylemini seçer.\n"
-            f"**Kılıç**: güvenli hasar (Kalkan bloklar)\n"
-            f"**Büyü**: güçlü ama ıskayabilir (Kalkanı deler)\n"
-            f"**Kalkan**: Kılıcı tamamen, Büyüyü %55 azaltır"
+            f"### {p1.mention}  ⚔️  {rakip.mention}\n"
+            f"-# Her tur eylemini **gizlice** seçersin — ikisi de seçince açıklanır.\n"
+            f"-# ⚔️ **Kılıç** güvenli vurur · 🔮 **Büyü** Kalkanı deler · 🛡️ **Kalkan** Kılıcı bloklar"
         )
         await interaction.response.send_message(embed=e, view=view)
         view.msg = await interaction.original_response()

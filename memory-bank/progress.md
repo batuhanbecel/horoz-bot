@@ -1,6 +1,6 @@
 # Progress
 
-## Çalışan Özellikler (v1.0)
+## Çalışan Özellikler (v1.1)
 
 ### ✅ Temel Altyapı
 - Bot başlatma, cog yükleme, slash command sync
@@ -11,14 +11,16 @@
 ### ✅ Moderasyon (`/moderatör`)
 - temizle, at, yasakla, sustur, sustu-kaldır
 - ihlaller, ihlal-temizle
-- Role hiyerarşi kontrolü
-- Infraction DB kaydı
+- Role hiyerarşi kontrolü, infraction DB kaydı
 
-### ✅ Müzik (`/müzik`)
-- çal (URL veya arama), ara (5 sonuç + buton seçimi)
+### ✅ Müzik (`/müzik`) — v1.1 güncellendi
+- çal: tekil şarkı (URL veya arama) + YouTube playlist desteği
+- ara: 5 sonuç listele, buton ile seç
 - atla, duraklat, devam, dur
-- ses (0-200%), sıra, sıra-temizle, döngü
-- Guild başına ayrı player state
+- ses (0-200%), sıra (ilk 10 + footer), sıra-temizle, döngü
+- şimdi-çalıyor: mevcut şarkı + döngü/ses durumu
+- Lazy stream URL resolution (süresi dolmuş URL otomatik yenilenir)
+- Playlist: max 100 şarkı, flat extraction + lazy resolve
 
 ### ✅ Eğlence
 - yazıtura, zar (özelleştirilebilir)
@@ -27,18 +29,26 @@
 
 ### ✅ Özel Komutlar
 - komutyarat, komutlistele, komutsil, komut
-- Autocomplete desteği
-- Guild başına izole
+- Autocomplete desteği, guild izolasyonu
 
-### ✅ Araçlar
+### ✅ Araçlar — v1.1 güncellendi
 - yardım, kullanici-bilgi, sunucu-bilgi
+- ping (WebSocket latency + renk)
+- avatar (PNG/JPG/WEBP format linkleri)
+- bot-bilgi (uptime, sunucu/üye sayısı, gecikme)
+- komuttazele (administrator → manuel slash sync)
+
+### ✅ Dokümantasyon
+- README.md: Windows + Ubuntu kurulum kılavuzu
+- memory-bank: AGENTS.md uyumlu tam dokümantasyon
 
 ## Yapılmadı / Planlı Değil
-- Levels / XP
-- Economy
+- Levels / XP sistemi
+- Economy sistemi
 - Web dashboard
 - Spotify / SoundCloud
 
-## Bilinen Sorunlar
-- SearchView callback'inde `cal.callback()` doğrudan çağrısı test edilmeli
-- Playlist desteği yok (yt-dlp `extract_flat` şu an sadece ilk sonucu alıyor)
+## Bilinen Kısıtlar
+- Playlist desteği sadece YouTube (yt-dlp genel URL desteği var ama test edilmedi)
+- Sıra görünümü 10 şarkı ile sınırlı (pagination yok)
+- Moderasyon log kanalı yok

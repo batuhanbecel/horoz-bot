@@ -1,26 +1,41 @@
 # Active Context
 
 ## Mevcut Durum
-İlk versiyon (v1.0) tamamlandı. Tüm cog'lar yazıldı, GitHub'a push edildi.
+v1.1 tamamlandı. Playlist desteği, yeni araç komutları ve README eklendi.
 
-## Son Yapılanlar
-- Proje iskeleti oluşturuldu
-- 5 cog yazıldı: moderation, music, fun, utility, custom_commands
-- SQLite veritabanı kuruldu (infractions, custom_commands, mutes tabloları)
-- memory-bank dokümantasyonu AGENTS.md formatına uygun oluşturuldu
-- GitHub repo: https://github.com/batuhanbecel/horoz-bot
+## Son Yapılanlar (v1.1)
+- `cogs/music.py` tamamen yeniden yazıldı:
+  - Playlist desteği (YouTube playlist URL, max 100 şarkı)
+  - Lazy stream URL resolution: track URL'leri çalınmadan hemen önce çözümlenir
+  - Yeni `/müzik şimdi-çalıyor` komutu
+  - Döngü modunda stream URL yeniden çözümlenir (süresi dolmuş URL sorunu çözüldü)
+  - `/müzik ara` → SearchView buton callback düzeltildi
+- `cogs/utility.py` güncellendi:
+  - `/ping` — WebSocket gecikmesi
+  - `/avatar` — kullanıcı avatarı (PNG/JPG/WEBP linkleri)
+  - `/bot-bilgi` — uptime, sunucu sayısı, üye sayısı, gecikme
+  - `/komuttazele` — administrator yetkisiyle manuel slash command sync
+- `README.md` oluşturuldu (Windows + Ubuntu kurulum kılavuzu)
+- GitHub: https://github.com/batuhanbecel/horoz-bot
 
-## Sonraki Adımlar
-1. FFmpeg'i Windows'a kur (geliştirme için) ve PATH'e ekle
-2. `pip install -r requirements.txt` ile bağımlılıkları yükle
-3. `.env` dosyasında token ve guild ID'yi doğrula
-4. `python main.py` ile botu başlat
-5. Discord Developer Portal'da slash komutları sync olmak için birkaç dakika bekle
-6. Ubuntu sunucuya deploy için `systemd` service dosyası oluşturulabilir
+## Komutların Tam Listesi
+### /moderatör (grup)
+temizle, at, yasakla, sustur, sustu-kaldır, ihlaller, ihlal-temizle
 
-## Bilinen Eksikler / Geliştirilebilecekler
-- Müzik: Playlist desteği (şu an sadece tek şarkı)
-- Müzik: `/müzik ara` ile `/müzik çal` entegrasyonu SearchView callback'inde düzeltilebilir
-- Custom commands: Embed desteği (şu an sadece plain text)
-- Moderasyon: `/moderatör yasakla` için sadece ID ile ban (sunucuda olmayan kullanıcı)
-- Logging: Moderasyon işlemlerini log kanalına gönderme
+### /müzik (grup)
+çal (tekil + playlist), ara, atla, duraklat, devam, dur, ses, sıra, sıra-temizle, döngü, şimdi-çalıyor
+
+### Eğlence
+/yazıtura, /zar, /anket, /etkinlik
+
+### Özel Komutlar
+/komutyarat, /komutlistele, /komutsil, /komut (autocomplete)
+
+### Araçlar
+/yardım, /ping, /kullanici-bilgi, /sunucu-bilgi, /avatar, /bot-bilgi, /komuttazele
+
+## Sonraki Olası Geliştirmeler
+- Moderasyon log kanalı (kick/ban/mute olaylarını bir kanala gönder)
+- Custom commands için embed desteği
+- `/moderatör yasakla` ID ile ban (sunucuda olmayan kullanıcı)
+- Müzik: `/müzik sıra` için pagination (10'dan fazla şarkı için butonlu sayfalama)

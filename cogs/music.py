@@ -7,14 +7,20 @@ from collections import deque
 from dataclasses import dataclass, field
 
 
-YTDL_OPTIONS = {
+YTDL_FLAT_OPTIONS = {
     "format": "bestaudio/best",
-    "noplaylist": False,
     "quiet": True,
     "no_warnings": True,
-    "default_search": "ytsearch",
+    "extract_flat": True,
     "source_address": "0.0.0.0",
-    "extract_flat": "in_playlist",
+}
+
+YTDL_STREAM_OPTIONS = {
+    "format": "bestaudio/best",
+    "quiet": True,
+    "no_warnings": True,
+    "noplaylist": True,
+    "source_address": "0.0.0.0",
 }
 
 FFMPEG_OPTIONS = {
@@ -22,14 +28,16 @@ FFMPEG_OPTIONS = {
     "options": "-vn",
 }
 
+MAX_PLAYLIST = 100
+
 
 @dataclass
 class Track:
     title: str
-    url: str
     webpage_url: str
-    duration: int
     requester: discord.Member
+    duration: int = 0
+    stream_url: str | None = None  # None = lazily resolved before playback
 
 
 @dataclass
@@ -41,6 +49,8 @@ class GuildPlayer:
 
 
 def duration_fmt(seconds: int) -> str:
+    if not seconds:
+        return "?"
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
@@ -48,6 +58,14 @@ def duration_fmt(seconds: int) -> str:
 
 def music_embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
     return discord.Embed(title=title, description=description, color=color)
+
+
+def is_url(text: str) -> bool:
+    return text.startswith("http://") or text.startswith("https://")
+
+
+def is_playlist_url(url: str) -> bool:
+    return "list=" in url or "/playlist" in url
 
 
 class Music(commands.Cog):
@@ -74,74 +92,171 @@ class Music(commands.Cog):
             await vc.move_to(interaction.user.voice.channel)
         return vc
 
-    async def fetch_track(self, query: str, requester: discord.Member) -> Track | None:
+    async def resolve_stream_url(self, track: Track) -> bool:
+        """Şarkının akış URL'sini lazily çözer. Başarılıysa True döner."""
+        if track.stream_url:
+            return True
         loop = asyncio.get_event_loop()
-        opts = dict(YTDL_OPTIONS)
-        opts["extract_flat"] = False
-        opts["noplaylist"] = True
 
         def _fetch():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                if not query.startswith("http"):
-                    info = ydl.extract_info(f"ytsearch:{query}", download=False)
-                    if "entries" in info:
-                        info = info["entries"][0]
-                else:
-                    info = ydl.extract_info(query, download=False)
-                    if "entries" in info:
-                        info = info["entries"][0]
+            with yt_dlp.YoutubeDL(YTDL_STREAM_OPTIONS) as ydl:
+                info = ydl.extract_info(track.webpage_url, download=False)
+                return info.get("url"), info.get("duration", 0), info.get("title", track.title)
+
+        try:
+            stream_url, duration, title = await loop.run_in_executor(None, _fetch)
+            track.stream_url = stream_url
+            track.duration = duration
+            track.title = title
+            return bool(stream_url)
+        except Exception:
+            return False
+
+    async def fetch_single(self, query: str, requester: discord.Member) -> Track | None:
+        """Tekil şarkı veya URL için Track döner."""
+        loop = asyncio.get_event_loop()
+
+        def _fetch():
+            with yt_dlp.YoutubeDL(YTDL_STREAM_OPTIONS) as ydl:
+                search = f"ytsearch:{query}" if not is_url(query) else query
+                info = ydl.extract_info(search, download=False)
+                if "entries" in info:
+                    info = info["entries"][0]
                 return info
 
         try:
             info = await loop.run_in_executor(None, _fetch)
             return Track(
                 title=info.get("title", "Bilinmiyor"),
-                url=info["url"],
                 webpage_url=info.get("webpage_url", query),
-                duration=info.get("duration", 0),
                 requester=requester,
+                duration=info.get("duration", 0),
+                stream_url=info.get("url"),
             )
         except Exception:
             return None
 
+    async def fetch_playlist(self, url: str, requester: discord.Member) -> list[Track]:
+        """Playlist URL'sindeki tüm şarkıları (MAX_PLAYLIST kadar) flat olarak getirir."""
+        loop = asyncio.get_event_loop()
+
+        def _fetch():
+            with yt_dlp.YoutubeDL(YTDL_FLAT_OPTIONS) as ydl:
+                return ydl.extract_info(url, download=False)
+
+        try:
+            info = await loop.run_in_executor(None, _fetch)
+        except Exception:
+            return []
+
+        entries = info.get("entries", [])[:MAX_PLAYLIST]
+        tracks = []
+        for e in entries:
+            if not e:
+                continue
+            vid_id = e.get("id", "")
+            webpage = e.get("webpage_url") or e.get("url") or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None)
+            if not webpage:
+                continue
+            tracks.append(Track(
+                title=e.get("title", "Bilinmiyor"),
+                webpage_url=webpage,
+                requester=requester,
+                duration=e.get("duration", 0),
+                stream_url=None,  # lazily resolved
+            ))
+        return tracks
+
+    # --- Playback engine ---
+
     def play_next(self, guild_id: int, vc: discord.VoiceClient):
+        asyncio.run_coroutine_threadsafe(self._play_next(guild_id, vc), self.bot.loop)
+
+    async def _play_next(self, guild_id: int, vc: discord.VoiceClient):
+        if not vc.is_connected():
+            return
         player = self.get_player(guild_id)
+
         if player.loop and player.current:
             track = player.current
+            # Stream URL expires; always re-resolve on loop
+            track.stream_url = None
         elif player.queue:
             track = player.queue.popleft()
             player.current = track
         else:
             player.current = None
-            asyncio.run_coroutine_threadsafe(vc.disconnect(), self.bot.loop)
+            await vc.disconnect()
+            return
+
+        ok = await self.resolve_stream_url(track)
+        if not ok:
+            # Şarkı çözülemedi, sıradakine geç
+            await self._play_next(guild_id, vc)
             return
 
         source = discord.PCMVolumeTransformer(
-            discord.FFmpegPCMAudio(track.url, **FFMPEG_OPTIONS),
+            discord.FFmpegPCMAudio(track.stream_url, **FFMPEG_OPTIONS),
             volume=player.volume,
         )
         vc.play(source, after=lambda e: self.play_next(guild_id, vc))
 
+    # --- Commands ---
+
     music = app_commands.Group(name="müzik", description="Müzik komutları")
 
     # /müzik çal
-    @music.command(name="çal", description="Bir şarkı veya YouTube URL'si çalar.")
-    @app_commands.describe(sorgu="Şarkı adı veya YouTube linki")
+    @music.command(name="çal", description="Şarkı adı, YouTube URL'si veya playlist çalar.")
+    @app_commands.describe(sorgu="Şarkı adı, YouTube linki veya playlist linki")
     async def cal(self, interaction: discord.Interaction, sorgu: str):
         vc = await self.ensure_voice(interaction)
         if not vc:
             return
 
         await interaction.response.defer()
-        track = await self.fetch_track(sorgu, interaction.user)
+        player = self.get_player(interaction.guild_id)
 
+        # Playlist mi?
+        if is_url(sorgu) and is_playlist_url(sorgu):
+            tracks = await self.fetch_playlist(sorgu, interaction.user)
+            if not tracks:
+                await interaction.followup.send(
+                    embed=music_embed("Hata", "Playlist bulunamadı veya boş.", discord.Color.red())
+                )
+                return
+
+            was_empty = not vc.is_playing() and not vc.is_paused()
+            first = tracks[0]
+            rest = tracks[1:]
+
+            if was_empty:
+                player.current = first
+                for t in rest:
+                    player.queue.append(t)
+                await self._play_next(interaction.guild_id, vc)
+                embed = music_embed(
+                    "Playlist Yüklendi",
+                    f"**{len(tracks)}** şarkı sıraya eklendi.\nİlk şarkı: **{first.title}**",
+                    discord.Color.green(),
+                )
+            else:
+                for t in tracks:
+                    player.queue.append(t)
+                embed = music_embed(
+                    "Playlist Sıraya Eklendi",
+                    f"**{len(tracks)}** şarkı sıraya eklendi.",
+                )
+            await interaction.followup.send(embed=embed)
+            return
+
+        # Tekil şarkı
+        track = await self.fetch_single(sorgu, interaction.user)
         if not track:
             await interaction.followup.send(
                 embed=music_embed("Hata", "Şarkı bulunamadı.", discord.Color.red())
             )
             return
 
-        player = self.get_player(interaction.guild_id)
         if vc.is_playing() or vc.is_paused():
             player.queue.append(track)
             await interaction.followup.send(
@@ -153,7 +268,7 @@ class Music(commands.Cog):
             )
         else:
             player.current = track
-            self.play_next(interaction.guild_id, vc)
+            await self._play_next(interaction.guild_id, vc)
             await interaction.followup.send(
                 embed=music_embed(
                     "Şimdi Çalıyor",
@@ -164,18 +279,21 @@ class Music(commands.Cog):
             )
 
     # /müzik ara
-    @music.command(name="ara", description="YouTube'da şarkı arar ve seçim sunar.")
+    @music.command(name="ara", description="YouTube'da şarkı arar ve 5 sonuç listeler.")
     @app_commands.describe(sorgu="Aranacak şarkı")
     async def ara(self, interaction: discord.Interaction, sorgu: str):
         await interaction.response.defer(ephemeral=True)
         loop = asyncio.get_event_loop()
 
         def _search():
-            with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
+            opts = dict(YTDL_FLAT_OPTIONS)
+            opts["default_search"] = "ytsearch5"
+            opts["noplaylist"] = True
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 return ydl.extract_info(f"ytsearch5:{sorgu}", download=False)
 
         info = await loop.run_in_executor(None, _search)
-        entries = info.get("entries", [])[:5]
+        entries = [e for e in info.get("entries", []) if e][:5]
 
         if not entries:
             await interaction.followup.send("Sonuç bulunamadı.", ephemeral=True)
@@ -184,9 +302,10 @@ class Music(commands.Cog):
         embed = discord.Embed(title=f'"{sorgu}" için sonuçlar', color=discord.Color.blurple())
         for i, e in enumerate(entries, 1):
             dur = duration_fmt(e.get("duration", 0))
+            url = e.get("url") or f"https://www.youtube.com/watch?v={e.get('id', '')}"
             embed.add_field(
                 name=f"{i}. {e.get('title', 'Bilinmiyor')}",
-                value=f"Süre: `{dur}` | [Link]({e.get('url', '')})",
+                value=f"Süre: `{dur}` | [Link]({url})",
                 inline=False,
             )
 
@@ -274,7 +393,7 @@ class Music(commands.Cog):
         embed = discord.Embed(title="Müzik Sırası", color=discord.Color.blurple())
         if player.current:
             embed.add_field(
-                name="Şu An Çalıyor",
+                name="▶️ Şu An Çalıyor",
                 value=f"**[{player.current.title}]({player.current.webpage_url})** | `{duration_fmt(player.current.duration)}`",
                 inline=False,
             )
@@ -289,12 +408,13 @@ class Music(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     # /müzik sıra-temizle
-    @music.command(name="sıra-temizle", description="Müzik sırasını temizler.")
+    @music.command(name="sıra-temizle", description="Müzik sırasını temizler (mevcut şarkıyı durdurmaz).")
     async def sira_temizle(self, interaction: discord.Interaction):
         player = self.get_player(interaction.guild_id)
+        count = len(player.queue)
         player.queue.clear()
         await interaction.response.send_message(
-            embed=music_embed("Sıra Temizlendi", "Müzik sırası temizlendi.", discord.Color.green())
+            embed=music_embed("Sıra Temizlendi", f"{count} şarkı sıradan kaldırıldı.", discord.Color.green())
         )
 
     # /müzik döngü
@@ -302,10 +422,30 @@ class Music(commands.Cog):
     async def dongu(self, interaction: discord.Interaction):
         player = self.get_player(interaction.guild_id)
         player.loop = not player.loop
-        durum = "açıldı" if player.loop else "kapatıldı"
+        durum = "açıldı 🔂" if player.loop else "kapatıldı"
         await interaction.response.send_message(
             embed=music_embed("Döngü", f"Döngü modu **{durum}**.", discord.Color.green())
         )
+
+    # /müzik şimdi-çalıyor
+    @music.command(name="şimdi-çalıyor", description="Şu an çalan şarkıyı gösterir.")
+    async def simdi_calıyor(self, interaction: discord.Interaction):
+        player = self.get_player(interaction.guild_id)
+        if not player.current:
+            await interaction.response.send_message(
+                embed=music_embed("Şimdi Çalıyor", "Şu an çalan bir şey yok.", discord.Color.orange()),
+                ephemeral=True,
+            )
+            return
+        t = player.current
+        embed = music_embed(
+            "▶️ Şimdi Çalıyor",
+            f"**[{t.title}]({t.webpage_url})**\n"
+            f"Süre: `{duration_fmt(t.duration)}` | İsteyen: {t.requester.mention}\n"
+            f"Döngü: {'Açık 🔂' if player.loop else 'Kapalı'} | Ses: {int(player.volume * 100)}%",
+            discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed)
 
 
 class SearchView(discord.ui.View):
@@ -314,8 +454,8 @@ class SearchView(discord.ui.View):
         self.entries = entries
         self.user = user
         self.cog = cog
-        for i in range(len(entries)):
-            self.add_item(SearchButton(i + 1, entries[i], user, cog))
+        for i, entry in enumerate(entries):
+            self.add_item(SearchButton(i + 1, entry, user, cog))
 
 
 class SearchButton(discord.ui.Button):
@@ -329,10 +469,40 @@ class SearchButton(discord.ui.Button):
         if interaction.user != self.user:
             await interaction.response.send_message("Bu seçim size ait değil.", ephemeral=True)
             return
+
+        vc = await self.cog.ensure_voice(interaction)
+        if not vc:
+            return
+
+        vid_id = self.entry.get("id", "")
+        url = self.entry.get("url") or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None)
+        if not url:
+            await interaction.response.send_message("URL çözülemedi.", ephemeral=True)
+            return
+
         await interaction.response.defer()
-        url = self.entry.get("url") or self.entry.get("webpage_url", "")
-        fake_interaction = interaction
-        await self.cog.cal.callback(self.cog, fake_interaction, url)
+        player = self.cog.get_player(interaction.guild_id)
+        track = Track(
+            title=self.entry.get("title", "Bilinmiyor"),
+            webpage_url=url,
+            requester=interaction.user,
+            duration=self.entry.get("duration", 0),
+            stream_url=None,
+        )
+
+        if vc.is_playing() or vc.is_paused():
+            player.queue.append(track)
+            await interaction.followup.send(
+                embed=music_embed("Sıraya Eklendi", f"**{track.title}** sıraya eklendi.", discord.Color.blurple()),
+                ephemeral=True,
+            )
+        else:
+            player.current = track
+            await self.cog._play_next(interaction.guild_id, vc)
+            await interaction.followup.send(
+                embed=music_embed("Şimdi Çalıyor", f"**{track.title}**", discord.Color.green()),
+                ephemeral=True,
+            )
         self.view.stop()
 
 

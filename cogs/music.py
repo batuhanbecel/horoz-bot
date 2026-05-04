@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import yt_dlp
 import asyncio
+import random
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -57,7 +58,9 @@ def duration_fmt(seconds: int) -> str:
 
 
 def music_embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
-    return discord.Embed(title=title, description=description, color=color)
+    e = discord.Embed(title=title, description=description, color=color)
+    e.timestamp = discord.utils.utcnow()
+    return e
 
 
 def is_url(text: str) -> bool:
@@ -96,7 +99,7 @@ class Music(commands.Cog):
         """Şarkının akış URL'sini lazily çözer. Başarılıysa True döner."""
         if track.stream_url:
             return True
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _fetch():
             with yt_dlp.YoutubeDL(YTDL_STREAM_OPTIONS) as ydl:
@@ -114,7 +117,7 @@ class Music(commands.Cog):
 
     async def fetch_single(self, query: str, requester: discord.Member) -> Track | None:
         """Tekil şarkı veya URL için Track döner."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _fetch():
             with yt_dlp.YoutubeDL(YTDL_STREAM_OPTIONS) as ydl:
@@ -138,7 +141,7 @@ class Music(commands.Cog):
 
     async def fetch_playlist(self, url: str, requester: discord.Member) -> list[Track]:
         """Playlist URL'sindeki tüm şarkıları (MAX_PLAYLIST kadar) flat olarak getirir."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _fetch():
             with yt_dlp.YoutubeDL(YTDL_FLAT_OPTIONS) as ydl:
@@ -155,7 +158,11 @@ class Music(commands.Cog):
             if not e:
                 continue
             vid_id = e.get("id", "")
-            webpage = e.get("webpage_url") or e.get("url") or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None)
+            webpage = (
+                e.get("webpage_url")
+                or e.get("url")
+                or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None)
+            )
             if not webpage:
                 continue
             tracks.append(Track(
@@ -163,7 +170,7 @@ class Music(commands.Cog):
                 webpage_url=webpage,
                 requester=requester,
                 duration=e.get("duration", 0),
-                stream_url=None,  # lazily resolved
+                stream_url=None,
             ))
         return tracks
 
@@ -178,8 +185,8 @@ class Music(commands.Cog):
         player = self.get_player(guild_id)
 
         if player.loop and player.current:
+            # Döngü modunda aynı şarkıyı tekrar çal; stream URL yeniden çözülmeli
             track = player.current
-            # Stream URL expires; always re-resolve on loop
             track.stream_url = None
         elif player.queue:
             track = player.queue.popleft()
@@ -191,7 +198,7 @@ class Music(commands.Cog):
 
         ok = await self.resolve_stream_url(track)
         if not ok:
-            # Şarkı çözülemedi, sıradakine geç
+            # Çözülemedi, bir sonrakine geç
             await self._play_next(guild_id, vc)
             return
 
@@ -215,6 +222,7 @@ class Music(commands.Cog):
 
         await interaction.response.defer()
         player = self.get_player(interaction.guild_id)
+        is_playing_now = vc.is_playing() or vc.is_paused()
 
         # Playlist mi?
         if is_url(sorgu) and is_playlist_url(sorgu):
@@ -225,23 +233,17 @@ class Music(commands.Cog):
                 )
                 return
 
-            was_empty = not vc.is_playing() and not vc.is_paused()
-            first = tracks[0]
-            rest = tracks[1:]
+            for t in tracks:
+                player.queue.append(t)
 
-            if was_empty:
-                player.current = first
-                for t in rest:
-                    player.queue.append(t)
+            if not is_playing_now:
                 await self._play_next(interaction.guild_id, vc)
                 embed = music_embed(
                     "Playlist Yüklendi",
-                    f"**{len(tracks)}** şarkı sıraya eklendi.\nİlk şarkı: **{first.title}**",
+                    f"**{len(tracks)}** şarkı yüklendi.\nİlk şarkı: **{tracks[0].title}**",
                     discord.Color.green(),
                 )
             else:
-                for t in tracks:
-                    player.queue.append(t)
                 embed = music_embed(
                     "Playlist Sıraya Eklendi",
                     f"**{len(tracks)}** şarkı sıraya eklendi.",
@@ -257,7 +259,7 @@ class Music(commands.Cog):
             )
             return
 
-        if vc.is_playing() or vc.is_paused():
+        if is_playing_now:
             player.queue.append(track)
             await interaction.followup.send(
                 embed=music_embed(
@@ -267,7 +269,8 @@ class Music(commands.Cog):
                 )
             )
         else:
-            player.current = track
+            # Kuyruğun başına ekle, _play_next halleder
+            player.queue.appendleft(track)
             await self._play_next(interaction.guild_id, vc)
             await interaction.followup.send(
                 embed=music_embed(
@@ -283,11 +286,10 @@ class Music(commands.Cog):
     @app_commands.describe(sorgu="Aranacak şarkı")
     async def ara(self, interaction: discord.Interaction, sorgu: str):
         await interaction.response.defer(ephemeral=True)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _search():
             opts = dict(YTDL_FLAT_OPTIONS)
-            opts["default_search"] = "ytsearch5"
             opts["noplaylist"] = True
             with yt_dlp.YoutubeDL(opts) as ydl:
                 return ydl.extract_info(f"ytsearch5:{sorgu}", download=False)
@@ -316,12 +318,17 @@ class Music(commands.Cog):
     @music.command(name="atla", description="Mevcut şarkıyı atlar.")
     async def atla(self, interaction: discord.Interaction):
         vc: discord.VoiceClient = interaction.guild.voice_client
-        if not vc or not vc.is_playing():
+        if not vc or not (vc.is_playing() or vc.is_paused()):
             await interaction.response.send_message(
                 embed=music_embed("Hata", "Şu anda çalan bir şey yok.", discord.Color.red()), ephemeral=True
             )
             return
+        player = self.get_player(interaction.guild_id)
+        # Döngü modunu geçici olarak kapat ki atla çalışsın
+        was_loop = player.loop
+        player.loop = False
         vc.stop()
+        player.loop = was_loop
         await interaction.response.send_message(embed=music_embed("Atlandı", "Şarkı atlandı.", discord.Color.green()))
 
     # /müzik duraklat
@@ -360,6 +367,7 @@ class Music(commands.Cog):
         player = self.get_player(interaction.guild_id)
         player.queue.clear()
         player.current = None
+        player.loop = False
         await vc.disconnect()
         await interaction.response.send_message(embed=music_embed("Durduruldu", "Müzik durduruldu, kanaldan ayrıldım."))
 
@@ -368,14 +376,10 @@ class Music(commands.Cog):
     @app_commands.describe(seviye="Ses seviyesi (0-200)")
     async def ses(self, interaction: discord.Interaction, seviye: app_commands.Range[int, 0, 200]):
         vc: discord.VoiceClient = interaction.guild.voice_client
-        if not vc or not vc.source:
-            await interaction.response.send_message(
-                embed=music_embed("Hata", "Şu anda çalan bir şey yok.", discord.Color.red()), ephemeral=True
-            )
-            return
         player = self.get_player(interaction.guild_id)
         player.volume = seviye / 100
-        vc.source.volume = player.volume
+        if vc and vc.source:
+            vc.source.volume = player.volume
         await interaction.response.send_message(
             embed=music_embed("Ses Seviyesi", f"Ses seviyesi **{seviye}%** olarak ayarlandı.", discord.Color.green())
         )
@@ -415,6 +419,23 @@ class Music(commands.Cog):
         player.queue.clear()
         await interaction.response.send_message(
             embed=music_embed("Sıra Temizlendi", f"{count} şarkı sıradan kaldırıldı.", discord.Color.green())
+        )
+
+    # /müzik karıştır
+    @music.command(name="karıştır", description="Müzik sırasını rastgele karıştırır.")
+    async def karistir(self, interaction: discord.Interaction):
+        player = self.get_player(interaction.guild_id)
+        if len(player.queue) < 2:
+            await interaction.response.send_message(
+                embed=music_embed("Hata", "Karıştırmak için sırada en az 2 şarkı olmalı.", discord.Color.red()),
+                ephemeral=True,
+            )
+            return
+        queue_list = list(player.queue)
+        random.shuffle(queue_list)
+        player.queue = deque(queue_list)
+        await interaction.response.send_message(
+            embed=music_embed("Karıştırıldı", f"{len(queue_list)} şarkı rastgele sıralandı. 🔀", discord.Color.green())
         )
 
     # /müzik döngü
@@ -497,7 +518,7 @@ class SearchButton(discord.ui.Button):
                 ephemeral=True,
             )
         else:
-            player.current = track
+            player.queue.appendleft(track)
             await self.cog._play_next(interaction.guild_id, vc)
             await interaction.followup.send(
                 embed=music_embed("Şimdi Çalıyor", f"**{track.title}**", discord.Color.green()),

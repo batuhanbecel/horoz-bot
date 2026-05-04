@@ -7,7 +7,6 @@ from datetime import timedelta
 
 
 def parse_duration(text: str) -> timedelta | None:
-    """'10m', '2h', '1d' gibi süre stringlerini timedelta'ya çevirir."""
     match = re.fullmatch(r"(\d+)([smhd])", text.strip().lower())
     if not match:
         return None
@@ -16,9 +15,21 @@ def parse_duration(text: str) -> timedelta | None:
             "h": timedelta(hours=value), "d": timedelta(days=value)}[unit]
 
 
-def mod_embed(title: str, description: str, color: discord.Color = discord.Color.red()) -> discord.Embed:
-    embed = discord.Embed(title=title, description=description, color=color)
-    return embed
+def mod_embed(title: str, description: str = "", color: discord.Color = discord.Color.red()) -> discord.Embed:
+    e = discord.Embed(title=title, description=description, color=color)
+    e.timestamp = discord.utils.utcnow()
+    return e
+
+
+def hierarchy_ok(interaction: discord.Interaction, target: discord.Member) -> str | None:
+    """Rol hiyerarşisi kontrolü. Sorun varsa hata mesajı, yoksa None döner."""
+    if target == interaction.user:
+        return "Kendinize bu işlemi yapamazsınız."
+    if target.top_role >= interaction.user.top_role:
+        return "Bu üyeye işlem yapamazsınız (rol hiyerarşisi)."
+    if target.top_role >= interaction.guild.me.top_role:
+        return "Botun rolü bu üyenin rolünden düşük, işlem yapılamaz."
+    return None
 
 
 class Moderation(commands.Cog):
@@ -39,15 +50,43 @@ class Moderation(commands.Cog):
             ephemeral=True,
         )
 
+    # /moderatör uyar
+    @mod.command(name="uyar", description="Bir üyeye uyarı verir (infraction kaydı oluşturur).")
+    @app_commands.describe(üye="Uyarılacak üye", sebep="Uyarı sebebi")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def uyar(self, interaction: discord.Interaction, üye: discord.Member, sebep: str = "Belirtilmedi"):
+        err = hierarchy_ok(interaction, üye)
+        if err:
+            await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
+            return
+        await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "warn")
+        rows = await db.get_infractions(interaction.guild_id, üye.id)
+        await interaction.response.send_message(
+            embed=mod_embed(
+                "Uyarıldı",
+                f"{üye.mention} uyarıldı. Toplam ihlal: **{len(rows)}**\n**Sebep:** {sebep}",
+                discord.Color.yellow(),
+            )
+        )
+        try:
+            await üye.send(
+                embed=mod_embed(
+                    f"⚠️ {interaction.guild.name} sunucusunda uyarı aldınız",
+                    f"**Sebep:** {sebep}\nToplam ihlal sayınız: **{len(rows)}**",
+                    discord.Color.yellow(),
+                )
+            )
+        except discord.Forbidden:
+            pass
+
     # /moderatör at
     @mod.command(name="at", description="Bir üyeyi sunucudan atar.")
     @app_commands.describe(üye="Atılacak üye", sebep="Atılma sebebi")
     @app_commands.checks.has_permissions(kick_members=True)
     async def at(self, interaction: discord.Interaction, üye: discord.Member, sebep: str = "Belirtilmedi"):
-        if üye.top_role >= interaction.user.top_role:
-            await interaction.response.send_message(
-                embed=mod_embed("Hata", "Bu üyeye işlem yapamazsınız."), ephemeral=True
-            )
+        err = hierarchy_ok(interaction, üye)
+        if err:
+            await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
             return
         await üye.kick(reason=f"{interaction.user}: {sebep}")
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "kick")
@@ -66,10 +105,9 @@ class Moderation(commands.Cog):
         sebep: str = "Belirtilmedi",
         mesaj_sil: app_commands.Range[int, 0, 7] = 0,
     ):
-        if üye.top_role >= interaction.user.top_role:
-            await interaction.response.send_message(
-                embed=mod_embed("Hata", "Bu üyeye işlem yapamazsınız."), ephemeral=True
-            )
+        err = hierarchy_ok(interaction, üye)
+        if err:
+            await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
             return
         await üye.ban(reason=f"{interaction.user}: {sebep}", delete_message_days=mesaj_sil)
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "ban")
@@ -88,6 +126,10 @@ class Moderation(commands.Cog):
         süre: str,
         sebep: str = "Belirtilmedi",
     ):
+        err = hierarchy_ok(interaction, üye)
+        if err:
+            await interaction.response.send_message(embed=mod_embed("Hata", err), ephemeral=True)
+            return
         delta = parse_duration(süre)
         if not delta:
             await interaction.response.send_message(
@@ -109,8 +151,8 @@ class Moderation(commands.Cog):
             )
         )
 
-    # /moderatör sustu-kaldır
-    @mod.command(name="sustu-kaldır", description="Bir üyenin susturmasını kaldırır.")
+    # /moderatör sustur-kaldır
+    @mod.command(name="sustur-kaldır", description="Bir üyenin susturmasını kaldırır.")
     @app_commands.describe(üye="Susturması kaldırılacak üye")
     @app_commands.checks.has_permissions(moderate_members=True)
     async def sustu_kaldir(self, interaction: discord.Interaction, üye: discord.Member):
@@ -122,6 +164,59 @@ class Moderation(commands.Cog):
         await üye.timeout(None)
         await interaction.response.send_message(
             embed=mod_embed("Susturma Kaldırıldı", f"{üye.mention} artık konuşabilir.", discord.Color.green())
+        )
+
+    # /moderatör yavaşmod
+    @mod.command(name="yavaşmod", description="Kanalda yavaş mod süresini ayarlar.")
+    @app_commands.describe(saniye="Mesajlar arası bekleme süresi saniye cinsinden (0 = kapalı, max 21600)", kanal="Kanal (boş = mevcut kanal)")
+    @app_commands.checks.has_permissions(manage_channels=True)
+    async def yavaşmod(
+        self,
+        interaction: discord.Interaction,
+        saniye: app_commands.Range[int, 0, 21600],
+        kanal: discord.TextChannel = None,
+    ):
+        target = kanal or interaction.channel
+        await target.edit(slowmode_delay=saniye)
+        if saniye == 0:
+            desc = f"{target.mention} kanalında yavaş mod kapatıldı."
+            color = discord.Color.green()
+        else:
+            desc = f"{target.mention} kanalında yavaş mod **{saniye} saniye** olarak ayarlandı."
+            color = discord.Color.orange()
+        await interaction.response.send_message(
+            embed=mod_embed("Yavaş Mod", desc, color), ephemeral=True
+        )
+
+    # /moderatör kilitle
+    @mod.command(name="kilitle", description="Kanalı kilitler, üyeler mesaj gönderemez.")
+    @app_commands.describe(kanal="Kilitlenecek kanal (boş = mevcut kanal)", sebep="Kilitleme sebebi")
+    @app_commands.checks.has_permissions(manage_channels=True)
+    async def kilitle(
+        self,
+        interaction: discord.Interaction,
+        kanal: discord.TextChannel = None,
+        sebep: str = "Belirtilmedi",
+    ):
+        target = kanal or interaction.channel
+        overwrite = target.overwrites_for(interaction.guild.default_role)
+        overwrite.send_messages = False
+        await target.set_permissions(interaction.guild.default_role, overwrite=overwrite, reason=f"{interaction.user}: {sebep}")
+        await interaction.response.send_message(
+            embed=mod_embed("🔒 Kanal Kilitlendi", f"{target.mention} kilitlendi.\n**Sebep:** {sebep}", discord.Color.red())
+        )
+
+    # /moderatör kilidi-kaldır
+    @mod.command(name="kilidi-kaldır", description="Kilitli kanalın kilidini açar.")
+    @app_commands.describe(kanal="Kilidi açılacak kanal (boş = mevcut kanal)")
+    @app_commands.checks.has_permissions(manage_channels=True)
+    async def kilidi_kaldir(self, interaction: discord.Interaction, kanal: discord.TextChannel = None):
+        target = kanal or interaction.channel
+        overwrite = target.overwrites_for(interaction.guild.default_role)
+        overwrite.send_messages = None  # varsayılana dön
+        await target.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+        await interaction.response.send_message(
+            embed=mod_embed("🔓 Kanal Kilidi Açıldı", f"{target.mention} artık açık.", discord.Color.green())
         )
 
     # /moderatör ihlaller
@@ -163,15 +258,23 @@ class Moderation(commands.Cog):
         )
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if interaction.response.is_done():
+            send = interaction.followup.send
+        else:
+            send = interaction.response.send_message
+
         if isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message(
+            await send(
                 embed=mod_embed("Yetki Hatası", "Bu komutu kullanmak için gerekli yetkiye sahip değilsiniz."),
                 ephemeral=True,
             )
-        else:
-            await interaction.response.send_message(
-                embed=mod_embed("Hata", str(error)), ephemeral=True
+        elif isinstance(error, app_commands.BotMissingPermissions):
+            await send(
+                embed=mod_embed("Bot Yetki Hatası", "Botun bu işlem için yeterli yetkisi yok."),
+                ephemeral=True,
             )
+        else:
+            await send(embed=mod_embed("Hata", str(error)), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

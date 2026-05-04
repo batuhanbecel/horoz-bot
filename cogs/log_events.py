@@ -1,9 +1,12 @@
+import asyncio
 import discord
 from discord.ext import commands
 import os
 from datetime import timezone
 
-LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "1326534476213256192"))
+LOG_CHANNEL_ID     = int(os.getenv("LOG_CHANNEL_ID",     "1326534476213256192"))
+WELCOME_CHANNEL_ID = int(os.getenv("WELCOME_CHANNEL_ID", "0"))
+LEAVE_EMOJI_ID     = int(os.getenv("LEAVE_EMOJI_ID",     "0"))
 
 
 def embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
@@ -41,8 +44,27 @@ class LogEvents(commands.Cog):
 
     # ── Üye Katılma / Ayrılma ─────────────────────────────────────────────
 
+    async def welcome_channel(self, guild: discord.Guild):
+        if not WELCOME_CHANNEL_ID:
+            return None
+        ch = guild.get_channel(WELCOME_CHANNEL_ID)
+        if ch is None:
+            try:
+                ch = await self.bot.fetch_channel(WELCOME_CHANNEL_ID)
+            except Exception:
+                return None
+        return ch
+
+    def leave_emoji(self, guild: discord.Guild) -> str:
+        if LEAVE_EMOJI_ID:
+            emoji = discord.utils.get(guild.emojis, id=LEAVE_EMOJI_ID)
+            if emoji:
+                return str(emoji)
+        return "👋"
+
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
+        # Mod log
         e = embed("📥 Üye Katıldı", color=discord.Color.green())
         e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
         e.add_field(name="ID", value=str(member.id), inline=True)
@@ -51,15 +73,29 @@ class LogEvents(commands.Cog):
         e.set_thumbnail(url=member.display_avatar.url)
         await self.log(member.guild, embed=e)
 
+        # Karşılama kanalı
+        ch = await self.welcome_channel(member.guild)
+        if ch:
+            await ch.send(f"{member.mention} çiftliğe katıldı 🐤")
+
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
+        # Ban olayı da on_member_remove tetikler; küçük bir beklemeyle ban audit log'una bakarız.
+        # Ban ise on_member_ban zaten ayrıca log atacak, burada sadece kick/ayrılma loglanır.
+        await asyncio.sleep(0.75)
+
+        # Önce ban mı kontrol et
+        ban_entry = await get_audit(member.guild, discord.AuditLogAction.ban, member.id)
+        if ban_entry and (discord.utils.utcnow() - ban_entry.created_at).total_seconds() < 5:
+            return  # on_member_ban zaten bu olayı logluyor
+
         # Kick mi yoksa gönüllü ayrılma mı?
-        entry = await get_audit(member.guild, discord.AuditLogAction.kick, member.id)
-        if entry and (discord.utils.utcnow() - entry.created_at).total_seconds() < 5:
+        kick_entry = await get_audit(member.guild, discord.AuditLogAction.kick, member.id)
+        if kick_entry and (discord.utils.utcnow() - kick_entry.created_at).total_seconds() < 5:
             e = embed("👢 Üye Atıldı", color=discord.Color.orange())
             e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
-            e.add_field(name="Atan Yetkili", value=f"{entry.user.mention} `{entry.user}`", inline=True)
-            e.add_field(name="Sebep", value=entry.reason or "Belirtilmedi", inline=True)
+            e.add_field(name="Atan Yetkili", value=f"{kick_entry.user.mention} `{kick_entry.user}`", inline=True)
+            e.add_field(name="Sebep", value=kick_entry.reason or "Belirtilmedi", inline=True)
         else:
             e = embed("📤 Üye Ayrıldı", color=discord.Color.light_grey())
             e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
@@ -69,6 +105,12 @@ class LogEvents(commands.Cog):
         e.add_field(name="ID", value=str(member.id), inline=True)
         e.set_thumbnail(url=member.display_avatar.url)
         await self.log(member.guild, embed=e)
+
+        # Karşılama kanalı — ayrılma
+        ch = await self.welcome_channel(member.guild)
+        if ch:
+            emoji_str = self.leave_emoji(member.guild)
+            await ch.send(f"{member.mention} çiftliği terk etti {emoji_str}")
 
     # ── Ban / Unban ────────────────────────────────────────────────────────
 

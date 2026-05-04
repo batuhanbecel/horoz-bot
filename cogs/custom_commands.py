@@ -5,7 +5,9 @@ from database import db
 
 
 def cc_embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
-    return discord.Embed(title=title, description=description, color=color)
+    e = discord.Embed(title=title, description=description, color=color)
+    e.timestamp = discord.utils.utcnow()
+    return e
 
 
 class CustomCommands(commands.Cog):

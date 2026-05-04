@@ -5,7 +5,9 @@ from datetime import timezone, datetime
 
 
 def util_embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
-    return discord.Embed(title=title, description=description, color=color)
+    e = discord.Embed(title=title, description=description, color=color)
+    e.timestamp = discord.utils.utcnow()
+    return e
 
 
 class Utility(commands.Cog):
@@ -19,17 +21,17 @@ class Utility(commands.Cog):
         embed = discord.Embed(title="🐓 Horoz Bot — Komut Listesi", color=discord.Color.blurple())
         embed.add_field(
             name="🛡️ /moderatör",
-            value="`temizle` `at` `yasakla` `sustur` `sustu-kaldır` `ihlaller` `ihlal-temizle`",
+            value="`temizle` `uyar` `at` `yasakla` `sustur` `sustur-kaldır`\n`yavaşmod` `kilitle` `kilidi-kaldır` `ihlaller` `ihlal-temizle`",
             inline=False,
         )
         embed.add_field(
             name="🎵 /müzik",
-            value="`çal` `ara` `atla` `duraklat` `devam` `dur` `ses` `sıra` `sıra-temizle` `döngü`",
+            value="`çal` `ara` `atla` `duraklat` `devam` `dur`\n`ses` `sıra` `sıra-temizle` `karıştır` `döngü` `şimdi-çalıyor`",
             inline=False,
         )
         embed.add_field(
             name="🎉 Eğlence",
-            value="`/yazıtura` `/zar` `/anket` `/etkinlik`",
+            value="`/yazıtura` `/zar` `/8top` `/anket` `/etkinlik`",
             inline=False,
         )
         embed.add_field(

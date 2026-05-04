@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(gh auth status 2>&1)",
+      "PowerShell(python --version 2>&1)"
+    ]
+  }
+}

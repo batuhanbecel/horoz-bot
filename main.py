@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
+import pathlib
 import logging
 from dotenv import load_dotenv
 
@@ -17,15 +18,16 @@ logging.basicConfig(
 )
 log = logging.getLogger("horoz_bot")
 
-COGS = [
-    "cogs.moderation",
-    "cogs.music",
-    "cogs.fun",
-    "cogs.utility",
-    "cogs.custom_commands",
-    "cogs.log_events",
-    "cogs.emoji",
-]
+
+def discover_cogs() -> list[str]:
+    """cogs/ altındaki tüm alt-klasör .py dosyalarını otomatik bulur."""
+    found = []
+    for py in sorted(pathlib.Path("cogs").rglob("*.py")):
+        if py.name.startswith("_"):
+            continue
+        # cogs/server/emoji.py  →  cogs.server.emoji
+        found.append(".".join(py.with_suffix("").parts))
+    return found
 
 
 class HorozBot(commands.Bot):
@@ -39,7 +41,7 @@ class HorozBot(commands.Bot):
         from database.db import init_db
         await init_db()
 
-        for cog in COGS:
+        for cog in discover_cogs():
             try:
                 await self.load_extension(cog)
                 log.info(f"Yüklendi: {cog}")

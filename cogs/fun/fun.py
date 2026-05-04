@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import random
+import asyncio
 from datetime import datetime, timezone, timedelta
 
 
@@ -290,9 +291,36 @@ class Fun(commands.Cog):
     # /yazıtura
     @app_commands.command(name="yazıtura", description="Yazı mı tura mı? Bozuk para atar.")
     async def yazıtura(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
         sonuç = random.choice(["Yazı", "Tura"])
-        embed = fun_embed(f"🪙 {sonuç}!", f"{interaction.user.mention} parayı attı: **{sonuç}**", discord.Color.gold())
-        await interaction.response.send_message(embed=embed)
+
+        spin_embed = discord.Embed(
+            title="Para atılıyor...",
+            description=f"{interaction.user.mention} parayı havaya fırlattı!\n\n<a:spinning_para:1500895448968331468>",
+            color=discord.Color.gold(),
+        )
+        spin_embed.timestamp = discord.utils.utcnow()
+        msg = await interaction.followup.send(embed=spin_embed, wait=True)
+
+        await asyncio.sleep(2)
+
+        if sonuç == "Tura":
+            emoji_str = "<:tura:1500895527242563837>"
+            title = "Tura!"
+            color = discord.Color.gold()
+        else:
+            emoji_str = "<:yazi:1500895591129944194>"
+            title = "Yazı!"
+            color = discord.Color.light_grey()
+
+        result_embed = discord.Embed(
+            title=title,
+            description=f"{interaction.user.mention} parayı attı ve...\n\n{emoji_str}  **{sonuç}** çıktı!",
+            color=color,
+        )
+        result_embed.timestamp = discord.utils.utcnow()
+        await msg.edit(embed=result_embed)
 
     # /zar
     @app_commands.command(name="zar", description="Zar atar.")

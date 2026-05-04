@@ -95,26 +95,23 @@ class ArenaView(discord.ui.View):
     def _embed(self, son_log: str = "") -> discord.Embed:
         p1, p2 = self.oyuncular
 
-        e = discord.Embed(
-            title="⚔️  A R E N A  D Ö V Ü Ş Ü",
-            color=discord.Color.from_rgb(180, 30, 30),
-        )
-
-        # ── Oyuncu kalpleri (3 inline field → yan yana) ──────────────────────
-        e.add_field(name=f"🗡️ {p1.display_name}", value=_kalp(self.hp[0]), inline=True)
-        e.add_field(name=f"Tur {self.tur} / {MAKS_TUR}",  value="⚔️",               inline=True)
-        e.add_field(name=f"🗡️ {p2.display_name}", value=_kalp(self.hp[1]), inline=True)
-
-        # ── Seçim durumu ─────────────────────────────────────────────────────
         durum = []
         for oyuncu in self.oyuncular:
             if oyuncu.id in self.seçimler:
                 durum.append(f"✅  **{oyuncu.display_name}** seçimini yaptı")
             else:
                 durum.append(f"⏳  **{oyuncu.display_name}** bekleniyor...")
-        e.add_field(name="─────────────────────────────", value="\n".join(durum), inline=False)
 
-        # ── Tur özeti ────────────────────────────────────────────────────────
+        e = discord.Embed(
+            title="⚔️  A R E N A  D Ö V Ü Ş Ü",
+            description="\n".join(durum),
+            color=discord.Color.from_rgb(180, 30, 30),
+        )
+
+        e.add_field(name=f"🗡️ {p1.display_name}", value=_kalp(self.hp[0]), inline=True)
+        e.add_field(name=f"Tur {self.tur} / {MAKS_TUR}", value="⚔️",              inline=True)
+        e.add_field(name=f"🗡️ {p2.display_name}", value=_kalp(self.hp[1]), inline=True)
+
         if son_log:
             e.add_field(name=f"Tur {self.tur - 1} Özeti", value=son_log, inline=False)
 
@@ -241,9 +238,8 @@ class Arena(commands.Cog):
         view = ArenaView(p1, rakip)
         e    = view._embed()
         e.description = (
-            f"### {p1.mention}  ⚔️  {rakip.mention}\n"
-            f"-# Her tur eylemini **gizlice** seçersin — ikisi de seçince açıklanır.\n"
-            f"-# ⚔️ **Kılıç** güvenli vurur · 🔮 **Büyü** Kalkanı deler · 🛡️ **Kalkan** Kılıcı bloklar"
+            f"{p1.mention}  ⚔️  {rakip.mention}\n"
+            f"⏳  Her iki oyuncu da eylemini seçsin."
         )
         await interaction.response.send_message(embed=e, view=view)
         view.msg = await interaction.original_response()

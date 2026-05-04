@@ -2,7 +2,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import re
-import io
 import aiohttp
 from database import db
 
@@ -28,20 +27,13 @@ async def fetch_bytes(url: str) -> bytes | None:
 class EmojiStealer(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._ctx_emoji = app_commands.ContextMenu(name="Emojileri Ekle",   callback=self._ctx_emoji_ekle)
-        self._ctx_sticker = app_commands.ContextMenu(name="Sticker'ı Ekle", callback=self._ctx_sticker_ekle)
+        self._ctx_emoji = app_commands.ContextMenu(name="Emojileri Ekle", callback=self._ctx_emoji_ekle)
         bot.tree.add_command(self._ctx_emoji)
-        bot.tree.add_command(self._ctx_sticker)
 
     async def cog_unload(self):
-        self.bot.tree.remove_command(self._ctx_emoji.name,   type=self._ctx_emoji.type)
-        self.bot.tree.remove_command(self._ctx_sticker.name, type=self._ctx_sticker.type)
+        self.bot.tree.remove_command(self._ctx_emoji.name, type=self._ctx_emoji.type)
 
-    # /emoji-ekle ─────────────────────────────────────────────────────────────
-    # BUG FIX: @app_commands.checks.has_permissions kaldırıldı — Discord komutu
-    # yetkisiz kişilerden gizliyordu, bu da "did not respond" hatasına yol açıyordu.
-    # defer() ilk çağrı olarak kondu, manuel yetki kontrolü sonra yapılıyor.
-
+    # /emoji-ekle
     @app_commands.command(name="emoji-ekle", description="Başka bir sunucudaki özel emojiyi bu sunucuya ekler.")
     @app_commands.describe(emoji="Emoji metni  (<:isim:123456>  veya  <a:isim:123456>)")
     async def emoji_ekle(self, interaction: discord.Interaction, emoji: str):
@@ -66,15 +58,15 @@ class EmojiStealer(commands.Cog):
 
         if not data:
             return await interaction.followup.send(
-                embed=_emb("❌ İndirme Hatası", "Emoji CDN'den indirilemedi. Geçerli bir özel emoji girdiğinizden emin olun.", discord.Color.red()),
+                embed=_emb("❌ İndirme Hatası", "Emoji CDN'den indirilemedi.", discord.Color.red()),
                 ephemeral=True,
             )
 
         try:
             new_e = await interaction.guild.create_custom_emoji(name=name, image=data)
             embed = _emb("✅ Emoji Eklendi", f"{new_e}  **:{new_e.name}:**  sunucuya eklendi!", discord.Color.green())
-            embed.add_field(name="İsim",      value=f"`{new_e.name}`",              inline=True)
-            embed.add_field(name="ID",        value=f"`{new_e.id}`",                inline=True)
+            embed.add_field(name="İsim",      value=f"`{new_e.name}`",               inline=True)
+            embed.add_field(name="ID",        value=f"`{new_e.id}`",                 inline=True)
             embed.add_field(name="Animasyon", value="Evet" if animated else "Hayır", inline=True)
             await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.HTTPException as ex:
@@ -82,8 +74,7 @@ class EmojiStealer(commands.Cog):
                 embed=_emb("❌ Hata", f"Emoji eklenemedi:\n```{ex}```", discord.Color.red()), ephemeral=True
             )
 
-    # /oto-emoji ──────────────────────────────────────────────────────────────
-
+    # /oto-emoji
     @app_commands.command(name="oto-emoji", description="Sunucuda kullanılan yabancı emojileri otomatik ekler (aç/kapat).")
     async def oto_emoji(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -104,13 +95,10 @@ class EmojiStealer(commands.Cog):
                           "⚠️ Emoji limiti dolduğunda yeni eklemeler atlanır.",
                           discord.Color.green())
         else:
-            embed = _emb("⏹️ Otomatik Emoji Kapatıldı",
-                          "Artık otomatik emoji ekleme yapılmayacak.",
-                          discord.Color.orange())
+            embed = _emb("⏹️ Otomatik Emoji Kapatıldı", "Artık otomatik emoji ekleme yapılmayacak.", discord.Color.orange())
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    # Sağ tık → Emojileri Ekle ───────────────────────────────────────────────
-
+    # Sağ tık → Emojileri Ekle
     async def _ctx_emoji_ekle(self, interaction: discord.Interaction, message: discord.Message):
         await interaction.response.defer(ephemeral=True)
         try:
@@ -148,7 +136,7 @@ class EmojiStealer(commands.Cog):
             lines = []
             if added:  lines.append(f"✅ **Eklendi ({len(added)}):** {' '.join(added)}")
             if failed: lines.append(f"❌ **Başarısız ({len(failed)}):** {', '.join(f'`{n}`' for n in failed)}")
-            color  = discord.Color.green() if added else discord.Color.red()
+            color = discord.Color.green() if added else discord.Color.red()
             await interaction.followup.send(
                 embed=_emb("Emoji Ekleme Sonucu", "\n".join(lines) or "Hiçbir emoji eklenemedi.", color),
                 ephemeral=True,
@@ -158,59 +146,7 @@ class EmojiStealer(commands.Cog):
                 embed=_emb("❌ Hata", str(ex), discord.Color.red()), ephemeral=True
             )
 
-    # Sağ tık → Sticker'ı Ekle ───────────────────────────────────────────────
-
-    async def _ctx_sticker_ekle(self, interaction: discord.Interaction, message: discord.Message):
-        await interaction.response.defer(ephemeral=True)
-        try:
-            if not interaction.user.guild_permissions.manage_emojis_and_stickers:
-                return await interaction.followup.send(
-                    embed=_emb("❌ Yetersiz Yetki", "Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", discord.Color.red()),
-                    ephemeral=True,
-                )
-            if not message.stickers:
-                return await interaction.followup.send(
-                    embed=_emb("⚠️ Sticker Bulunamadı", "Bu mesajda sticker yok.", discord.Color.orange()),
-                    ephemeral=True,
-                )
-
-            sticker = await message.stickers[0].fetch()
-
-            if sticker.format == discord.StickerFormatType.lottie:
-                return await interaction.followup.send(
-                    embed=_emb("⚠️ Desteklenmiyor", "Lottie animasyonlu sticker'lar eklenemez.", discord.Color.orange()),
-                    ephemeral=True,
-                )
-
-            ext  = "gif" if sticker.format == discord.StickerFormatType.gif else "png"
-            data = await fetch_bytes(str(sticker.url))
-            if not data:
-                return await interaction.followup.send(
-                    embed=_emb("❌ İndirme Hatası", "Sticker indirilemedi.", discord.Color.red()), ephemeral=True
-                )
-
-            new_s = await interaction.guild.create_sticker(
-                name=sticker.name,
-                description=sticker.description or sticker.name,
-                emoji="⭐",
-                file=discord.File(io.BytesIO(data), filename=f"sticker.{ext}"),
-            )
-            embed = _emb("✅ Sticker Eklendi", f"**{new_s.name}** sunucuya eklendi!", discord.Color.green())
-            embed.add_field(name="İsim", value=new_s.name, inline=True)
-            embed.add_field(name="ID",   value=str(new_s.id), inline=True)
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-        except discord.HTTPException as ex:
-            await interaction.followup.send(
-                embed=_emb("❌ Hata", str(ex), discord.Color.red()), ephemeral=True
-            )
-        except Exception as ex:
-            await interaction.followup.send(
-                embed=_emb("❌ Hata", str(ex), discord.Color.red()), ephemeral=True
-            )
-
-    # on_message: otomatik emoji ──────────────────────────────────────────────
-
+    # on_message: otomatik emoji
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot or not message.guild or not message.content:

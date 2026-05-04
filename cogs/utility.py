@@ -73,7 +73,7 @@ class Utility(commands.Cog):
 
     # /bot-bilgi
     @app_commands.command(name="bot-bilgi", description="Bot hakkında istatistiksel bilgi verir.")
-    async def bot_bilgi(self, interaction: discord.Interaction):
+    async def bilgi_bot(self, interaction: discord.Interaction):
         uptime_delta = datetime.now(timezone.utc) - self._start_time
         hours, rem = divmod(int(uptime_delta.total_seconds()), 3600)
         minutes, seconds = divmod(rem, 60)

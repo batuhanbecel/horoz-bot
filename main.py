@@ -23,6 +23,7 @@ COGS = [
     "cogs.fun",
     "cogs.utility",
     "cogs.custom_commands",
+    "cogs.log_events",
 ]
 
 

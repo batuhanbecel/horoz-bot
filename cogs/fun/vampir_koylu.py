@@ -8,7 +8,7 @@ from collections import Counter
 # ── Sabitler ──────────────────────────────────────────────────────────────────
 
 LOBI_SURESI   = 120
-GECE_SURESI   = 60
+GECE_SURESI   = 90
 GUNDUZ_SURESI = 120
 AVCI_SURESI   = 30
 MIN_OYUNCU    = 4
@@ -35,13 +35,13 @@ _ROL_SIRA = ["vampir", "köylü", "doktor", "avcı", "kahin"]
 
 def _rol_dagit(n: int) -> list[str]:
     if n <= 4:
-        return ["vampir", "kahin", "köylü", "köylü"]
+        return ["vampir", "köylü", "köylü", "köylü"]
     elif n == 5:
-        return ["vampir", "kahin", "doktor", "köylü", "köylü"]
+        return ["vampir", "doktor", "köylü", "köylü", "köylü"]
     elif n == 6:
-        return ["vampir", "vampir", "kahin", "doktor", "köylü", "köylü"]
+        return ["vampir", "vampir", "doktor", "köylü", "köylü", "köylü"]
     elif n == 7:
-        return ["vampir", "vampir", "kahin", "doktor", "köylü", "köylü", "köylü"]
+        return ["vampir", "vampir", "doktor", "köylü", "köylü", "köylü", "köylü"]
     elif n == 8:
         return ["vampir", "vampir", "kahin", "doktor", "avcı", "köylü", "köylü", "köylü"]
     elif n == 9:
@@ -73,10 +73,18 @@ class GeceAksiyonView(discord.ui.View):
 
         if rol == "vampir":
             diğer = [o for o in oyun.yaşayanlar if oyun.roller[o.id] == "vampir" and o.id != self.oyuncu.id]
-            self._vampir_bilgi = (
-                f"\n🧛 **Takımın:** {', '.join(o.display_name for o in diğer)}"
-                if diğer else "\n🧛 Sen tek vampirsin!"
-            )
+            if diğer:
+                oy_satırları = []
+                for d in diğer:
+                    if d.id in oyun.vampir_oyları:
+                        hedef = next((o for o in oyun.oyuncular if o.id == oyun.vampir_oyları[d.id]), None)
+                        oy_satırları.append(f"  • {d.display_name} → 💀 **{hedef.display_name if hedef else '?'}**")
+                    else:
+                        oy_satırları.append(f"  • {d.display_name} → ⏳ henüz seçmedi")
+                takım_bilgi = "\n".join(oy_satırları)
+                self._vampir_bilgi = f"\n\n🧛 **Vampir Takımın:**\n{takım_bilgi}"
+            else:
+                self._vampir_bilgi = "\n\n🧛 Sen tek vampirsin!"
             hedefler = [o for o in oyun.yaşayanlar if oyun.roller[o.id] != "vampir"]
             opts = [discord.SelectOption(label=o.display_name, value=str(o.id), emoji="💀") for o in hedefler]
             sel = discord.ui.Select(placeholder="🧛 Kurbanını seç...", options=opts)
@@ -502,15 +510,18 @@ class VampirKoyluOyunu:
 
     async def _oyun_bitti(self, kazanan: str):
         if kazanan == "köylü":
-            başlık = "🌟 Köylüler Kazandı!"
-            renk   = discord.Color.green()
+            başlık   = "🌟 Köylüler Kazandı!"
+            renk     = discord.Color.green()
             açıklama = "Tüm vampirler temizlendi! Köy güvende! 🎉"
+            gif      = "https://tenor.com/b1AOe.gif"
         else:
-            başlık = "🧛 Vampirler Kazandı!"
-            renk   = discord.Color.dark_red()
+            başlık   = "🧛 Vampirler Kazandı!"
+            renk     = discord.Color.dark_red()
             açıklama = "Vampirler köyü ele geçirdi! Geceler artık daha karanlık... 🌙"
+            gif      = "https://tenor.com/Rlos.gif"
 
         e = discord.Embed(title=başlık, description=açıklama, color=renk)
+        e.set_image(url=gif)
 
         satırlar = []
         for oyuncu in self.oyuncular:
@@ -533,26 +544,51 @@ class VampirKoyluOyunu:
         for oyuncu, rol in zip(self.oyuncular, roller_listesi):
             self.roller[oyuncu.id] = rol
 
+        # Her oyuncuya DM ile rolünü gönder
+        dm_hatası = []
+        for oyuncu in self.oyuncular:
+            rol = self.roller[oyuncu.id]
+            vampir_bilgi = ""
+            if rol == "vampir":
+                diğer = [o for o in self.oyuncular if self.roller[o.id] == "vampir" and o.id != oyuncu.id]
+                vampir_bilgi = (
+                    f"\n\n🧛 **Vampir Takımın:** {', '.join(o.display_name for o in diğer)}"
+                    if diğer else "\n\n🧛 **Sen tek vampirsin!**"
+                )
+            try:
+                await oyuncu.send(
+                    f"🎭 **Vampir Köylü — Rolün**\n\n"
+                    f"{ROL_EMOJI[rol]} **{rol.capitalize()}**\n"
+                    f"_{ROL_TANIM[rol]}_{vampir_bilgi}"
+                )
+            except discord.Forbidden:
+                dm_hatası.append(oyuncu.display_name)
+
         sayım = Counter(roller_listesi)
         rol_satır = "\n".join(
             f"{ROL_EMOJI[r]} {r.capitalize()}: {sayım[r]}"
             for r in _ROL_SIRA if r in sayım
         )
 
+        dm_uyarı = ""
+        if dm_hatası:
+            dm_uyarı = f"\n\n⚠️ DM gönderilemeyen oyuncular: {', '.join(dm_hatası)}"
+
         e = discord.Embed(
             title="🧛 Vampir Köylü Başlıyor!",
             description=(
-                f"**{len(self.oyuncular)} oyuncu** ile gece başlıyor!\n\n"
-                "**Gece Eylemini Seç** butonuna basarak rolünüzü öğrenin.\n"
+                f"**{len(self.oyuncular)} oyuncu** ile oyun başlıyor!\n\n"
+                "📬 **Herkes rolünü DM olarak aldı.** Gelen kutunuzu kontrol edin!\n"
                 "Vampirler takım arkadaşlarını tanır. Özel roller gece eylem yapar."
+                f"{dm_uyarı}"
             ),
             color=discord.Color.dark_red(),
         )
-        e.add_field(name="Rol Dağılımı", value=rol_satır, inline=True)
+        e.add_field(name="Rol Dağılımı", value=rol_satır, inline=False)
         e.add_field(
-            name="Oyuncular",
+            name=f"Oyuncular ({len(self.oyuncular)})",
             value="\n".join(f"• {o.mention}" for o in self.oyuncular),
-            inline=True,
+            inline=False,
         )
         e.add_field(
             name="Nasıl Oynanır?",
@@ -584,8 +620,9 @@ class VampirKoyluOyunu:
             title=f"🌙 {self.gece_sayısı}. Gece Başladı!",
             description=(
                 "Köy uykuya dalıyor...\n\n"
-                "**Vampirler**, **Doktor** ve **Kahin** gece eylemlerini seçsin.\n"
-                "**Köylüler** sabahı bekler. 💤"
+                "🧛 **Vampirler** • 👨‍⚕️ **Doktor** • 🔮 **Kahin** → Butona basarak gece eylemini seç.\n"
+                "👨‍🌾 **Köylüler** → Sabahı bekle. 💤\n\n"
+                "*(Rolünü hatırlamak için DM'ine bakabilirsin)*"
             ),
             color=discord.Color.from_rgb(15, 10, 50),
         )
@@ -693,7 +730,7 @@ class VampirKoyluOyunu:
             title=f"☀️ Gündüz — {self.gece_sayısı}. Günün Oylaması",
             description=(
                 "**Tartışın ve karar verin!**\n\n"
-                f"Köyde **{len(self.yaşayanlar)}** kişi hayatta. "
+                f"Köyde **{len(self.yaşayanlar)}** kişi hayatta.\n"
                 "Aralarında vampir var mı? Oylayın ve birini idam edin!"
             ),
             color=discord.Color.from_rgb(255, 220, 80),

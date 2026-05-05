@@ -98,13 +98,13 @@ class ArenaView(discord.ui.View):
         durum = []
         for oyuncu in self.oyuncular:
             if oyuncu.id in self.seçimler:
-                durum.append(f"✅  **{oyuncu.display_name}** seçimini yaptı")
+                durum.append(f"✅ **{oyuncu.display_name}** seçimini yaptı")
             else:
-                durum.append(f"⏳  **{oyuncu.display_name}** bekleniyor...")
+                durum.append(f"⏳ **{oyuncu.display_name}** bekleniyor...")
 
         e = discord.Embed(
             title="⚔️  A R E N A  D Ö V Ü Ş Ü",
-            description="\n".join(durum),
+            description="\n\n".join(durum),
             color=discord.Color.from_rgb(180, 30, 30),
         )
 
@@ -238,8 +238,8 @@ class Arena(commands.Cog):
         view = ArenaView(p1, rakip)
         e    = view._embed()
         e.description = (
-            f"{p1.mention}  ⚔️  {rakip.mention}\n"
-            f"⏳  Her iki oyuncu da eylemini seçsin."
+            f"{p1.mention}  ⚔️  {rakip.mention}\n\n"
+            f"⏳ Her iki oyuncu da eylemini seçsin."
         )
         await interaction.response.send_message(embed=e, view=view)
         view.msg = await interaction.original_response()

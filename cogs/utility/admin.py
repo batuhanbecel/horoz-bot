@@ -1,6 +1,8 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import os
+import sys
 from ._shared import _emb
 
 
@@ -83,6 +85,17 @@ class Admin(commands.Cog):
             ),
             ephemeral=True,
         )
+
+    # /restart
+    @app_commands.command(name="restart", description="Botu yeniden başlatır ve komutları tazeler.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def restart(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            embed=_emb("🔄 Yeniden Başlatılıyor...", "Bot kapatılıyor, birkaç saniye sonra geri dönecek.", discord.Color.orange()),
+            ephemeral=True,
+        )
+        await self.bot.close()
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         msg  = "Bu komutu kullanmak için **Yönetici** yetkisi gereklidir." if isinstance(error, app_commands.MissingPermissions) else str(error)

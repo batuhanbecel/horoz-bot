@@ -63,16 +63,17 @@ class Info(commands.Cog):
 
         embed = discord.Embed(title=f"👤 {target.display_name}", color=color)
         embed.set_thumbnail(url=target.display_avatar.url)
-        embed.add_field(name="Kullanıcı", value=str(target),                      inline=True)
-        embed.add_field(name="ID",        value=f"`{target.id}`",                  inline=True)
+        embed.add_field(name="Kullanıcı", value=str(target),                           inline=True)
+        embed.add_field(name="ID",        value=f"`{target.id}`",                       inline=True)
         embed.add_field(name="Bot?",      value="✅ Evet" if target.bot else "❌ Hayır", inline=True)
 
         created = target.created_at.replace(tzinfo=timezone.utc)
-        embed.add_field(name="📅 Hesap Açıldı", value=f"<t:{int(created.timestamp())}:R>", inline=True)
+        embed.add_field(name="📅 Hesap Açıldı", value=f"<t:{int(created.timestamp())}:F>", inline=True)
 
         if isinstance(target, discord.Member):
             joined = target.joined_at.replace(tzinfo=timezone.utc)
-            embed.add_field(name="📥 Katılım", value=f"<t:{int(joined.timestamp())}:R>", inline=True)
+            embed.add_field(name="📥 Sunucuya Katılım", value=f"<t:{int(joined.timestamp())}:F>", inline=True)
+            embed.add_field(name="​", value="​", inline=True)
             roles = [r.mention for r in reversed(target.roles) if r.name != "@everyone"]
             embed.add_field(
                 name=f"🏷️ Roller ({len(roles)})",

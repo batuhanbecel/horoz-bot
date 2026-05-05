@@ -175,12 +175,12 @@ class IsimSehirOyunu:
             description=(
                 f"**Bu turun harfi: `{self.harf}`**\n\n"
                 f"Kategoriler: {', '.join(f'**{k}**' for k in KATEGORILER)}\n\n"
-                f"✏️ Cevaplarımı Gir butonuna bas ve {TUR_SURESI} saniye içinde cevaplarını gönder!\n"
-                f"Cevaplayan: **{girenler}/{toplam}**"
+                f"✏️ **Cevaplarımı Gir** butonuna bas ve {TUR_SURESI} saniye içinde cevaplarını gönder!\n\n"
+                f"👥 Cevaplayan: **{girenler}/{toplam}**"
             ),
             color=discord.Color.orange(),
         )
-        e.set_footer(text=f"Eşsiz cevap = 10 puan | Ortak cevap = 5 puan | Yanlış harf = 0 puan")
+        e.set_footer(text="Eşsiz cevap = 10 puan  •  Ortak cevap = 5 puan  •  Yanlış harf = 0 puan")
         e.timestamp = discord.utils.utcnow()
         return e
 

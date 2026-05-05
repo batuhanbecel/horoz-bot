@@ -13,11 +13,11 @@ _EPH = 1 << 6    # EPHEMERAL
 
 # ── Component type IDs ────────────────────────────────────────────────────────
 CONTAINER = 17
-TEXT      = 21
-THUMBNAIL = 22
-SECTION   = 25
+SECTION   = 9
+TEXT      = 10
+THUMBNAIL = 11
+MEDIA     = 12
 SEPARATOR = 14
-MEDIA     = 23
 
 
 # ── Builders ──────────────────────────────────────────────────────────────────

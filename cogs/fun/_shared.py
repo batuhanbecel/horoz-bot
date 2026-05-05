@@ -1,5 +1,32 @@
 import discord
+import aiohttp
+import os
+import random
 from datetime import datetime, timezone
+
+_GIPHY_KEY = os.getenv("GIPHY_API_KEY", "")
+
+
+async def giphy(tag: str) -> str | None:
+    """Giphy search API'den rastgele bir GIF URL'si döndürür. Hata olursa None."""
+    if not _GIPHY_KEY:
+        return None
+    url = (
+        "https://api.giphy.com/v1/gifs/search"
+        f"?api_key={_GIPHY_KEY}&q={tag}&limit=25&rating=pg-13"
+    )
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
+                if r.status != 200:
+                    return None
+                payload = await r.json()
+                results = payload.get("data", [])
+                if not results:
+                    return None
+                return random.choice(results)["images"]["original"]["url"]
+    except Exception:
+        return None
 
 SEKIZ_TOP_YANIT = [
     "Kesinlikle evet.", "Evet, şüphesiz.", "Bence evet.",

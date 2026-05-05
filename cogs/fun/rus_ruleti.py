@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import asyncio
-from ._shared import fun_embed
+from ._shared import fun_embed, giphy
 
 MAX_OYUNCU = 6
 LOBI_SURE  = 60   # seconds to wait for players
@@ -301,6 +301,7 @@ async def _sonraki_tur(interaction: discord.Interaction, oyun: RusRuletiOyun):
 async def _oyun_bitti(interaction: discord.Interaction, oyun: RusRuletiOyun, kurban: discord.Member):
     hayatta = [o for o in oyun.oyuncular if o.id != kurban.id]
 
+    gif = await giphy("bang gunshot dead")
     e = fun_embed(
         "💀 Oyun Bitti",
         f"**{kurban.mention}** hayatını kaybetti!\n\n"
@@ -310,6 +311,8 @@ async def _oyun_bitti(interaction: discord.Interaction, oyun: RusRuletiOyun, kur
         ),
         discord.Color.dark_red(),
     )
+    if gif:
+        e.set_image(url=gif)
     e.set_thumbnail(url=kurban.display_avatar.url)
     e.set_footer(text="Horoz Bot • Rus Ruleti")
 

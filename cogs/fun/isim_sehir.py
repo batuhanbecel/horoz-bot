@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import asyncio
+from ._shared import giphy
 
 # ── Sabitler ─────────────────────────────────────────────────────────────────────
 
@@ -316,11 +317,14 @@ class IsimSehirOyunu:
             m = madalya[i] if i < 3 else f"`{i+1}.`"
             satirlar.append(f"{m} {oyuncu.mention} — **{self.skorlar[oyuncu.id]} puan**")
 
+        gif = await giphy("trophy winner podium celebration")
         e = discord.Embed(
             title="🏆 İsim Şehir Bitti!",
             description="\n".join(satirlar),
             color=discord.Color.gold(),
         )
+        if gif:
+            e.set_image(url=gif)
         e.set_footer(text=f"{TOPLAM_TUR} tur oynadınız.")
         e.timestamp = discord.utils.utcnow()
         tekrar = IsimSehirTekrarView(self.oyuncular)

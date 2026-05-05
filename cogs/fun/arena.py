@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import math
+from ._shared import giphy
 
 # ── Sabitler ────────────────────────────────────────────────────────────────────
 
@@ -181,17 +182,21 @@ class ArenaView(discord.ui.View):
                 c.disabled = True
 
             if self.hp[0] <= 0 and self.hp[1] <= 0:
-                başlık, renk = "🤝 Berabere! İkiniz de yıkıldınız.", discord.Color.greyple()
+                başlık, renk, tag = "🤝 Berabere! İkiniz de yıkıldınız.", discord.Color.greyple(), "tie draw"
             elif self.hp[0] <= 0:
-                başlık, renk = f"🏆 {p2n} kazandı!", discord.Color.green()
+                başlık, renk, tag = f"🏆 {p2n} kazandı!", discord.Color.green(), "victory winner"
             elif self.hp[1] <= 0:
-                başlık, renk = f"🏆 {p1n} kazandı!", discord.Color.green()
+                başlık, renk, tag = f"🏆 {p1n} kazandı!", discord.Color.green(), "victory winner"
             else:
                 kazanan = p1n if self.hp[0] > self.hp[1] else p2n
-                başlık, renk = f"⏱️ {kazanan} daha fazla canla hayatta kaldı!", discord.Color.gold()
+                başlık, renk, tag = f"⏱️ {kazanan} daha fazla canla hayatta kaldı!", discord.Color.gold(), "victory winner"
 
+            gif   = await giphy(tag)
+            embed = self._embed_bitis(başlık, renk, son_log)
+            if gif:
+                embed.set_image(url=gif)
             tekrar = ArenaTekrarView(self.oyuncular[0], self.oyuncular[1])
-            await self.msg.edit(embed=self._embed_bitis(başlık, renk, son_log), view=tekrar)
+            await self.msg.edit(embed=embed, view=tekrar)
             tekrar.msg = self.msg
             return
 

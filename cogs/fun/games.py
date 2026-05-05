@@ -3,34 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import asyncio
-import os
-import aiohttp
-from ._shared import fun_embed, SEKIZ_TOP_YANIT
-
-_GIPHY_KEY = os.getenv("GIPHY_API_KEY", "")
-
-
-async def _giphy(tag: str) -> str | None:
-    """Giphy'den rastgele bir GIF URL'si döndürür. Başarısız olursa None."""
-    if not _GIPHY_KEY:
-        return None
-    url = (
-        "https://api.giphy.com/v1/gifs/search"
-        f"?api_key={_GIPHY_KEY}&q={tag}&limit=25&rating=pg-13&lang=tr"
-    )
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
-                if r.status != 200:
-                    return None
-                payload = await r.json()
-                results = payload.get("data", [])
-                if not results:
-                    return None
-                gif = random.choice(results)
-                return gif["images"]["original"]["url"]
-    except Exception:
-        return None
+from ._shared import fun_embed, giphy, SEKIZ_TOP_YANIT
 
 # ── Taş Kağıt Makas ────────────────────────────────────────────────────────────
 
@@ -153,9 +126,13 @@ class TKMView(discord.ui.View):
             self.stop()
             kazanan = self.oyuncu.mention if self.skor[0] > self.skor[1] else self._r_mention()
             metin += f"\n\n🏆 **{kazanan} oyunu kazandı!**"
+            gif    = await giphy("winner rock paper scissors")
+            embed  = self._embed(metin)
+            if gif:
+                embed.set_image(url=gif)
             tekrar = TKMTekrarView(self.oyuncu, self.rakip)
             assert self.msg
-            await self.msg.edit(embed=self._embed(metin), view=tekrar)
+            await self.msg.edit(embed=embed, view=tekrar)
             tekrar.msg = self.msg
             return
 
@@ -329,8 +306,12 @@ class AdamAsmacaView(discord.ui.View):
     def _bitti(self) -> bool:
         return all(h in self.tahminler for h in self.kelime)
 
-    async def _oyun_bitti(self, embed: discord.Embed):
+    async def _oyun_bitti(self, embed: discord.Embed, tag: str = ""):
         self.stop()
+        if tag:
+            gif = await giphy(tag)
+            if gif:
+                embed.set_image(url=gif)
         tekrar = AdamAsmacaTekrarView(self.oyuncu)
         assert self.msg
         await self.msg.edit(embed=embed, view=tekrar)
@@ -354,10 +335,10 @@ class AdamAsmacaView(discord.ui.View):
 
         if self._bitti():
             e = self._embed("🎉 Adam Asmaca — Kazandın!", discord.Color.green(), f"Kelime: **`{self.kelime}`**")
-            return await self._oyun_bitti(e)
+            return await self._oyun_bitti(e, "victory yes celebration")
         if self.yanlis >= self.maks:
             e = self._embed("💀 Adam Asmaca — Kaybettin!", discord.Color.red(), f"Kelime: **`{self.kelime}`** idi.")
-            return await self._oyun_bitti(e)
+            return await self._oyun_bitti(e, "fail game over")
 
         await self.msg.edit(embed=self._embed(), view=self)
 
@@ -372,13 +353,13 @@ class AdamAsmacaView(discord.ui.View):
             for h in self.kelime:
                 self.tahminler.add(h)
             e = self._embed("🎉 Adam Asmaca — Kazandın!", discord.Color.green(), f"Kelime: **`{self.kelime}`**")
-            return await self._oyun_bitti(e)
+            return await self._oyun_bitti(e, "victory yes celebration")
 
         # Wrong word guess = 2 yanlış cezası
         self.yanlis = min(self.yanlis + 2, self.maks)
         if self.yanlis >= self.maks:
             e = self._embed("💀 Adam Asmaca — Kaybettin!", discord.Color.red(), f"Kelime: **`{self.kelime}`** idi.")
-            return await self._oyun_bitti(e)
+            return await self._oyun_bitti(e, "fail game over")
 
         e = self._embed(son_not=f"❌ **`{tahmin}`** yanlış! 2 hak kaybettin.")
         await self.msg.edit(embed=e, view=self)
@@ -430,7 +411,8 @@ class Games(commands.Cog):
         )
         spin_embed.timestamp = discord.utils.utcnow()
         msg = await interaction.followup.send(embed=spin_embed, wait=True)
-        await asyncio.sleep(2)
+        tag = "coin flip heads" if sonuç == "Yazı" else "coin flip tails"
+        gif, _ = await asyncio.gather(giphy(tag), asyncio.sleep(2))
         if sonuç == "Tura":
             emoji_str, title, color = "<:tura:1500895527242563837>", "Tura!", discord.Color.gold()
         else:
@@ -440,6 +422,8 @@ class Games(commands.Cog):
             description=f"{interaction.user.mention} parayı attı ve...\n\n{emoji_str}  **{sonuç}** çıktı!",
             color=color,
         )
+        if gif:
+            result_embed.set_image(url=gif)
         result_embed.timestamp = discord.utils.utcnow()
         await msg.edit(embed=result_embed)
 
@@ -554,7 +538,7 @@ class Games(commands.Cog):
             ])
 
         await interaction.response.defer()
-        gif = await _giphy(tag)
+        gif = await giphy(tag)
 
         embed = discord.Embed(
             title=f"{emoji} Bilimsel Pipi Ölçümü™",

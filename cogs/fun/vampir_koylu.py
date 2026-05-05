@@ -4,6 +4,7 @@ from discord.ext import commands
 import random
 import asyncio
 from collections import Counter
+from ._shared import giphy
 
 # ── Sabitler ──────────────────────────────────────────────────────────────────
 
@@ -532,15 +533,17 @@ class VampirKoyluOyunu:
             başlık   = "🌟 Köylüler Kazandı!"
             renk     = discord.Color.green()
             açıklama = "Tüm vampirler temizlendi! Köy güvende! 🎉"
-            gif      = "https://tenor.com/b1AOe.gif"
+            tag      = "victory celebration villagers"
         else:
             başlık   = "🧛 Vampirler Kazandı!"
             renk     = discord.Color.dark_red()
             açıklama = "Vampirler köyü ele geçirdi! Geceler artık daha karanlık... 🌙"
-            gif      = "https://tenor.com/Rlos.gif"
+            tag      = "vampire evil laugh win"
 
-        e = discord.Embed(title=başlık, description=açıklama, color=renk)
-        e.set_image(url=gif)
+        gif = await giphy(tag)
+        e   = discord.Embed(title=başlık, description=açıklama, color=renk)
+        if gif:
+            e.set_image(url=gif)
 
         satırlar = []
         for oyuncu in self.oyuncular:

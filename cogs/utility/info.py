@@ -17,13 +17,13 @@ class Info(commands.Cog):
         color = discord.Color.green() if ws < 100 else discord.Color.orange() if ws < 200 else discord.Color.red()
 
         before = discord.utils.utcnow()
-        await interaction.response.defer()
+        await interaction.response.send_message(embed=_emb("🏓 Pong!", "Ölçülüyor...", color))
         rt = round((discord.utils.utcnow() - before).total_seconds() * 1000)
 
         bar_len = min(int(ws / 20), 10)
         bar     = "█" * bar_len + "░" * (10 - bar_len)
         embed   = _emb("🏓 Pong!", f"`{bar}`\n\n📡 **WebSocket:** {ws} ms\n🔄 **Roundtrip:** {rt} ms", color)
-        await interaction.followup.send(embed=embed)
+        await interaction.edit_original_response(embed=embed)
 
     # /avatar
     @app_commands.command(name="avatar", description="Bir kullanıcının avatarını gösterir.")

@@ -1,7 +1,7 @@
 # 🐓 Horoz Bot
 
 Türkçe, slash command tabanlı çok amaçlı Discord botu.  
-Moderasyon · Müzik (YouTube + Playlist) · Eğlence · Özel Komutlar
+Moderasyon · Müzik · Eğlence / Oyunlar · Sunucu Yönetimi · Özel Komutlar
 
 ---
 
@@ -9,12 +9,17 @@ Moderasyon · Müzik (YouTube + Playlist) · Eğlence · Özel Komutlar
 
 | Kategori | Komutlar |
 |---|---|
-| 🛡️ Moderasyon | `/moderatör temizle` `at` `yasakla` `sustur` `sustu-kaldır` `ihlaller` `ihlal-temizle` |
-| 🎵 Müzik | `/müzik çal` `ara` `atla` `duraklat` `devam` `dur` `ses` `sıra` `sıra-temizle` `döngü` `şimdi-çalıyor` |
-| 🎉 Eğlence | `/yazıtura` `/zar` `/anket` `/etkinlik` |
-| ⚙️ Özel Komutlar | `/komutyarat` `/komutlistele` `/komutsil` `/komut` |
-| ℹ️ Araçlar | `/yardım` `/ping` `/kullanici-bilgi` `/sunucu-bilgi` `/avatar` `/bot-bilgi` |
-| 🔧 Yönetim | `/komuttazele` |
+| 🛡️ Moderasyon — Üye | `/üye uyar` `at` `yasakla` `sustur` `sus-kaldır` |
+| 🛡️ Moderasyon — Kanal | `/kanal temizle` `yavaşmod` `kilitle` `kilit-aç` |
+| ⚠️ İhlal | `/ihlal listele` `sil` |
+| 🎵 Müzik | `/müzik çal` `ara` `atla` `duraklat` `devam` `dur` `ses` `sıra` `sıra-sil` `karıştır` `döngü` `şimdi` |
+| 🎮 Oyunlar | `/yazıtura` `/zar` `/8top` `/kaccm` `/tkm` `/adamasmaca` `/arena` `/isimşehir` `/vampirkoylu` `/rusruleti` |
+| 📊 Sosyal | `/anket` `/etkinlik` |
+| 📢 Mesajlaşma | `/yaz` `/embed` `/duyuru` `/hatırlat` |
+| ℹ️ Araçlar | `/ping` `/profil` `/sunucu` `/avatar` `/bot` `/yardım` |
+| 😀 Emoji & Sticker | `/emoji-ekle` `/oto-emoji` · Sağ tık → Emojileri Ekle / Sticker'ı Ekle |
+| ⚙️ Özel Komutlar | `/komut-yarat` `/komut-liste` `/komut-sil` `/komut` |
+| 🔧 Yönetim | `/tazele` `/restart` |
 
 ---
 
@@ -75,10 +80,7 @@ Proje klasöründe `.env` dosyası oluştur:
 
 ```env
 DISCORD_TOKEN=buraya_bot_tokenini_yaz
-GUILD_ID=buraya_sunucu_idni_yaz
 ```
-
-> **Not:** `GUILD_ID` isteğe bağlıdır. Sunucu ID'si için Discord'da **Geliştirici Modu**'nu aç (Ayarlar → Gelişmiş), ardından sunucu ikonuna sağ tıkla → ID Kopyala.
 
 ---
 
@@ -93,8 +95,10 @@ Developer Portal → OAuth2 → URL Generator:
 - Kick Members
 - Ban Members
 - Moderate Members (Timeout)
+- Manage Channels
+- Manage Emojis and Stickers
 - Connect & Speak (ses kanalları için)
-- Send Messages, Embed Links, Read Message History
+- Send Messages, Embed Links, Read Message History, Attach Files
 
 Oluşturulan URL'yi tarayıcıda aç ve botu sunucuna ekle.
 
@@ -125,9 +129,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/horoz_bot
-ExecStart=/usr/bin/python3 main.py
+User=root
+WorkingDirectory=/root/horoz_bot
+ExecStart=/root/horoz_bot/venv/bin/python main.py
 Restart=on-failure
 RestartSec=5
 
@@ -154,10 +158,24 @@ sudo journalctl -u horoz-bot -f
 Slash komutları Discord tarafında cache'lenir. Güncelleme için:
 
 ```
-/komuttazele
+/tazele
 ```
 
-Bu komut `Administrator` yetkisi gerektirir ve tüm komutları Discord ile yeniden senkronize eder.
+Bu komut `Administrator` yetkisi gerektirir ve tüm komutları Discord ile yeniden senkronize eder.  
+Ayrıca `/restart` komutu botu yeniden başlatarak senkronizasyonu otomatik yapar.
+
+---
+
+## Oyunlar
+
+| Oyun | Açıklama |
+|---|---|
+| `/vampirkoylu` | 4–12 kişilik çok oyunculu rol yapma oyunu. Vampirler gece öldürür, köylüler gündüz oylar. |
+| `/rusruleti` | 2–6 kişilik Rus Ruleti. 6 oda, 1 mermi — biri mutlaka kaybeder. |
+| `/arena` | 2 kişilik tur bazlı dövüş. Kılıç / Büyü / Kalkan sistemi. |
+| `/isimşehir` | 2–8 kişilik İsim Şehir. 5 tur, 5 kategori. Eşsiz cevap 10 puan. |
+| `/tkm` | Taş Kağıt Makas. İnsan veya bota karşı, ilk 2 galibiyeti alan kazanır. |
+| `/adamasmaca` | Tek oyunculu Adam Asmaca. 6 yanlış hak, Türkçe kelime havuzu. |
 
 ---
 
@@ -177,13 +195,13 @@ Bu komut `Administrator` yetkisi gerektirir ve tüm komutları Discord ile yenid
 
 ## Özel Komutlar
 
-Sunucu yöneticileri `/komutyarat` ile özel komutlar oluşturabilir:
+Sunucu yöneticileri `/komut-yarat` ile sunucuya özel komutlar oluşturabilir:
 
 ```
-/komutyarat isim:merhaba yanıt:Merhaba dünya!
+/komut-yarat isim:merhaba yanıt:Merhaba dünya!
 /komut isim:merhaba          → "Merhaba dünya!" gönderilir
-/komutlistele                → Tüm özel komutlar
-/komutsil isim:merhaba       → Komutu sil
+/komut-liste                 → Tüm özel komutlar
+/komut-sil isim:merhaba      → Komutu sil
 ```
 
 Özel komutlar sunucuya özeldir, başka sunucularda görünmez.

@@ -37,7 +37,7 @@ class Admin(commands.Cog):
         )
         embed.add_field(
             name="🎮 Oyunlar",
-            value="`/yazıtura` `/zar` `/8top`",
+            value="`/yazıtura` `/zar` `/8top` `/kaccm`\n`/tkm` `/adamasmaca` `/arena`\n`/isimşehir` `/vampirkoylu` `/rusruleti`",
             inline=False,
         )
         embed.add_field(

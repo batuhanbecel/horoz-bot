@@ -11,7 +11,6 @@ class ChannelMod(commands.Cog):
     kanal = app_commands.Group(
         name="kanal",
         description="Kanal yönetim komutları",
-        default_member_permissions=None,
     )
 
     # /kanal temizle

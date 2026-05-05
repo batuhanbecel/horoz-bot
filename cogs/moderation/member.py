@@ -13,7 +13,6 @@ class MemberMod(commands.Cog):
     üye = app_commands.Group(
         name="üye",
         description="Üye yönetim komutları",
-        default_member_permissions=None,
     )
 
     # /üye uyar

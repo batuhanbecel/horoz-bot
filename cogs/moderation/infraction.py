@@ -12,7 +12,6 @@ class InfractionMod(commands.Cog):
     ihlal = app_commands.Group(
         name="ihlal",
         description="İhlal yönetim komutları",
-        default_member_permissions=None,
     )
 
     # /ihlal listele

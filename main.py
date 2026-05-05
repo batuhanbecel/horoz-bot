@@ -23,7 +23,7 @@ def discover_cogs() -> list[str]:
     """cogs/ altındaki tüm alt-klasör .py dosyalarını otomatik bulur."""
     found = []
     for py in sorted(pathlib.Path("cogs").rglob("*.py")):
-        if py.name.startswith("_"):
+        if py.name.startswith("_") or py.stem == "views":
             continue
         # cogs/server/emoji.py  →  cogs.server.emoji
         found.append(".".join(py.with_suffix("").parts))

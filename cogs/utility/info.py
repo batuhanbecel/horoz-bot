@@ -37,7 +37,7 @@ class Info(commands.Cog):
 
     # /bot
     @app_commands.command(name="bot", description="Bot hakkında bilgi verir.")
-    async def bot_info(self, interaction: discord.Interaction):
+    async def horoz_info(self, interaction: discord.Interaction):
         delta  = datetime.now(timezone.utc) - self._start_time
         h, rem = divmod(int(delta.total_seconds()), 3600)
         m, s   = divmod(rem, 60)

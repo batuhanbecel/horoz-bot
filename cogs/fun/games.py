@@ -212,7 +212,7 @@ _KELIMELER = [
 _TR_NORM: dict[str, str] = {"I": "İ", "İ": "I"}
 
 
-class HarfModal(discord.ui.Modal, title="Harf Tahmin Et"):
+class HarfModal(discord.ui.Modal):
     harf = discord.ui.TextInput(
         label="Bir harf gir",
         min_length=1,
@@ -221,7 +221,7 @@ class HarfModal(discord.ui.Modal, title="Harf Tahmin Et"):
     )
 
     def __init__(self, view: "AdamAsmacaView"):
-        super().__init__()
+        super().__init__(title="Harf Tahmin Et")
         self._game = view
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -336,24 +336,28 @@ class AdamAsmacaView(discord.ui.View):
 
         harf = self._normalize_harf(harf)
         self.tahminler.add(harf)
-        if harf not in self.kelime:
+        hit = harf in self.kelime
+        if not hit:
             self.yanlis += 1
 
         await interaction.response.defer(ephemeral=True)
         assert self.msg
 
         if self._bitti():
-            return await self._oyun_bitti(
-                "🎉 Adam Asmaca — Kazandın!", _C_GREEN,
-                f"Kelime: **`{self.kelime}`**", "victory yes celebration",
-            )
+            await self._oyun_bitti("🎉 Adam Asmaca — Kazandın!", _C_GREEN,
+                                   f"Kelime: **`{self.kelime}`**", "victory yes celebration")
+            await interaction.followup.send("🎉 **Kazandın!**", ephemeral=True)
+            return
         if self.yanlis >= self.maks:
-            return await self._oyun_bitti(
-                "💀 Adam Asmaca — Kaybettin!", _C_RED,
-                f"Kelime: **`{self.kelime}`** idi.", "fail game over",
-            )
+            await self._oyun_bitti("💀 Adam Asmaca — Kaybettin!", _C_RED,
+                                   f"Kelime: **`{self.kelime}`** idi.", "fail game over")
+            await interaction.followup.send("💀 **Kaybettin.**", ephemeral=True)
+            return
 
         await msg_edit(self.msg, self._card(), view=self)
+        await interaction.followup.send(
+            f"✅ `{harf}` kelimede {'var!' if hit else 'yok.'}", ephemeral=True
+        )
 
     async def kelime_tahmin(self, interaction: discord.Interaction, tahmin: str):
         if interaction.user.id != self.oyuncu.id:
@@ -365,19 +369,20 @@ class AdamAsmacaView(discord.ui.View):
         if tahmin == self.kelime:
             for h in self.kelime:
                 self.tahminler.add(h)
-            return await self._oyun_bitti(
-                "🎉 Adam Asmaca — Kazandın!", _C_GREEN,
-                f"Kelime: **`{self.kelime}`**", "victory yes celebration",
-            )
+            await self._oyun_bitti("🎉 Adam Asmaca — Kazandın!", _C_GREEN,
+                                   f"Kelime: **`{self.kelime}`**", "victory yes celebration")
+            await interaction.followup.send("🎉 **Kazandın!**", ephemeral=True)
+            return
 
         self.yanlis = min(self.yanlis + 2, self.maks)
         if self.yanlis >= self.maks:
-            return await self._oyun_bitti(
-                "💀 Adam Asmaca — Kaybettin!", _C_RED,
-                f"Kelime: **`{self.kelime}`** idi.", "fail game over",
-            )
+            await self._oyun_bitti("💀 Adam Asmaca — Kaybettin!", _C_RED,
+                                   f"Kelime: **`{self.kelime}`** idi.", "fail game over")
+            await interaction.followup.send("💀 **Kaybettin.**", ephemeral=True)
+            return
 
         await msg_edit(self.msg, self._card(son_not=f"❌ **`{tahmin}`** yanlış! 2 hak kaybettin."), view=self)
+        await interaction.followup.send(f"❌ **`{tahmin}`** yanlış kelime.", ephemeral=True)
 
     async def on_timeout(self):
         self.stop()
@@ -515,7 +520,9 @@ class Games(commands.Cog):
     async def adamasmaca(self, interaction: discord.Interaction):
         kelime = random.choice(_KELIMELER)
         view   = AdamAsmacaView(interaction.user, kelime)
-        view.msg = await respond(interaction, view._card(), view=view)
+        await interaction.response.defer(ephemeral=True)
+        msg = await channel_send(interaction.channel, view._card(), view=view)
+        view.msg = msg
 
     @app_commands.command(name="kaccm", description="Pipi ölçer. Bilimsel kesinlik garantili.")
     @app_commands.describe(kişi="Ölçülecek kişi (boş = kendin)")

@@ -3,7 +3,20 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import asyncio
-from ._shared import fun_embed, giphy, SEKIZ_TOP_YANIT
+from ._shared import giphy, SEKIZ_TOP_YANIT
+from .._v2 import (
+    c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
+    respond, followup, edit_followup, update, channel_send, msg_edit,
+)
+
+# ── Renkler ────────────────────────────────────────────────────────────────────
+_C_BLUE   = 0x5865F2
+_C_GREEN  = 0x57F287
+_C_RED    = 0xED4245
+_C_ORANGE = 0xF0A030
+_C_GOLD   = 0xFEE75C
+_C_PINK   = 0xFF69B4
+_C_DARK   = 0x23272A
 
 # ── Taş Kağıt Makas ────────────────────────────────────────────────────────────
 
@@ -19,10 +32,11 @@ def _tkm_tur(s1: str, s2: str) -> str:
 
 
 class TKMTekrarView(discord.ui.View):
-    def __init__(self, oyuncu: discord.Member, rakip: discord.Member | None):
+    def __init__(self, oyuncu: discord.Member, rakip: discord.Member | None, son_kart: dict):
         super().__init__(timeout=120)
-        self.oyuncu = oyuncu
-        self.rakip  = rakip
+        self.oyuncu    = oyuncu
+        self.rakip     = rakip
+        self._son_kart = son_kart
         self.msg: discord.Message | None = None
 
     async def on_timeout(self):
@@ -30,7 +44,7 @@ class TKMTekrarView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(view=self)
+                await msg_edit(self.msg, self._son_kart, view=self)
             except discord.HTTPException:
                 pass
 
@@ -43,11 +57,12 @@ class TKMTekrarView(discord.ui.View):
             return await interaction.response.send_message("Bu oyuna dahil değilsin!", ephemeral=True)
         btn.disabled = True
         self.stop()
-        await interaction.response.edit_message(view=self)
+        await update(interaction, self._son_kart, view=self)
         view = TKMView(self.oyuncu, self.rakip)
         r_str = self.rakip.mention if self.rakip else "Bot"
-        msg = await interaction.channel.send(
-            embed=view._embed(f"{self.oyuncu.mention} vs {r_str}\n\nSeçiminizi yapın!"),
+        msg = await channel_send(
+            interaction.channel,
+            view._card(f"{self.oyuncu.mention} vs {r_str}\n\nSeçiminizi yapın!"),
             view=view,
         )
         view.msg = msg
@@ -56,31 +71,33 @@ class TKMTekrarView(discord.ui.View):
 class TKMView(discord.ui.View):
     def __init__(self, oyuncu: discord.Member, rakip: discord.Member | None):
         super().__init__(timeout=60)
-        self.oyuncu  = oyuncu
-        self.rakip   = rakip
+        self.oyuncu   = oyuncu
+        self.rakip    = rakip
         self.seçimler: dict[int, str] = {}
-        self.skor    = [0, 0]
-        self.tur     = 1
-        self.hedef   = 2
+        self.skor     = [0, 0]
+        self.tur      = 1
+        self.hedef    = 2
         self.msg: discord.Message | None = None
 
     def _r_isim(self)    -> str: return self.rakip.display_name if self.rakip else "Bot"
     def _r_mention(self) -> str: return self.rakip.mention if self.rakip else "**Bot**"
 
-    def _embed(self, açıklama: str = "") -> discord.Embed:
+    def _card(self, açıklama: str = "", gif_url: str | None = None, color: int = _C_BLUE) -> dict:
         s0 = "⭐" * self.skor[0] if self.skor[0] else "—"
         s1 = "⭐" * self.skor[1] if self.skor[1] else "—"
-        e = discord.Embed(
-            title=f"🪨📄✂️ Taş Kağıt Makas",
-            color=discord.Color.blue(),
+        body = (
+            f"## 🪨📄✂️ Taş Kağıt Makas\n"
+            f"-# İlk {self.hedef} galibiyeti alan kazanır!\n\n"
+            f"**{self.oyuncu.display_name}** — {s0}\n"
+            f"*Tur {self.tur}*\n"
+            f"**{self._r_isim()}** — {s1}"
         )
-        e.add_field(name=f"👤 {self.oyuncu.display_name}", value=s0, inline=True)
-        e.add_field(name=f"Tur {self.tur}",               value="⚔️", inline=True)
-        e.add_field(name=f"👤 {self._r_isim()}",          value=s1,   inline=True)
-        e.add_field(name="​", value=açıklama or "Seçiminizi yapın!", inline=False)
-        e.set_footer(text=f"İlk {self.hedef} galibiyeti alan kazanır!")
-        e.timestamp = discord.utils.utcnow()
-        return e
+        if açıklama:
+            body += f"\n\n{açıklama}"
+        items: list[dict] = [c_section(c_text(body))]
+        if gif_url:
+            items.append(c_media(gif_url))
+        return c_container(*items, color=color)
 
     async def _oyna(self, interaction: discord.Interaction, seçim: str):
         uid = interaction.user.id
@@ -94,9 +111,12 @@ class TKMView(discord.ui.View):
             await interaction.response.defer()
             if len(self.seçimler) < 2:
                 beklenen = self.rakip if uid == self.oyuncu.id else self.oyuncu
-                return await self.msg.edit(embed=self._embed(
-                    f"{interaction.user.mention} seçimini yaptı.\n{beklenen.mention} bekleniyor..."
-                ))
+                await msg_edit(
+                    self.msg,
+                    self._card(f"{interaction.user.mention} seçimini yaptı.\n{beklenen.mention} bekleniyor..."),
+                    view=self,
+                )
+                return
             s1 = self.seçimler[self.oyuncu.id]
             s2 = self.seçimler[self.rakip.id]
         else:
@@ -114,39 +134,37 @@ class TKMView(discord.ui.View):
         metin = f"{_TKM_EMOJI[s1]} **{l1}** vs {_TKM_EMOJI[s2]} **{l2}**\n"
 
         if sonuç == "berabere":
-            metin += "🤝 **Bu tur berabere!**"
+            metin += "🤝 Bu tur berabere!"
         elif sonuç == "1":
             self.skor[0] += 1
-            metin += f"✅ **{self.oyuncu.display_name} bu turu kazandı!**"
+            metin += f"✅ **{self.oyuncu.display_name}** bu turu kazandı!"
         else:
             self.skor[1] += 1
-            metin += f"✅ **{self._r_isim()} bu turu kazandı!**"
+            metin += f"✅ **{self._r_isim()}** bu turu kazandı!"
 
         if self.skor[0] >= self.hedef or self.skor[1] >= self.hedef:
             self.stop()
             kazanan = self.oyuncu.mention if self.skor[0] > self.skor[1] else self._r_mention()
-            metin += f"\n\n🏆 **{kazanan} oyunu kazandı!**"
-            gif    = await giphy("winner rock paper scissors")
-            embed  = self._embed(metin)
-            if gif:
-                embed.set_image(url=gif)
-            tekrar = TKMTekrarView(self.oyuncu, self.rakip)
+            metin  += f"\n\n🏆 **{kazanan} oyunu kazandı!**"
+            gif     = await giphy("winner rock paper scissors")
+            son_kart = self._card(metin, gif_url=gif, color=_C_GREEN)
+            tekrar   = TKMTekrarView(self.oyuncu, self.rakip, son_kart)
             assert self.msg
-            await self.msg.edit(embed=embed, view=tekrar)
+            await msg_edit(self.msg, son_kart, view=tekrar)
             tekrar.msg = self.msg
             return
 
         self.tur += 1
         self.seçimler.clear()
         assert self.msg
-        await self.msg.edit(embed=self._embed(metin + "\n\nSonraki tur için seçiminizi yapın!"), view=self)
+        await msg_edit(self.msg, self._card(metin + "\n\nSonraki tur için seçiminizi yapın!"), view=self)
 
     async def on_timeout(self):
         for c in self.children:
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(embed=self._embed("⏰ Süre doldu!"), view=self)
+                await msg_edit(self.msg, self._card("⏰ Süre doldu!"), view=self)
             except discord.HTTPException:
                 pass
 
@@ -165,40 +183,32 @@ class TKMView(discord.ui.View):
 
 # ── Adam Asmaca ────────────────────────────────────────────────────────────────
 
-_AŞAMALAR = [
-    "```\n  -----\n  |   |\n  |\n  |\n  |\n  |\n------\n```",
-    "```\n  -----\n  |   |\n  |   O\n  |\n  |\n  |\n------\n```",
-    "```\n  -----\n  |   |\n  |   O\n  |   |\n  |\n  |\n------\n```",
-    "```\n  -----\n  |   |\n  |   O\n  |  /|\n  |\n  |\n------\n```",
-    "```\n  -----\n  |   |\n  |   O\n  |  /|\\\n  |\n  |\n------\n```",
-    "```\n  -----\n  |   |\n  |   O\n  |  /|\\\n  |  /\n  |\n------\n```",
-    "```\n  -----\n  |   |\n  |   O\n  |  /|\\\n  |  / \\\n  |\n------\n```",
+_DARAĞAÇLARI = [
+    "  -----\n  |   |\n  |\n  |\n  |\n  |\n------",
+    "  -----\n  |   |\n  |   O\n  |\n  |\n  |\n------",
+    "  -----\n  |   |\n  |   O\n  |   |\n  |\n  |\n------",
+    "  -----\n  |   |\n  |   O\n  |  /|\n  |\n  |\n------",
+    "  -----\n  |   |\n  |   O\n  |  /|\\\n  |\n  |\n------",
+    "  -----\n  |   |\n  |   O\n  |  /|\\\n  |  /\n  |\n------",
+    "  -----\n  |   |\n  |   O\n  |  /|\\\n  |  / \\\n  |\n------",
 ]
 
 _KELIMELER = [
-    # Hayvanlar
     "KEDİ", "KÖPEK", "ASLAN", "KAPLAN", "FİL", "TİMSAH", "TAVŞAN",
     "TAVUK", "BALIK", "KURBAĞA", "KAPLUMBAĞA", "KARTAL", "PAPAĞAN",
     "ZEBRA", "KANGURU", "PENGUEN", "AHTAPOT", "SINCAP",
-    # Eşyalar & Taşıtlar
     "MASA", "SANDALYE", "PENCERE", "KALEM", "KİTAP", "TELEFON",
     "ARABA", "UÇAK", "GEMİ", "TREN", "BİSİKLET", "HELİKOPTER", "ROKET",
-    # Doğa
     "DENİZ", "ORMAN", "ÇİÇEK", "AĞAÇ", "BULUT", "YILDIZ", "VOLKAN",
     "OKYANUS", "NEHİR", "GÖL",
-    # Yiyecek
     "ELMA", "ARMUT", "PORTAKAL", "MUZ", "ÇİLEK", "DOMATES",
     "PATATES", "EKMEK", "PEYNİR", "PİZZA",
-    # Yerler
     "İSTANBUL", "ANKARA", "İZMİR", "OKUL", "HASTANE", "MARKET", "PLAJ",
-    # Spor & Teknoloji
     "FUTBOL", "BASKETBOL", "VOLEYBOL", "TENİS", "YÜZME",
     "BİLGİSAYAR", "İNTERNET", "MÜZİK", "SİNEMA", "TELEVİZYON",
-    # Diğer
     "ŞEHİR", "ÜLKE", "DÜNYA", "UZAY", "GEZEGEN", "GALAKSİ",
 ]
 
-# Turkish I/İ normalization: dotted vs dotless confusion
 _TR_NORM: dict[str, str] = {"I": "İ", "İ": "I"}
 
 
@@ -235,9 +245,10 @@ class KelimeModal(discord.ui.Modal):
 
 
 class AdamAsmacaTekrarView(discord.ui.View):
-    def __init__(self, oyuncu: discord.Member):
+    def __init__(self, oyuncu: discord.Member, son_kart: dict):
         super().__init__(timeout=120)
-        self.oyuncu = oyuncu
+        self.oyuncu    = oyuncu
+        self._son_kart = son_kart
         self.msg: discord.Message | None = None
 
     async def on_timeout(self):
@@ -245,7 +256,7 @@ class AdamAsmacaTekrarView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(view=self)
+                await msg_edit(self.msg, self._son_kart, view=self)
             except discord.HTTPException:
                 pass
 
@@ -255,10 +266,10 @@ class AdamAsmacaTekrarView(discord.ui.View):
             return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
         btn.disabled = True
         self.stop()
-        await interaction.response.edit_message(view=self)
+        await update(interaction, self._son_kart, view=self)
         kelime = random.choice(_KELIMELER)
-        view = AdamAsmacaView(self.oyuncu, kelime)
-        msg = await interaction.channel.send(embed=view._embed(), view=view)
+        view   = AdamAsmacaView(self.oyuncu, kelime)
+        msg    = await channel_send(interaction.channel, view._card(), view=view)
         view.msg = msg
 
 
@@ -281,40 +292,38 @@ class AdamAsmacaView(discord.ui.View):
     def _gizli(self) -> str:
         return " ".join(h if h in self.tahminler else "_" for h in self.kelime)
 
-    def _embed(
+    def _card(
         self,
         başlık: str = "🪢 Adam Asmaca",
-        renk: discord.Color = discord.Color.orange(),
+        color: int = _C_ORANGE,
         son_not: str = "",
-    ) -> discord.Embed:
-        e = discord.Embed(
-            title=başlık,
-            description=(
-                f"{_AŞAMALAR[self.yanlis]}\n"
-                f"**Kelime:** `{self._gizli()}`\n"
-                f"**Yanlış:** {self.yanlis}/{self.maks}"
-                + (f"\n\n{son_not}" if son_not else "")
-            ),
-            color=renk,
+        gif_url: str | None = None,
+    ) -> dict:
+        tahmin_str = " ".join(sorted(self.tahminler)) if self.tahminler else "—"
+        content = (
+            f"## {başlık}\n"
+            f"```\n{_DARAĞAÇLARI[self.yanlis]}\n```\n"
+            f"**Kelime:** `{self._gizli()}`\n"
+            f"**Yanlış:** {self.yanlis}/{self.maks}\n"
+            f"**Tahminler:** {tahmin_str}"
         )
-        if self.tahminler:
-            e.add_field(name="Tahmin Edilenler", value=" ".join(sorted(self.tahminler)))
-        e.set_footer(text=f"Oynayan: {self.oyuncu.display_name}")
-        e.timestamp = discord.utils.utcnow()
-        return e
+        if son_not:
+            content += f"\n\n{son_not}"
+        items: list[dict] = [c_text(content)]
+        if gif_url:
+            items.append(c_media(gif_url))
+        return c_container(*items, color=color)
 
     def _bitti(self) -> bool:
         return all(h in self.tahminler for h in self.kelime)
 
-    async def _oyun_bitti(self, embed: discord.Embed, tag: str = ""):
+    async def _oyun_bitti(self, başlık: str, color: int, son_not: str, tag: str = ""):
         self.stop()
-        if tag:
-            gif = await giphy(tag)
-            if gif:
-                embed.set_image(url=gif)
-        tekrar = AdamAsmacaTekrarView(self.oyuncu)
+        gif  = await giphy(tag) if tag else None
+        kart = self._card(başlık=başlık, color=color, son_not=son_not, gif_url=gif)
+        tekrar = AdamAsmacaTekrarView(self.oyuncu, kart)
         assert self.msg
-        await self.msg.edit(embed=embed, view=tekrar)
+        await msg_edit(self.msg, kart, view=tekrar)
         tekrar.msg = self.msg
 
     async def harf_tahmin(self, interaction: discord.Interaction, harf: str):
@@ -334,13 +343,17 @@ class AdamAsmacaView(discord.ui.View):
         assert self.msg
 
         if self._bitti():
-            e = self._embed("🎉 Adam Asmaca — Kazandın!", discord.Color.green(), f"Kelime: **`{self.kelime}`**")
-            return await self._oyun_bitti(e, "victory yes celebration")
+            return await self._oyun_bitti(
+                "🎉 Adam Asmaca — Kazandın!", _C_GREEN,
+                f"Kelime: **`{self.kelime}`**", "victory yes celebration",
+            )
         if self.yanlis >= self.maks:
-            e = self._embed("💀 Adam Asmaca — Kaybettin!", discord.Color.red(), f"Kelime: **`{self.kelime}`** idi.")
-            return await self._oyun_bitti(e, "fail game over")
+            return await self._oyun_bitti(
+                "💀 Adam Asmaca — Kaybettin!", _C_RED,
+                f"Kelime: **`{self.kelime}`** idi.", "fail game over",
+            )
 
-        await self.msg.edit(embed=self._embed(), view=self)
+        await msg_edit(self.msg, self._card(), view=self)
 
     async def kelime_tahmin(self, interaction: discord.Interaction, tahmin: str):
         if interaction.user.id != self.oyuncu.id:
@@ -352,25 +365,30 @@ class AdamAsmacaView(discord.ui.View):
         if tahmin == self.kelime:
             for h in self.kelime:
                 self.tahminler.add(h)
-            e = self._embed("🎉 Adam Asmaca — Kazandın!", discord.Color.green(), f"Kelime: **`{self.kelime}`**")
-            return await self._oyun_bitti(e, "victory yes celebration")
+            return await self._oyun_bitti(
+                "🎉 Adam Asmaca — Kazandın!", _C_GREEN,
+                f"Kelime: **`{self.kelime}`**", "victory yes celebration",
+            )
 
-        # Wrong word guess = 2 yanlış cezası
         self.yanlis = min(self.yanlis + 2, self.maks)
         if self.yanlis >= self.maks:
-            e = self._embed("💀 Adam Asmaca — Kaybettin!", discord.Color.red(), f"Kelime: **`{self.kelime}`** idi.")
-            return await self._oyun_bitti(e, "fail game over")
+            return await self._oyun_bitti(
+                "💀 Adam Asmaca — Kaybettin!", _C_RED,
+                f"Kelime: **`{self.kelime}`** idi.", "fail game over",
+            )
 
-        e = self._embed(son_not=f"❌ **`{tahmin}`** yanlış! 2 hak kaybettin.")
-        await self.msg.edit(embed=e, view=self)
+        await msg_edit(self.msg, self._card(son_not=f"❌ **`{tahmin}`** yanlış! 2 hak kaybettin."), view=self)
 
     async def on_timeout(self):
         self.stop()
         if self.msg:
             try:
-                e = self._embed("⏰ Adam Asmaca — Süre Doldu!", discord.Color.red(), f"Kelime: **`{self.kelime}`** idi.")
-                tekrar = AdamAsmacaTekrarView(self.oyuncu)
-                await self.msg.edit(embed=e, view=tekrar)
+                kart = self._card(
+                    "⏰ Adam Asmaca — Süre Doldu!", _C_RED,
+                    f"Kelime: **`{self.kelime}`** idi.",
+                )
+                tekrar = AdamAsmacaTekrarView(self.oyuncu, kart)
+                await msg_edit(self.msg, kart, view=tekrar)
                 tekrar.msg = self.msg
             except discord.HTTPException:
                 pass
@@ -388,10 +406,13 @@ class AdamAsmacaView(discord.ui.View):
         if interaction.user.id != self.oyuncu.id:
             return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
         self.stop()
-        e = self._embed("🏳️ Adam Asmaca — Teslim Oldun!", discord.Color.red(), f"Kelime: **`{self.kelime}`** idi.")
-        tekrar = AdamAsmacaTekrarView(self.oyuncu)
-        await interaction.response.edit_message(embed=e, view=tekrar)
-        tekrar.msg = interaction.message
+        kart = self._card(
+            "🏳️ Adam Asmaca — Teslim Oldun!", _C_RED,
+            f"Kelime: **`{self.kelime}`** idi.",
+        )
+        tekrar = AdamAsmacaTekrarView(self.oyuncu, kart)
+        await update(interaction, kart, view=tekrar)
+        tekrar.msg = self.msg
 
 
 # ── Cog ────────────────────────────────────────────────────────────────────────
@@ -404,28 +425,44 @@ class Games(commands.Cog):
     async def yazıtura(self, interaction: discord.Interaction):
         await interaction.response.defer()
         sonuç = random.choice(["Yazı", "Tura"])
-        spin_embed = discord.Embed(
-            title="Para atılıyor...",
-            description=f"{interaction.user.mention} parayı havaya fırlattı!\n\n<a:spinning_para:1500895448968331468>",
-            color=discord.Color.gold(),
+
+        spin_card = c_container(
+            c_section(
+                c_text(
+                    f"## 🪙 Yazı mı Tura mı?\n"
+                    f"{interaction.user.mention} parayı havaya fırlattı!\n\n"
+                    f"<a:spinning_para:1500895448968331468>"
+                ),
+                accessory=c_thumbnail(interaction.user.display_avatar.url),
+            ),
+            color=_C_GOLD,
         )
-        spin_embed.timestamp = discord.utils.utcnow()
-        msg = await interaction.followup.send(embed=spin_embed, wait=True)
+        msg_id = await followup(interaction, spin_card)
+
         tag = "coin flip heads" if sonuç == "Yazı" else "coin flip tails"
         gif, _ = await asyncio.gather(giphy(tag), asyncio.sleep(2))
+
         if sonuç == "Tura":
-            emoji_str, title, color = "<:tura:1500895527242563837>", "Tura!", discord.Color.gold()
+            emoji_str = "<:tura:1500895527242563837>"
+            color     = _C_GOLD
         else:
-            emoji_str, title, color = "<:yazi:1500895591129944194>", "Yazı!", discord.Color.light_grey()
-        result_embed = discord.Embed(
-            title=title,
-            description=f"{interaction.user.mention} parayı attı ve...\n\n{emoji_str}  **{sonuç}** çıktı!",
-            color=color,
-        )
+            emoji_str = "<:yazi:1500895591129944194>"
+            color     = 0xC0C0C0
+
+        items: list[dict] = [
+            c_section(
+                c_text(
+                    f"## {emoji_str} {sonuç}!\n"
+                    f"{interaction.user.mention} parayı attı ve...\n\n"
+                    f"**{sonuç}** çıktı!"
+                ),
+                accessory=c_thumbnail(interaction.user.display_avatar.url),
+            ),
+        ]
         if gif:
-            result_embed.set_image(url=gif)
-        result_embed.timestamp = discord.utils.utcnow()
-        await msg.edit(embed=result_embed)
+            items.append(c_media(gif))
+
+        await edit_followup(interaction, msg_id, c_container(*items, color=color))
 
     @app_commands.command(name="zar", description="Zar atar.")
     @app_commands.describe(yüz="Zarın kaç yüzlü olduğu (varsayılan 6)", adet="Kaç zar atılsın (1-10)")
@@ -435,18 +472,29 @@ class Games(commands.Cog):
         yüz: app_commands.Range[int, 2, 100] = 6,
         adet: app_commands.Range[int, 1, 10] = 1,
     ):
-        sonuçlar = [random.randint(1, yüz) for _ in range(adet)]
-        toplam = sum(sonuçlar)
+        sonuçlar  = [random.randint(1, yüz) for _ in range(adet)]
+        toplam    = sum(sonuçlar)
         sonuç_str = " + ".join(f"**{s}**" for s in sonuçlar)
-        embed = fun_embed("🎲 Zar Atıldı!", f"{adet}d{yüz}: {sonuç_str}\n**Toplam: {toplam}**", discord.Color.green())
-        await interaction.response.send_message(embed=embed)
+        card = c_container(
+            c_text(f"## 🎲 Zar Atıldı!\n{adet}d{yüz}: {sonuç_str}\n\n**Toplam: {toplam}**"),
+            color=_C_GREEN,
+        )
+        await respond(interaction, card)
 
     @app_commands.command(name="8top", description="Sihirli 8-top'a bir soru sor.")
     @app_commands.describe(soru="Sormak istediğin soru")
     async def sekiz_top(self, interaction: discord.Interaction, soru: str):
         yanıt = random.choice(SEKIZ_TOP_YANIT)
-        embed = fun_embed("🎱 Sihirli 8-Top", f"**Soru:** {soru}\n\n**Cevap:** {yanıt}", discord.Color.dark_blue())
-        await interaction.response.send_message(embed=embed)
+        card = c_container(
+            c_section(
+                c_text(f"## 🎱 Sihirli 8-Top\n**Soru:** {soru}"),
+                accessory=c_thumbnail(interaction.client.user.display_avatar.url),
+            ),
+            c_separator(),
+            c_text(f"**💬 Cevap:** {yanıt}"),
+            color=_C_DARK,
+        )
+        await respond(interaction, card)
 
     @app_commands.command(name="tkm", description="Taş Kağıt Makas — ilk 2 galibiyeti alan kazanır.")
     @app_commands.describe(rakip="Rakip (boş bırakırsan bota karşı oynarsın)")
@@ -455,102 +503,82 @@ class Games(commands.Cog):
             return await interaction.response.send_message("Kendinle oynayamazsın!", ephemeral=True)
         if rakip and rakip.bot:
             return await interaction.response.send_message("Botlarla oynayamazsın!", ephemeral=True)
-        view = TKMView(interaction.user, rakip)
+        view  = TKMView(interaction.user, rakip)
         r_str = rakip.mention if rakip else "Bot"
-        await interaction.response.send_message(
-            embed=view._embed(f"{interaction.user.mention} vs {r_str}\n\nSeçiminizi yapın!"),
+        view.msg = await respond(
+            interaction,
+            view._card(f"{interaction.user.mention} vs {r_str}\n\nSeçiminizi yapın!"),
             view=view,
         )
-        view.msg = await interaction.original_response()
 
     @app_commands.command(name="adamasmaca", description="Adam Asmaca — kelimeyi tahmin et.")
     async def adamasmaca(self, interaction: discord.Interaction):
         kelime = random.choice(_KELIMELER)
-        view = AdamAsmacaView(interaction.user, kelime)
-        await interaction.response.send_message(embed=view._embed(), view=view)
-        view.msg = await interaction.original_response()
+        view   = AdamAsmacaView(interaction.user, kelime)
+        view.msg = await respond(interaction, view._card(), view=view)
 
     @app_commands.command(name="kaccm", description="Pipi ölçer. Bilimsel kesinlik garantili.")
     @app_commands.describe(kişi="Ölçülecek kişi (boş = kendin)")
     async def kaccm(self, interaction: discord.Interaction, kişi: discord.Member | None = None):
         hedef = kişi or interaction.user
-        cm = random.randint(1, 35)
+        cm    = random.randint(1, 35)
 
         if cm < 5:
-            emoji = "🤏"
-            bar   = "8" + "." * cm + "D"
-            tag   = "tiny disappointing"
+            emoji = "🤏"; bar = "8" + "." * cm + "D"; tag = "tiny disappointing"
             yorum = random.choice([
-                "Ciğerim bu iş böyle olmaz...",
-                "Yok gibi ama var işte, maşallah",
-                "Minyatür sanat eseri sayılır",
-                "Kaybedersin onu bir gün farkında bile olmazsın",
+                "Ciğerim bu iş böyle olmaz...", "Yok gibi ama var işte, maşallah",
+                "Minyatür sanat eseri sayılır", "Kaybedersin onu bir gün farkında bile olmazsın",
             ])
         elif cm < 10:
-            emoji = "😐"
-            bar   = "8" + "-" * cm + "D"
-            tag   = "meh mediocre"
+            emoji = "😐"; bar = "8" + "-" * cm + "D"; tag = "meh mediocre"
             yorum = random.choice([
-                "Yani... çalışıyor en azından",
-                "Eh, yoksulluğun utanacak bir yanı yok",
-                "Kimseye söyleme, sırrın saklı",
-                "Ortalama altı ama gurur duyabilirsin herhalde",
+                "Yani... çalışıyor en azından", "Eh, yoksulluğun utanacak bir yanı yok",
+                "Kimseye söyleme, sırrın saklı", "Ortalama altı ama gurur duyabilirsin herhalde",
             ])
         elif cm < 15:
-            emoji = "😎"
-            bar   = "8" + "=" * cm + "D"
-            tag   = "not bad okay"
+            emoji = "😎"; bar = "8" + "=" * cm + "D"; tag = "not bad okay"
             yorum = random.choice([
-                "Tıkırında, ne eksik ne fazla",
-                "Standart paket, fabrika çıkışı",
-                "İşi görür, kimse şikayet etmez",
-                "Normal insan işte, tebrikler",
+                "Tıkırında, ne eksik ne fazla", "Standart paket, fabrika çıkışı",
+                "İşi görür, kimse şikayet etmez", "Normal insan işte, tebrikler",
             ])
         elif cm < 20:
-            emoji = "🔥"
-            bar   = "8" + "=" * cm + "D"
-            tag   = "impressive nice"
+            emoji = "🔥"; bar = "8" + "=" * cm + "D"; tag = "impressive nice"
             yorum = random.choice([
-                "E iyimiş be abi, kimden aldın bunu",
-                "Sormak istemiyorum ama nasıl taşıyorsun",
-                "Arkadaşlarına söyleme kıskanırlar",
-                "Oha be, adam gibi adam çıktın",
+                "E iyimiş be abi, kimden aldın bunu", "Sormak istemiyorum ama nasıl taşıyorsun",
+                "Arkadaşlarına söyleme kıskanırlar", "Oha be, adam gibi adam çıktın",
             ])
         elif cm < 30:
-            emoji = "🚀"
-            bar   = "8" + "=" * 22 + "D 🚀"
-            tag   = "wow amazing reaction"
+            emoji = "🚀"; bar = "8" + "=" * 22 + "D 🚀"; tag = "wow amazing reaction"
             yorum = random.choice([
-                "OHAAA KAMIŞA BAK LAN",
-                "Tarzan mı büyüttü seni kardeşim",
-                "Bununla mı geziyorsun her gün, nasıl sığıyor",
-                "Saygıyla eğiliyorum, devam et",
+                "OHAAA KAMIŞA BAK LAN", "Tarzan mı büyüttü seni kardeşim",
+                "Bununla mı geziyorsun her gün, nasıl sığıyor", "Saygıyla eğiliyorum, devam et",
             ])
         else:
-            emoji = "💀"
-            bar   = "8" + "=" * 30 + "D 💀"
-            tag   = "mind blown shocked"
+            emoji = "💀"; bar = "8" + "=" * 30 + "D 💀"; tag = "mind blown shocked"
             yorum = random.choice([
-                "Kardeş bu silah ruhsatı istiyor",
-                "Hastane acil servis alarma geçsin",
-                "Bu bir pipi değil bu bir altyapı projesi",
-                "Devlet senden haberdar mı, ihbar etmem lazım",
+                "Kardeş bu silah ruhsatı istiyor", "Hastane acil servis alarma geçsin",
+                "Bu bir pipi değil bu bir altyapı projesi", "Devlet senden haberdar mı, ihbar etmem lazım",
             ])
 
         await interaction.response.defer()
         gif = await giphy(tag)
 
-        embed = discord.Embed(
-            title=f"{emoji} Bilimsel Pipi Ölçümü™",
-            description=f"{hedef.mention} — **{cm} cm**\n`{bar}`\n\n💬 {yorum}",
-            color=discord.Color.from_rgb(255, 105, 180),
-        )
+        items: list[dict] = [
+            c_section(
+                c_text(
+                    f"## {emoji} Bilimsel Pipi Ölçümü™\n"
+                    f"{hedef.mention} — **{cm} cm**\n"
+                    f"```\n{bar}\n```"
+                ),
+                accessory=c_thumbnail(hedef.display_avatar.url),
+            ),
+            c_separator(),
+            c_text(f"**💬** {yorum}"),
+        ]
         if gif:
-            embed.set_image(url=gif)
-        embed.set_thumbnail(url=hedef.display_avatar.url)
-        embed.set_footer(text="Horoz Bot Ölçüm Laboratuvarı™ • Sonuçlar yüzde yüz bilimseldir")
-        embed.timestamp = discord.utils.utcnow()
-        await interaction.followup.send(embed=embed)
+            items.append(c_media(gif))
+
+        await followup(interaction, c_container(*items, color=_C_PINK))
 
 
 async def setup(bot: commands.Bot):

@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import asyncio
 from ._shared import _emb, RENK_MAP, MesajModal, EmbedModal, DuyuruModal
+from .._v2 import c_text, c_container, respond
 
 
 class Messaging(commands.Cog):
@@ -65,11 +66,13 @@ class Messaging(commands.Cog):
         dakika: app_commands.Range[int, 1, 1440],
         mesaj: str = "Hatırlatma!",
     ):
-        await interaction.response.send_message(
-            embed=_emb(
-                "⏰ Hatırlatma Kuruldu",
-                f"**{dakika} dakika** sonra DM olarak hatırlatılacaksın.\n> {mesaj}",
-                discord.Color.green(),
+        await respond(interaction,
+            c_container(
+                c_text(
+                    f"**⏰ Hatırlatma Kuruldu**\n\n"
+                    f"**{dakika} dakika** sonra DM olarak hatırlatılacaksın.\n> {mesaj}"
+                ),
+                color=0x57F287,
             ),
             ephemeral=True,
         )
@@ -77,12 +80,11 @@ class Messaging(commands.Cog):
         async def _remind():
             await asyncio.sleep(dakika * 60)
             try:
-                dm = _emb(
+                await interaction.user.send(embed=_emb(
                     "⏰ Hatırlatma!",
                     f"{mesaj}\n\n*{dakika} dk önce **{interaction.guild.name}** sunucusunda ayarlandı.*",
                     discord.Color.gold(),
-                )
-                await interaction.user.send(embed=dm)
+                ))
             except discord.Forbidden:
                 pass
 

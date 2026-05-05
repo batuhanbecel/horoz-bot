@@ -4,23 +4,21 @@ from discord.ext import commands
 import random
 import asyncio
 from ._shared import giphy
-
-# ── Sabitler ─────────────────────────────────────────────────────────────────────
+from .._v2 import (
+    c_text, c_thumbnail, c_section, c_container, c_separator, c_media,
+    respond, update, channel_send, msg_edit,
+)
 
 KATEGORILER = ["İsim", "Şehir", "Hayvan", "Meyve/Sebze", "Ülke"]
-
-HARFLER = list("ABCDEFGHİKLMNOPRSTUYZ")
-
+HARFLER     = list("ABCDEFGHİKLMNOPRSTUYZ")
 TOPLAM_TUR  = 5
-TUR_SURESI  = 60   # saniye
-LOBI_SURESI = 60   # saniye
+TUR_SURESI  = 60
+LOBI_SURESI = 60
 
-# Türkçe I/İ normalizasyonu
 _TR_NORM: dict[str, str] = {"I": "İ"}
 
 
 def _normalize(s: str) -> str:
-    """Karşılaştırma için büyük harf + I→İ normalizasyonu."""
     return "".join(_TR_NORM.get(c, c) for c in s.upper().strip())
 
 
@@ -63,7 +61,7 @@ class IsimSehirModal(discord.ui.Modal):
 class IsimSehirTurView(discord.ui.View):
     def __init__(self, oyun: "IsimSehirOyunu"):
         super().__init__(timeout=TUR_SURESI)
-        self.oyun  = oyun
+        self.oyun   = oyun
         self._bitti = False
 
     async def on_timeout(self):
@@ -85,24 +83,20 @@ class IsimSehirTurView(discord.ui.View):
 class IsimSehirLobiView(discord.ui.View):
     def __init__(self, kurucu: discord.Member):
         super().__init__(timeout=LOBI_SURESI)
-        self.kurucu   = kurucu
+        self.kurucu    = kurucu
         self.oyuncular: list[discord.Member] = [kurucu]
         self.msg: discord.Message | None = None
         self._başladı  = False
 
-    def _embed(self) -> discord.Embed:
-        e = discord.Embed(
-            title="📝 İsim Şehir — Lobi",
-            description=(
-                f"**{self.kurucu.mention}** bir oyun kurdu!\n\n"
-                f"**Katılımcılar ({len(self.oyuncular)}):**\n"
-                + "\n".join(f"• {o.mention}" for o in self.oyuncular)
-            ),
-            color=discord.Color.blurple(),
+    def _card(self) -> tuple[dict, ...]:
+        lines = (
+            ["**📝 İsim Şehir — Lobi**", "",
+             f"**{self.kurucu.mention}** bir oyun kurdu!",
+             f"**Katılımcılar ({len(self.oyuncular)}):**"]
+            + [f"• {o.mention}" for o in self.oyuncular]
+            + ["", f"-# En az 2 oyuncu • {TOPLAM_TUR} tur • Her turda {TUR_SURESI}sn"]
         )
-        e.set_footer(text=f"En az 2 oyuncu • {TOPLAM_TUR} tur • Her turda {TUR_SURESI}sn")
-        e.timestamp = discord.utils.utcnow()
-        return e
+        return (c_container(c_text("\n".join(lines)), color=0x5865F2),)
 
     async def on_timeout(self):
         if not self._başladı:
@@ -110,9 +104,10 @@ class IsimSehirLobiView(discord.ui.View):
                 c.disabled = True
             if self.msg:
                 try:
-                    e = self._embed()
-                    e.description += "\n\n⏰ Lobi süresi doldu."
-                    await self.msg.edit(embed=e, view=self)
+                    lines_t = list(self._card()[0]["components"][0]["content"].splitlines())
+                    lines_t.append("\n⏰ Lobi süresi doldu.")
+                    timeout_card = c_container(c_text("\n".join(lines_t)), color=0x95A5A6)
+                    await msg_edit(self.msg, timeout_card, view=self)
                 except discord.HTTPException:
                     pass
 
@@ -125,7 +120,7 @@ class IsimSehirLobiView(discord.ui.View):
         self.oyuncular.append(interaction.user)
         await interaction.response.defer()
         assert self.msg
-        await self.msg.edit(embed=self._embed())
+        await msg_edit(self.msg, *self._card(), view=self)
 
     @discord.ui.button(label="Ayrıl", emoji="🚪", style=discord.ButtonStyle.secondary)
     async def ayrıl_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -138,7 +133,7 @@ class IsimSehirLobiView(discord.ui.View):
         self.oyuncular.remove(interaction.user)
         await interaction.response.defer()
         assert self.msg
-        await self.msg.edit(embed=self._embed())
+        await msg_edit(self.msg, *self._card(), view=self)
 
     @discord.ui.button(label="Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
     async def başlat_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -152,7 +147,7 @@ class IsimSehirLobiView(discord.ui.View):
             c.disabled = True
         await interaction.response.defer()
         assert self.msg
-        await self.msg.edit(embed=self._embed(), view=self)
+        await msg_edit(self.msg, *self._card(), view=self)
         oyun = IsimSehirOyunu(list(self.oyuncular), interaction.channel)  # type: ignore[arg-type]
         await oyun.yeni_tur()
 
@@ -164,13 +159,8 @@ class IsimSehirLobiView(discord.ui.View):
         self.stop()
         for c in self.children:
             c.disabled = True
-        await interaction.response.edit_message(
-            embed=discord.Embed(
-                title="🚫 Lobi İptal Edildi",
-                description=f"{interaction.user.mention} lobi iptal etti.",
-                color=discord.Color.greyple(),
-                timestamp=discord.utils.utcnow(),
-            ),
+        await update(interaction,
+            c_container(c_text(f"**🚫 Lobi İptal Edildi**\n\n{interaction.user.mention} lobi iptal etti."), color=0x95A5A6),
             view=self,
         )
 
@@ -178,9 +168,10 @@ class IsimSehirLobiView(discord.ui.View):
 # ── Tekrar Oyna View ─────────────────────────────────────────────────────────────
 
 class IsimSehirTekrarView(discord.ui.View):
-    def __init__(self, oyuncular: list[discord.Member]):
+    def __init__(self, oyuncular: list[discord.Member], son_kart: tuple[dict, ...]):
         super().__init__(timeout=120)
         self.oyuncular = oyuncular
+        self.son_kart  = son_kart
         self.msg: discord.Message | None = None
 
     async def on_timeout(self):
@@ -188,7 +179,7 @@ class IsimSehirTekrarView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(view=self)
+                await msg_edit(self.msg, *self.son_kart, view=self)
             except discord.HTTPException:
                 pass
 
@@ -198,10 +189,10 @@ class IsimSehirTekrarView(discord.ui.View):
             return await interaction.response.send_message("Bu oyuna dahil değildin!", ephemeral=True)
         btn.disabled = True
         self.stop()
-        await interaction.response.edit_message(view=self)
+        await update(interaction, *self.son_kart, view=self)
         lobi = IsimSehirLobiView(interaction.user)
-        msg  = await interaction.channel.send(embed=lobi._embed(), view=lobi)
-        lobi.msg = msg
+        new_msg = await channel_send(interaction.channel, *lobi._card(), view=lobi)
+        lobi.msg = new_msg
 
 
 # ── Oyun Motoru ──────────────────────────────────────────────────────────────────
@@ -217,36 +208,37 @@ class IsimSehirOyunu:
         self.tur_view: IsimSehirTurView | None = None
         self.msg: discord.Message | None = None
 
-    def _tur_embed(self) -> discord.Embed:
+    def _tur_card(self) -> dict:
         girenler = len(self.cevaplar)
         toplam   = len(self.oyuncular)
-        e = discord.Embed(
-            title=f"📝 İsim Şehir — Tur {self.tur}/{TOPLAM_TUR}",
-            description=(
-                f"**Bu turun harfi: `{self.harf}`**\n\n"
-                f"Kategoriler: {', '.join(f'**{k}**' for k in KATEGORILER)}\n\n"
-                f"✏️ **Cevaplarımı Gir** butonuna bas ve {TUR_SURESI} saniye içinde cevaplarını gönder!\n\n"
-                f"👥 Cevaplayan: **{girenler}/{toplam}**"
-            ),
-            color=discord.Color.orange(),
-        )
-        e.set_footer(text="Eşsiz cevap = 10 puan  •  Ortak cevap = 5 puan  •  Yanlış harf = 0 puan")
-        e.timestamp = discord.utils.utcnow()
-        return e
+        lines = [
+            f"**📝 İsim Şehir — Tur {self.tur}/{TOPLAM_TUR}**",
+            "",
+            f"**Bu turun harfi: `{self.harf}`**",
+            "",
+            f"Kategoriler: {', '.join(f'**{k}**' for k in KATEGORILER)}",
+            "",
+            f"✏️ **Cevaplarımı Gir** butonuna bas ve {TUR_SURESI} saniye içinde cevaplarını gönder!",
+            "",
+            f"👥 Cevaplayan: **{girenler}/{toplam}**",
+            "",
+            "-# Eşsiz cevap = 10 puan  •  Ortak cevap = 5 puan  •  Yanlış harf = 0 puan",
+        ]
+        return c_container(c_text("\n".join(lines)), color=0xF0A030)
 
     async def yeni_tur(self):
         self.harf     = random.choice(HARFLER)
         self.cevaplar = {}
         view = IsimSehirTurView(self)
         self.tur_view = view
-        self.msg = await self.kanal.send(embed=self._tur_embed(), view=view)
+        self.msg = await channel_send(self.kanal, self._tur_card(), view=view)
 
     async def cevap_kaydet(self, interaction: discord.Interaction, cevaplar: dict[str, str]):
         self.cevaplar[interaction.user.id] = cevaplar
         await interaction.response.send_message("✅ Cevapların kaydedildi!", ephemeral=True)
 
         assert self.msg
-        await self.msg.edit(embed=self._tur_embed())
+        await msg_edit(self.msg, self._tur_card(), view=self.tur_view)
 
         if len(self.cevaplar) >= len(self.oyuncular):
             assert self.tur_view
@@ -259,13 +251,11 @@ class IsimSehirOyunu:
         assert self.tur_view and self.msg
         for c in self.tur_view.children:
             c.disabled = True
-        await self.msg.edit(view=self.tur_view)
+        await msg_edit(self.msg, self._tur_card(), view=self.tur_view)
 
-        # ── Puan hesapla ────────────────────────────────────────────────────
         tur_puanları: dict[int, dict[str, int]] = {o.id: {} for o in self.oyuncular}
 
         for kategori in KATEGORILER:
-            # Geçerli cevapları topla (doğru harfle başlayanlar)
             geçerli: dict[str, list[int]] = {}
             for uid, cvplar in self.cevaplar.items():
                 val = cvplar.get(kategori, "").strip()
@@ -279,29 +269,20 @@ class IsimSehirOyunu:
                     tur_puanları[uid][kategori] = puan
                     self.skorlar[uid] += puan
 
-        # ── Sonuç embed'i ────────────────────────────────────────────────────
-        e = discord.Embed(
-            title=f"📊 Tur {self.tur} Sonuçları — Harf: `{self.harf}`",
-            color=discord.Color.green(),
-        )
+        result_lines = [f"**📊 Tur {self.tur} Sonuçları — Harf: `{self.harf}`**", ""]
         for oyuncu in self.oyuncular:
             uid  = oyuncu.id
             cvps = self.cevaplar.get(uid, {})
             pts  = tur_puanları.get(uid, {})
-            satirlar = []
+            result_lines.append(f"**{oyuncu.display_name}** — Toplam: {self.skorlar[uid]} puan")
             for kat in KATEGORILER:
                 val  = cvps.get(kat, "—") or "—"
                 puan = pts.get(kat, 0)
-                satirlar.append(f"**{kat}:** {val} `+{puan}`")
-            e.add_field(
-                name=f"{oyuncu.display_name} | Toplam: {self.skorlar[uid]} puan",
-                value="\n".join(satirlar),
-                inline=False,
-            )
-        e.timestamp = discord.utils.utcnow()
-        await self.kanal.send(embed=e)
+                result_lines.append(f"  **{kat}:** {val} `+{puan}`")
+            result_lines.append("")
 
-        # ── Sonraki tur veya bitiş ────────────────────────────────────────────
+        await channel_send(self.kanal, c_container(c_text("\n".join(result_lines)), color=0x57F287))
+
         self.tur += 1
         if self.tur > TOPLAM_TUR:
             await self._oyun_bitti()
@@ -311,24 +292,21 @@ class IsimSehirOyunu:
 
     async def _oyun_bitti(self):
         sıralama = sorted(self.oyuncular, key=lambda o: self.skorlar[o.id], reverse=True)
-        satirlar = []
         madalya  = ["🥇", "🥈", "🥉"]
+        satırlar = []
         for i, oyuncu in enumerate(sıralama):
             m = madalya[i] if i < 3 else f"`{i+1}.`"
-            satirlar.append(f"{m} {oyuncu.mention} — **{self.skorlar[oyuncu.id]} puan**")
+            satırlar.append(f"{m} {oyuncu.mention} — **{self.skorlar[oyuncu.id]} puan**")
 
         gif = await giphy("trophy winner podium celebration")
-        e = discord.Embed(
-            title="🏆 İsim Şehir Bitti!",
-            description="\n".join(satirlar),
-            color=discord.Color.gold(),
-        )
+        items: list[dict] = [c_text(f"**🏆 İsim Şehir Bitti!**\n\n" + "\n".join(satırlar) + f"\n\n-# {TOPLAM_TUR} tur oynadınız.")]
         if gif:
-            e.set_image(url=gif)
-        e.set_footer(text=f"{TOPLAM_TUR} tur oynadınız.")
-        e.timestamp = discord.utils.utcnow()
-        tekrar = IsimSehirTekrarView(self.oyuncular)
-        msg    = await self.kanal.send(embed=e, view=tekrar)
+            items.append(c_separator())
+            items.append(c_media(gif))
+        son_kart = (c_container(*items, color=0xFEE75C),)
+
+        tekrar = IsimSehirTekrarView(self.oyuncular, son_kart)
+        msg    = await channel_send(self.kanal, *son_kart, view=tekrar)
         tekrar.msg = msg
 
 
@@ -340,9 +318,8 @@ class IsimSehir(commands.Cog):
 
     @app_commands.command(name="isimşehir", description="Arkadaşlarla İsim Şehir oyna! (5 tur, 5 kategori)")
     async def isim_sehir(self, interaction: discord.Interaction):
-        view = IsimSehirLobiView(interaction.user)
-        await interaction.response.send_message(embed=view._embed(), view=view)
-        view.msg = await interaction.original_response()
+        view = IsimSehirLobiView(interaction.user)  # type: ignore[arg-type]
+        view.msg = await respond(interaction, *view._card(), view=view)
 
 
 async def setup(bot: commands.Bot):

@@ -2,7 +2,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import discord
 import random
-from ._shared import GuildPlayer, Track, now_playing_embed, stopped_embed, duration_fmt, music_embed
+from ._shared import GuildPlayer, Track, now_playing_card, stopped_card, duration_fmt, music_embed
+from .._v2 import msg_edit, c_text, c_container, respond as v2_respond
 
 if TYPE_CHECKING:
     from .player import Music
@@ -71,7 +72,7 @@ class PlayerView(discord.ui.View):
         p.loop = False
         p.force_next = False
         try:
-            await interaction.message.edit(embed=stopped_embed(), view=None)
+            await msg_edit(interaction.message, stopped_card())
         except Exception:
             pass
         p.player_message = None
@@ -121,23 +122,18 @@ class PlayerView(discord.ui.View):
         p = self.player()
         if not p.current and not p.queue:
             return await interaction.response.send_message("Sıra boş.", ephemeral=True)
-        embed = discord.Embed(title="📋 Müzik Sırası", color=discord.Color.blurple())
+        lines = ["**📋 Müzik Sırası**", ""]
         if p.current:
-            embed.add_field(
-                name="▶️ Şu An",
-                value=f"**[{p.current.title}]({p.current.webpage_url})** `{duration_fmt(p.current.duration)}`",
-                inline=False,
-            )
+            lines.append(f"▶️ **Şu An:** [{p.current.title}]({p.current.webpage_url}) `{duration_fmt(p.current.duration)}`")
+            lines.append("")
         for i, t in enumerate(list(p.queue)[:10], 1):
-            embed.add_field(
-                name=f"{i}. {t.title}",
-                value=f"`{duration_fmt(t.duration)}` · {t.requester.mention}",
-                inline=False,
-            )
+            lines.append(f"`{i}.` {t.title} `{duration_fmt(t.duration)}`")
         if len(p.queue) > 10:
-            embed.set_footer(text=f"ve {len(p.queue) - 10} şarkı daha...")
-        embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            lines.append(f"\n-# ve {len(p.queue) - 10} şarkı daha...")
+        await v2_respond(interaction,
+            c_container(c_text("\n".join(lines)), color=0x5865F2),
+            ephemeral=True,
+        )
 
 
 class SearchButton(discord.ui.Button):

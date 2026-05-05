@@ -4,26 +4,27 @@ from discord.ext import commands
 import random
 import asyncio
 from ._shared import fun_embed, giphy
+from .._v2 import (
+    c_text, c_thumbnail, c_section, c_container, c_separator, c_media,
+    respond, update, channel_send, msg_edit,
+)
 
 MAX_OYUNCU = 6
-LOBI_SURE  = 60   # seconds to wait for players
-TETIK_SURE = 45   # seconds per turn
+LOBI_SURE  = 60
+TETIK_SURE = 45
 
 
 def _ihtimal_bar(kalan_oda: int) -> str:
-    """Visual chamber indicator: 6 slots, filled = live bullet, empty = safe."""
-    # kalan_oda: remaining safe chambers (oda sayısı - çekilenler)
     toplam = 6
     ateşlendi = toplam - kalan_oda
-    # chambers: ■ = pulled (empty), 🟡 = remaining (unknown)
     return "🟡" * kalan_oda + "⬛" * ateşlendi
 
 
 class RusRuletiOyun:
     def __init__(self, oyuncular: list[discord.Member]):
         self.oyuncular  = list(oyuncular)
-        self.kalan_oda  = 6   # chambers not yet pulled
-        self.mevcut_idx = 0   # whose turn it is (index into oyuncular)
+        self.kalan_oda  = 6
+        self.mevcut_idx = 0
 
     @property
     def mevcut_oyuncu(self) -> discord.Member:
@@ -43,27 +44,18 @@ class RusRuletiOyun:
 class LobiView(discord.ui.View):
     def __init__(self, başlatan: discord.Member):
         super().__init__(timeout=LOBI_SURE)
-        self.başlatan   = başlatan
-        self.oyuncular  = [başlatan]
+        self.başlatan  = başlatan
+        self.oyuncular = [başlatan]
         self.msg: discord.Message | None = None
-        self.started    = False
+        self.started   = False
 
-    def _embed(self) -> discord.Embed:
-        e = fun_embed(
-            "🔫 Rus Ruleti — Lobi",
-            f"**{len(self.oyuncular)}/{MAX_OYUNCU}** oyuncu\n\n"
-            + "\n".join(f"• {o.mention}" for o in self.oyuncular)
-            + "\n\n_Katılmak için **Katıl** butonuna bas._",
-            discord.Color.dark_red(),
+    def _card(self) -> tuple[dict, ...]:
+        lines = (
+            ["**🔫 Rus Ruleti — Lobi**", "", f"**{len(self.oyuncular)}/{MAX_OYUNCU}** oyuncu", ""]
+            + [f"• {o.mention}" for o in self.oyuncular]
+            + ["", "-# Katılmak için **Katıl** butonuna bas."]
         )
-        e.set_footer(text=f"Başlatan: {self.başlatan.display_name} • Horoz Bot")
-        return e
-
-    async def _güncelle(self, interaction: discord.Interaction | None = None):
-        if interaction:
-            await interaction.response.edit_message(embed=self._embed(), view=self)
-        elif self.msg:
-            await self.msg.edit(embed=self._embed(), view=self)
+        return (c_container(c_text("\n".join(lines)), color=0xED4245),)
 
     @discord.ui.button(label="Katıl", emoji="✋", style=discord.ButtonStyle.success)
     async def katıl(self, interaction: discord.Interaction, btn: discord.ui.Button):
@@ -74,7 +66,7 @@ class LobiView(discord.ui.View):
         self.oyuncular.append(interaction.user)
         if len(self.oyuncular) >= MAX_OYUNCU:
             btn.disabled = True
-        await self._güncelle(interaction)
+        await update(interaction, *self._card(), view=self)
 
     @discord.ui.button(label="Ayrıl", emoji="🚪", style=discord.ButtonStyle.secondary)
     async def ayrıl(self, interaction: discord.Interaction, btn: discord.ui.Button):
@@ -88,7 +80,7 @@ class LobiView(discord.ui.View):
         for c in self.children:
             if hasattr(c, "label") and c.label == "Katıl":
                 c.disabled = False
-        await self._güncelle(interaction)
+        await update(interaction, *self._card(), view=self)
 
     @discord.ui.button(label="Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
     async def başlat(self, interaction: discord.Interaction, btn: discord.ui.Button):
@@ -99,8 +91,8 @@ class LobiView(discord.ui.View):
         self.started = True
         for c in self.children:
             c.disabled = True
-        await interaction.response.edit_message(
-            embed=fun_embed("🔫 Rus Ruleti", "Oyun başlıyor...", discord.Color.dark_red()),
+        await update(interaction,
+            c_container(c_text("**🔫 Rus Ruleti**\n\nOyun başlıyor..."), color=0xED4245),
             view=self,
         )
         self.stop()
@@ -114,12 +106,10 @@ class LobiView(discord.ui.View):
         self.stop()
         for c in self.children:
             c.disabled = True
-        await interaction.response.edit_message(
-            embed=discord.Embed(
-                title="🚫 Lobi İptal Edildi",
-                description=f"{interaction.user.mention} lobi iptal etti.",
-                color=discord.Color.greyple(),
-                timestamp=discord.utils.utcnow(),
+        await update(interaction,
+            c_container(
+                c_text(f"**🚫 Lobi İptal Edildi**\n\n{interaction.user.mention} lobi iptal etti."),
+                color=0x95A5A6,
             ),
             view=self,
         )
@@ -131,8 +121,8 @@ class LobiView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(
-                    embed=fun_embed("🔫 Rus Ruleti", "⏰ Lobi süresi doldu.", discord.Color.greyple()),
+                await msg_edit(self.msg,
+                    c_container(c_text("**🔫 Rus Ruleti**\n\n⏰ Lobi süresi doldu."), color=0x95A5A6),
                     view=self,
                 )
             except discord.HTTPException:
@@ -142,30 +132,36 @@ class LobiView(discord.ui.View):
 # ── Oyun Görünümü ─────────────────────────────────────────────────────────────
 
 class TetikView(discord.ui.View):
-    def __init__(self, oyun: RusRuletiOyun, kanal: discord.TextChannel | discord.DMChannel):
+    def __init__(self, oyun: RusRuletiOyun, kanal: discord.abc.Messageable):
         super().__init__(timeout=TETIK_SURE)
-        self.oyun  = oyun
-        self.kanal = kanal
+        self.oyun        = oyun
+        self.kanal       = kanal
         self.msg: discord.Message | None = None
         self._tamamlandı = False
 
-    def _embed(self, sonuç_metni: str = "") -> discord.Embed:
-        oyun  = self.oyun
-        oyuncu = oyun.mevcut_oyuncu
+    def _card(self, sonuç_metni: str = "") -> dict:
+        oyun    = self.oyun
+        oyuncu  = oyun.mevcut_oyuncu
         ihtimal = round(100 / oyun.kalan_oda) if oyun.kalan_oda > 0 else 100
-
-        e = fun_embed(
-            "🔫 Rus Ruleti",
-            f"**Sıra:** {oyuncu.mention}\n\n"
-            f"{_ihtimal_bar(oyun.kalan_oda)}\n"
-            f"**Kalan oda:** {oyun.kalan_oda} / 6  •  **Ölüm ihtimali:** %{ihtimal}\n\n"
-            + (f"**Oyuncular:**\n" + "\n".join(o.mention for o in oyun.oyuncular))
-            + (f"\n\n{sonuç_metni}" if sonuç_metni else ""),
-            discord.Color.dark_red(),
+        lines = [
+            "**🔫 Rus Ruleti**",
+            "",
+            f"**Sıra:** {oyuncu.mention}",
+            "",
+            _ihtimal_bar(oyun.kalan_oda),
+            f"**Kalan oda:** {oyun.kalan_oda} / 6  •  **Ölüm ihtimali:** %{ihtimal}",
+            "",
+            "**Oyuncular:**",
+        ] + [o.mention for o in oyun.oyuncular]
+        if sonuç_metni:
+            lines += ["", sonuç_metni]
+        return c_container(
+            c_section(
+                c_text("\n".join(lines)),
+                accessory=c_thumbnail(str(oyuncu.display_avatar.url)),
+            ),
+            color=0xED4245,
         )
-        e.set_thumbnail(url=oyuncu.display_avatar.url)
-        e.set_footer(text="Horoz Bot • Rus Ruleti")
-        return e
 
     @discord.ui.button(label="Tetiği Çek", emoji="🔫", style=discord.ButtonStyle.danger)
     async def tetik(self, interaction: discord.Interaction, btn: discord.ui.Button):
@@ -180,26 +176,34 @@ class TetikView(discord.ui.View):
 
         if öldü:
             kurban = interaction.user
-            btn.disabled = True
-            await interaction.response.edit_message(
-                embed=fun_embed(
-                    "💀 Bang!",
-                    f"{kurban.mention} tetiği çekti ve **hayatını kaybetti!** 💥\n\n"
-                    f"%{round(ihtimal * 100)} ihtimale rağmen...",
-                    discord.Color.dark_red(),
+            for c in self.children:
+                c.disabled = True
+            await update(interaction,
+                c_container(
+                    c_section(
+                        c_text(
+                            f"**💀 Bang!**\n\n"
+                            f"{kurban.mention} tetiği çekti ve **hayatını kaybetti!** 💥\n\n"
+                            f"%{round(ihtimal * 100)} ihtimale rağmen..."
+                        ),
+                        accessory=c_thumbnail(str(kurban.display_avatar.url)),
+                    ),
+                    color=0xED4245,
                 ),
                 view=self,
             )
             await asyncio.sleep(2)
             await _oyun_bitti(interaction, self.oyun, kurban)
         else:
-            await interaction.response.edit_message(
-                embed=fun_embed(
-                    "😮‍💨 Click...",
-                    f"{interaction.user.mention} tetiği çekti — **boş!** Nefes aldın.\n\n"
-                    f"{_ihtimal_bar(self.oyun.kalan_oda)}\n"
-                    f"**Kalan oda:** {self.oyun.kalan_oda} / 6",
-                    discord.Color.orange(),
+            await update(interaction,
+                c_container(
+                    c_text(
+                        f"**😮‍💨 Click...**\n\n"
+                        f"{interaction.user.mention} tetiği çekti — **boş!** Nefes aldın.\n\n"
+                        f"{_ihtimal_bar(self.oyun.kalan_oda)}\n"
+                        f"**Kalan oda:** {self.oyun.kalan_oda} / 6"
+                    ),
+                    color=0xF0A030,
                 ),
                 view=self,
             )
@@ -214,12 +218,14 @@ class TetikView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(
-                    embed=fun_embed(
-                        "⏰ Süre Doldu",
-                        f"{oyuncu.mention} süresi içinde tetiği çekmedi — korktu mu? 🐔\n"
-                        f"Oyun sona erdi.",
-                        discord.Color.greyple(),
+                await msg_edit(self.msg,
+                    c_container(
+                        c_text(
+                            f"**⏰ Süre Doldu**\n\n"
+                            f"{oyuncu.mention} süresi içinde tetiği çekmedi — korktu mu? 🐔\n"
+                            f"Oyun sona erdi."
+                        ),
+                        color=0x95A5A6,
                     ),
                     view=self,
                 )
@@ -228,10 +234,11 @@ class TetikView(discord.ui.View):
 
 
 class TekrarOynaView(discord.ui.View):
-    def __init__(self, oyuncular: list[discord.Member], başlatan: discord.Member):
+    def __init__(self, oyuncular: list[discord.Member], başlatan: discord.Member, son_kart: tuple[dict, ...]):
         super().__init__(timeout=60)
         self.oyuncular = oyuncular
         self.başlatan  = başlatan
+        self.son_kart  = son_kart
         self.msg: discord.Message | None = None
 
     @discord.ui.button(label="Tekrar Oyna", emoji="🔄", style=discord.ButtonStyle.success)
@@ -240,17 +247,17 @@ class TekrarOynaView(discord.ui.View):
             return await interaction.response.send_message("Oyuna dahil değildin!", ephemeral=True)
         btn.disabled = True
         self.stop()
-        await interaction.response.edit_message(view=self)
+        await update(interaction, *self.son_kart, view=self)
         lobi = LobiView(interaction.user)
-        msg = await interaction.channel.send(embed=lobi._embed(), view=lobi)
-        lobi.msg = msg
+        new_msg = await channel_send(interaction.channel, *lobi._card(), view=lobi)
+        lobi.msg = new_msg
 
     async def on_timeout(self):
         for c in self.children:
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(view=self)
+                await msg_edit(self.msg, *self.son_kart, view=self)
             except discord.HTTPException:
                 pass
 
@@ -259,22 +266,26 @@ class TekrarOynaView(discord.ui.View):
 
 async def _oyunu_başlat(interaction: discord.Interaction, oyuncular: list[discord.Member]):
     random.shuffle(oyuncular)
-    oyun   = RusRuletiOyun(oyuncular)
-    view   = TetikView(oyun, interaction.channel)
-    sıra   = oyun.mevcut_oyuncu
+    oyun    = RusRuletiOyun(oyuncular)
+    view    = TetikView(oyun, interaction.channel)
+    sıra    = oyun.mevcut_oyuncu
     ihtimal = round(100 / oyun.kalan_oda)
 
-    e = fun_embed(
-        "🔫 Rus Ruleti — Başladı!",
-        f"**{len(oyuncular)}** oyuncu tabancayı paylaşıyor.\n"
-        f"Silahda **1 mermi**, **6 oda**.\n\n"
-        f"**İlk sıra:** {sıra.mention}\n\n"
-        f"{_ihtimal_bar(oyun.kalan_oda)}\n"
-        f"**Ölüm ihtimali:** %{ihtimal}",
-        discord.Color.dark_red(),
+    card = c_container(
+        c_section(
+            c_text(
+                f"**🔫 Rus Ruleti — Başladı!**\n\n"
+                f"**{len(oyuncular)}** oyuncu tabancayı paylaşıyor.\n"
+                f"Silahda **1 mermi**, **6 oda**.\n\n"
+                f"**İlk sıra:** {sıra.mention}\n\n"
+                f"{_ihtimal_bar(oyun.kalan_oda)}\n"
+                f"**Ölüm ihtimali:** %{ihtimal}"
+            ),
+            accessory=c_thumbnail(str(sıra.display_avatar.url)),
+        ),
+        color=0xED4245,
     )
-    e.set_footer(text="Horoz Bot • Rus Ruleti")
-    msg = await interaction.channel.send(embed=e, view=view)
+    msg = await channel_send(interaction.channel, card, view=view)
     view.msg = msg
 
 
@@ -282,42 +293,48 @@ async def _sonraki_tur(interaction: discord.Interaction, oyun: RusRuletiOyun):
     sıra    = oyun.mevcut_oyuncu
     ihtimal = round(100 / oyun.kalan_oda) if oyun.kalan_oda > 0 else 100
 
-    e = fun_embed(
-        "🔫 Rus Ruleti",
-        f"**Sıra:** {sıra.mention}\n\n"
-        f"{_ihtimal_bar(oyun.kalan_oda)}\n"
-        f"**Kalan oda:** {oyun.kalan_oda} / 6  •  **Ölüm ihtimali:** %{ihtimal}\n\n"
-        f"**Oyuncular:**\n" + "\n".join(o.mention for o in oyun.oyuncular),
-        discord.Color.dark_red(),
+    card = c_container(
+        c_section(
+            c_text(
+                f"**🔫 Rus Ruleti**\n\n"
+                f"**Sıra:** {sıra.mention}\n\n"
+                f"{_ihtimal_bar(oyun.kalan_oda)}\n"
+                f"**Kalan oda:** {oyun.kalan_oda} / 6  •  **Ölüm ihtimali:** %{ihtimal}\n\n"
+                f"**Oyuncular:**\n" + "\n".join(o.mention for o in oyun.oyuncular)
+            ),
+            accessory=c_thumbnail(str(sıra.display_avatar.url)),
+        ),
+        color=0xED4245,
     )
-    e.set_thumbnail(url=sıra.display_avatar.url)
-    e.set_footer(text="Horoz Bot • Rus Ruleti")
-
     view = TetikView(oyun, interaction.channel)
-    msg  = await interaction.channel.send(embed=e, view=view)
+    msg  = await channel_send(interaction.channel, card, view=view)
     view.msg = msg
 
 
 async def _oyun_bitti(interaction: discord.Interaction, oyun: RusRuletiOyun, kurban: discord.Member):
     hayatta = [o for o in oyun.oyuncular if o.id != kurban.id]
-
     gif = await giphy("bang gunshot dead")
-    e = fun_embed(
-        "💀 Oyun Bitti",
-        f"**{kurban.mention}** hayatını kaybetti!\n\n"
-        + (
-            "**Hayatta kalanlar:**\n" + "\n".join(f"🎉 {o.mention}" for o in hayatta)
-            if hayatta else "_Kimse kalmadı._"
-        ),
-        discord.Color.dark_red(),
-    )
-    if gif:
-        e.set_image(url=gif)
-    e.set_thumbnail(url=kurban.display_avatar.url)
-    e.set_footer(text="Horoz Bot • Rus Ruleti")
 
-    view = TekrarOynaView(oyun.oyuncular, kurban)
-    msg  = await interaction.channel.send(embed=e, view=view)
+    hayatta_str = (
+        "\n".join(f"🎉 {o.mention}" for o in hayatta) if hayatta else "_Kimse kalmadı._"
+    )
+    items = [
+        c_section(
+            c_text(
+                f"**💀 Oyun Bitti**\n\n"
+                f"**{kurban.mention}** hayatını kaybetti!\n\n"
+                f"**Hayatta kalanlar:**\n{hayatta_str}"
+            ),
+            accessory=c_thumbnail(str(kurban.display_avatar.url)),
+        ),
+    ]
+    if gif:
+        items.append(c_separator())
+        items.append(c_media(gif))
+
+    son_kart = (c_container(*items, color=0xED4245),)
+    view = TekrarOynaView(oyun.oyuncular, kurban, son_kart)
+    msg  = await channel_send(interaction.channel, *son_kart, view=view)
     view.msg = msg
 
 
@@ -330,8 +347,7 @@ class RusRuleti(commands.Cog):
     @app_commands.command(name="rusruleti", description="Rus Ruleti oyna! 6 oda, 1 mermi.")
     async def rusruleti(self, interaction: discord.Interaction):
         lobi = LobiView(interaction.user)
-        await interaction.response.send_message(embed=lobi._embed(), view=lobi)
-        lobi.msg = await interaction.original_response()
+        lobi.msg = await respond(interaction, *lobi._card(), view=lobi)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message

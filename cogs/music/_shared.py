@@ -1,6 +1,7 @@
 import discord
 from dataclasses import dataclass, field
 from collections import deque
+from .._v2 import c_text, c_section, c_container, c_thumbnail
 
 YTDL_FLAT_OPTIONS = {
     "format": "bestaudio/best",
@@ -64,32 +65,35 @@ def is_playlist_url(url: str) -> bool:
     return "list=" in url or "/playlist" in url
 
 
-def now_playing_embed(track: Track, player: GuildPlayer) -> discord.Embed:
-    e = discord.Embed(
-        title="▶️ Şimdi Çalıyor",
-        description=f"### [{track.title}]({track.webpage_url})",
-        color=discord.Color.green(),
-    )
-    e.add_field(name="⏱️ Süre",    value=f"`{duration_fmt(track.duration)}`", inline=True)
-    e.add_field(name="👤 İsteyen", value=track.requester.mention,             inline=True)
-    e.add_field(name="🔊 Ses",     value=f"`{int(player.volume * 100)}%`",    inline=True)
-    e.add_field(name="🔁 Döngü",   value="Açık 🔂" if player.loop else "Kapalı", inline=True)
-    e.add_field(name="📋 Sırada",  value=f"{len(player.queue)} şarkı",        inline=True)
+def now_playing_card(track: Track, player: GuildPlayer) -> dict:
+    lines = [
+        "**▶️ Şimdi Çalıyor**",
+        "",
+        f"### [{track.title}]({track.webpage_url})",
+        "",
+        f"⏱️ **Süre:** `{duration_fmt(track.duration)}`",
+        f"👤 **İsteyen:** {track.requester.mention}",
+        f"🔊 **Ses:** `{int(player.volume * 100)}%`",
+        f"🔁 **Döngü:** {'Açık 🔂' if player.loop else 'Kapalı'}",
+        f"📋 **Sırada:** {len(player.queue)} şarkı",
+    ]
     if player.queue:
-        e.add_field(name="⏭️ Sonraki", value=list(player.queue)[0].title[:60], inline=True)
-    e.set_thumbnail(url=track.requester.display_avatar.url)
-    e.timestamp = discord.utils.utcnow()
-    return e
+        lines.append(f"⏭️ **Sonraki:** {list(player.queue)[0].title[:60]}")
 
-
-def stopped_embed() -> discord.Embed:
-    e = discord.Embed(
-        title="⏹️ Müzik Durduruldu",
-        description="Kuyruk bitti veya durduruldu.",
-        color=discord.Color.red(),
+    return c_container(
+        c_section(
+            c_text("\n".join(lines)),
+            accessory=c_thumbnail(str(track.requester.display_avatar.url)),
+        ),
+        color=0x57F287,
     )
-    e.timestamp = discord.utils.utcnow()
-    return e
+
+
+def stopped_card() -> dict:
+    return c_container(
+        c_text("**⏹️ Müzik Durduruldu**\n\nKuyruk bitti veya durduruldu."),
+        color=0xED4245,
+    )
 
 
 def music_embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:

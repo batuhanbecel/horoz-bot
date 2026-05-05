@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import timedelta
 from ._shared import fun_embed, parse_datetime
+from .._v2 import c_text, c_container, respond, update
 
 
 # ── Anket ─────────────────────────────────────────────────────────────────────
@@ -17,19 +18,17 @@ class PollView(discord.ui.View):
         for i, opt in enumerate(seçenekler):
             self.add_item(PollButton(i, opt, self))
 
-    def build_embed(self) -> discord.Embed:
+    def build_card(self) -> tuple[dict, ...]:
         total = sum(self.counts)
-        embed = discord.Embed(title=f"📊 {self.soru}", color=discord.Color.blurple())
+        lines = [f"**📊 {self.soru}**", ""]
         for i, opt in enumerate(self.seçenekler):
             pct = (self.counts[i] / total * 100) if total else 0
             bar = "█" * int(pct / 10) + "░" * (10 - int(pct / 10))
-            embed.add_field(
-                name=f"{i + 1}. {opt}",
-                value=f"`{bar}` {pct:.1f}% ({self.counts[i]} oy)",
-                inline=False,
-            )
-        embed.set_footer(text=f"Toplam oy: {total}")
-        return embed
+            lines.append(f"**{i + 1}. {opt}**")
+            lines.append(f"`{bar}` {pct:.1f}% ({self.counts[i]} oy)")
+            lines.append("")
+        lines.append(f"-# Toplam oy: {total}")
+        return (c_container(c_text("\n".join(lines)), color=0x5865F2),)
 
 
 class PollButton(discord.ui.Button):
@@ -45,7 +44,7 @@ class PollButton(discord.ui.Button):
             self.poll.counts[prev] -= 1
         self.poll.votes[uid] = self.index
         self.poll.counts[self.index] += 1
-        await interaction.response.edit_message(embed=self.poll.build_embed(), view=self.poll)
+        await update(interaction, *self.poll.build_card(), view=self.poll)
 
 
 # ── Etkinlik Modal ─────────────────────────────────────────────────────────────
@@ -250,9 +249,7 @@ class Social(commands.Cog):
     ):
         seçenekler = [s for s in [seçenek1, seçenek2, seçenek3, seçenek4, seçenek5] if s]
         view = PollView(soru, seçenekler)
-        embed = view.build_embed()
-        embed.set_footer(text=f"Anketi oluşturan: {interaction.user.display_name} | Toplam oy: 0")
-        await interaction.response.send_message(embed=embed, view=view)
+        await respond(interaction, *view.build_card(), view=view)
 
     # /etkinlik
     @app_commands.command(name="etkinlik", description="Discord sunucu etkinliği oluşturur.")

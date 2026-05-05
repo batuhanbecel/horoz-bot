@@ -5,8 +5,10 @@ import random
 import asyncio
 from collections import Counter
 from ._shared import giphy
-
-# ── Sabitler ──────────────────────────────────────────────────────────────────
+from .._v2 import (
+    c_text, c_thumbnail, c_section, c_container, c_separator, c_media,
+    respond, update, channel_send, msg_edit,
+)
 
 LOBI_SURESI   = 120
 GECE_SURESI   = 90
@@ -171,6 +173,7 @@ class GeceView(discord.ui.View):
         self.oyun   = oyun
         self._bitti = False
         self.msg: discord.Message | None = None
+        self.kart: dict | None = None
 
     async def on_timeout(self):
         if not self._bitti:
@@ -178,9 +181,9 @@ class GeceView(discord.ui.View):
             self.stop()
             for c in self.children:
                 c.disabled = True
-            if self.msg:
+            if self.msg and self.kart:
                 try:
-                    await self.msg.edit(view=self)
+                    await msg_edit(self.msg, self.kart, view=self)
                 except discord.HTTPException:
                     pass
             await self.oyun._gece_coz()
@@ -229,6 +232,25 @@ class GunduzOyView(discord.ui.View):
         sel.callback = self._oy_cb
         self.add_item(sel)
 
+    def _card(self) -> dict:
+        oyun     = self.oyun
+        oy_sayısı = len(oyun.gunduz_oyları)
+        toplam   = len(oyun.yaşayanlar)
+        lines = [
+            f"**☀️ Gündüz — {oyun.gece_sayısı}. Günün Oylaması**",
+            "",
+            "**Tartışın ve karar verin!**",
+            "",
+            f"Köyde **{toplam}** kişi hayatta.",
+            "Aralarında vampir var mı? Oylayın ve birini idam edin!",
+            "",
+            "**Hayatta Kalanlar:**",
+        ] + [f"• {o.mention}" for o in oyun.yaşayanlar] + [
+            "",
+            f"-# ⏱️ {GUNDUZ_SURESI} saniye — {oy_sayısı}/{toplam} oy kullandı",
+        ]
+        return c_container(c_text("\n".join(lines)), color=0xFFDC50)
+
     async def _oy_cb(self, interaction: discord.Interaction):
         uid  = interaction.user.id
         oyun = self.oyun
@@ -251,17 +273,13 @@ class GunduzOyView(discord.ui.View):
             ephemeral=True,
         )
 
-        oy_sayısı = len(oyun.gunduz_oyları)
-        toplam    = len(oyun.yaşayanlar)
         if self.msg:
             try:
-                emb = self.msg.embeds[0].copy()
-                emb.set_footer(text=f"✅ {oy_sayısı}/{toplam} oy kullandı")
-                await self.msg.edit(embed=emb)
+                await msg_edit(self.msg, self._card(), view=self)
             except discord.HTTPException:
                 pass
 
-        if oy_sayısı >= toplam and not self._bitti:
+        if len(oyun.gunduz_oyları) >= len(oyun.yaşayanlar) and not self._bitti:
             self._bitti = True
             self.stop()
             await oyun._gunduz_coz()
@@ -274,7 +292,7 @@ class GunduzOyView(discord.ui.View):
                 c.disabled = True
             if self.msg:
                 try:
-                    await self.msg.edit(view=self)
+                    await msg_edit(self.msg, self._card(), view=self)
                 except discord.HTTPException:
                     pass
             await self.oyun._gunduz_coz()
@@ -283,10 +301,11 @@ class GunduzOyView(discord.ui.View):
 # ── Avcı Son Hamle View ───────────────────────────────────────────────────────
 
 class AvcıSonHamleView(discord.ui.View):
-    def __init__(self, oyun: "VampirKoyluOyunu", avcı: discord.Member):
+    def __init__(self, oyun: "VampirKoyluOyunu", avcı: discord.Member, kart: dict):
         super().__init__(timeout=AVCI_SURESI)
         self.oyun   = oyun
         self.avcı   = avcı
+        self.kart   = kart
         self._bitti = False
         self.msg: discord.Message | None = None
         opts = [
@@ -309,7 +328,7 @@ class AvcıSonHamleView(discord.ui.View):
         self.oyun._avci_event.set()
         for c in self.children:
             c.disabled = True
-        await interaction.response.edit_message(view=self)
+        await update(interaction, self.kart, view=self)
 
     async def on_timeout(self):
         if not self._bitti:
@@ -319,7 +338,7 @@ class AvcıSonHamleView(discord.ui.View):
                 c.disabled = True
             if self.msg:
                 try:
-                    await self.msg.edit(view=self)
+                    await msg_edit(self.msg, self.kart, view=self)
                 except discord.HTTPException:
                     pass
 
@@ -327,9 +346,10 @@ class AvcıSonHamleView(discord.ui.View):
 # ── Tekrar Oyna View ──────────────────────────────────────────────────────────
 
 class VampirTekrarView(discord.ui.View):
-    def __init__(self, oyuncular: list[discord.Member]):
+    def __init__(self, oyuncular: list[discord.Member], son_kart: tuple[dict, ...]):
         super().__init__(timeout=120)
         self.oyuncular = oyuncular
+        self.son_kart  = son_kart
         self.msg: discord.Message | None = None
 
     async def on_timeout(self):
@@ -337,22 +357,20 @@ class VampirTekrarView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                await self.msg.edit(view=self)
+                await msg_edit(self.msg, *self.son_kart, view=self)
             except discord.HTTPException:
                 pass
 
     @discord.ui.button(label="Tekrar Oyna", emoji="🔄", style=discord.ButtonStyle.success)
     async def tekrar_btn(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user not in self.oyuncular:
-            return await interaction.response.send_message(
-                "Bu oyuna dahil değildin!", ephemeral=True
-            )
+            return await interaction.response.send_message("Bu oyuna dahil değildin!", ephemeral=True)
         btn.disabled = True
         self.stop()
-        await interaction.response.edit_message(view=self)
+        await update(interaction, *self.son_kart, view=self)
         lobi = VampirKoyluLobiView(interaction.user)
-        msg  = await interaction.channel.send(embed=lobi._embed(), view=lobi)
-        lobi.msg = msg
+        new_msg = await channel_send(interaction.channel, *lobi._card(), view=lobi)
+        lobi.msg = new_msg
 
 
 # ── Lobi View ─────────────────────────────────────────────────────────────────
@@ -365,30 +383,26 @@ class VampirKoyluLobiView(discord.ui.View):
         self.msg: discord.Message | None = None
         self._başladı  = False
 
-    def _embed(self) -> discord.Embed:
+    def _card(self, zaman_doldu: bool = False) -> tuple[dict, ...]:
         dagılım  = _rol_dagit(len(self.oyuncular))
         sayım    = Counter(dagılım)
         rol_satır = "\n".join(
             f"{ROL_EMOJI[r]} {r.capitalize()}: {sayım[r]}"
             for r in _ROL_SIRA if r in sayım
         )
-        e = discord.Embed(
-            title="🧛 Vampir Köylü — Lobi",
-            description=(
-                f"**{self.kurucu.mention}** bir oyun kurdu!\n\n"
-                f"**Katılımcılar ({len(self.oyuncular)}/{MAX_OYUNCU}):**\n"
-                + "\n".join(f"• {o.mention}" for o in self.oyuncular)
-            ),
-            color=discord.Color.dark_red(),
+        lines = (
+            ["**🧛 Vampir Köylü — Lobi**", "",
+             f"**{self.kurucu.mention}** bir oyun kurdu!",
+             f"**Katılımcılar ({len(self.oyuncular)}/{MAX_OYUNCU}):**"]
+            + [f"• {o.mention}" for o in self.oyuncular]
+            + ["",
+               f"**Bu sayıyla rol dağılımı:**\n{rol_satır}",
+               "",
+               f"-# Min {MIN_OYUNCU} • Max {MAX_OYUNCU} oyuncu • Kurucu başlatır"]
         )
-        e.add_field(
-            name=f"Bu sayıyla rol dağılımı ({len(self.oyuncular)} kişi)",
-            value=rol_satır,
-            inline=False,
-        )
-        e.set_footer(text=f"Min {MIN_OYUNCU} • Max {MAX_OYUNCU} oyuncu • Kurucu başlatır")
-        e.timestamp = discord.utils.utcnow()
-        return e
+        if zaman_doldu:
+            lines.append("\n⏰ Lobi süresi doldu.")
+        return (c_container(c_text("\n".join(lines)), color=0x8B0000),)
 
     async def on_timeout(self):
         if not self._başladı:
@@ -396,9 +410,7 @@ class VampirKoyluLobiView(discord.ui.View):
                 c.disabled = True
             if self.msg:
                 try:
-                    e = self._embed()
-                    e.description += "\n\n⏰ Lobi süresi doldu."
-                    await self.msg.edit(embed=e, view=self)
+                    await msg_edit(self.msg, *self._card(zaman_doldu=True), view=self)
                 except discord.HTTPException:
                     pass
 
@@ -411,7 +423,7 @@ class VampirKoyluLobiView(discord.ui.View):
         self.oyuncular.append(interaction.user)
         await interaction.response.defer()
         assert self.msg
-        await self.msg.edit(embed=self._embed())
+        await msg_edit(self.msg, *self._card(), view=self)
 
     @discord.ui.button(label="Ayrıl", emoji="🚪", style=discord.ButtonStyle.secondary)
     async def ayrıl_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -424,7 +436,7 @@ class VampirKoyluLobiView(discord.ui.View):
         self.oyuncular.remove(interaction.user)
         await interaction.response.defer()
         assert self.msg
-        await self.msg.edit(embed=self._embed())
+        await msg_edit(self.msg, *self._card(), view=self)
 
     @discord.ui.button(label="Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
     async def başlat_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -440,7 +452,7 @@ class VampirKoyluLobiView(discord.ui.View):
             c.disabled = True
         await interaction.response.defer()
         assert self.msg
-        await self.msg.edit(embed=self._embed(), view=self)
+        await msg_edit(self.msg, *self._card(), view=self)
         oyun = VampirKoyluOyunu(list(self.oyuncular), interaction.channel, self.kurucu)  # type: ignore[arg-type]
         await oyun.başlat()
 
@@ -452,13 +464,8 @@ class VampirKoyluLobiView(discord.ui.View):
         self.stop()
         for c in self.children:
             c.disabled = True
-        await interaction.response.edit_message(
-            embed=discord.Embed(
-                title="🚫 Lobi İptal Edildi",
-                description=f"{interaction.user.mention} lobi iptal etti.",
-                color=discord.Color.greyple(),
-                timestamp=discord.utils.utcnow(),
-            ),
+        await update(interaction,
+            c_container(c_text(f"**🚫 Lobi İptal Edildi**\n\n{interaction.user.mention} lobi iptal etti."), color=0x95A5A6),
             view=self,
         )
 
@@ -466,12 +473,7 @@ class VampirKoyluLobiView(discord.ui.View):
 # ── Oyun Motoru ───────────────────────────────────────────────────────────────
 
 class VampirKoyluOyunu:
-    def __init__(
-        self,
-        oyuncular: list[discord.Member],
-        kanal: discord.TextChannel,
-        kurucu: discord.Member,
-    ):
+    def __init__(self, oyuncular, kanal, kurucu):
         self.oyuncular  = oyuncular[:]
         self.yaşayanlar = oyuncular[:]
         self.kanal      = kanal
@@ -479,28 +481,22 @@ class VampirKoyluOyunu:
         self.roller: dict[int, str] = {}
         self.gece_sayısı = 0
 
-        # Night state
         self.vampir_oyları: dict[int, int] = {}
         self.doktor_koruması: int | None   = None
         self.kahin_görevi: int | None      = None
         self.gece_tamamlayanlar: set[int]  = set()
         self._gece_cozuluyor = False
 
-        # Day state
         self.gunduz_oyları: dict[int, int]  = {}
         self.gunduz_tamamlayanlar: set[int] = set()
 
-        # Hunter
         self._avci_event = asyncio.Event()
         self._avci_hedef: int | None = None
 
-        # Active views / messages
         self.aktif_gece_view: GeceView | None       = None
         self.aktif_gunduz_view: GunduzOyView | None = None
         self.gece_mesaj: discord.Message | None     = None
         self.gunduz_mesaj: discord.Message | None   = None
-
-    # ── Yardımcılar ───────────────────────────────────────────────────────────
 
     def _bul(self, uid: int) -> discord.Member | None:
         return next((o for o in self.oyuncular if o.id == uid), None)
@@ -514,51 +510,46 @@ class VampirKoyluOyunu:
     def _köylü_sayısı(self) -> int:
         return sum(1 for o in self.yaşayanlar if self.roller[o.id] != "vampir")
 
-    # ── Kazanma Kontrolü ──────────────────────────────────────────────────────
-
     async def _kazanma_kontrol(self) -> bool:
-        vampir = self._vampir_sayısı()
-        köylü  = self._köylü_sayısı()
-
-        if vampir == 0:
+        if self._vampir_sayısı() == 0:
             await self._oyun_bitti("köylü")
             return True
-        if vampir >= köylü:
+        if self._vampir_sayısı() >= self._köylü_sayısı():
             await self._oyun_bitti("vampir")
             return True
         return False
 
     async def _oyun_bitti(self, kazanan: str):
         if kazanan == "köylü":
-            başlık   = "🌟 Köylüler Kazandı!"
-            renk     = discord.Color.green()
+            başlık = "🌟 Köylüler Kazandı!"
+            renk   = 0x57F287
             açıklama = "Tüm vampirler temizlendi! Köy güvende! 🎉"
-            tag      = "victory celebration villagers"
+            tag    = "victory celebration villagers"
         else:
-            başlık   = "🧛 Vampirler Kazandı!"
-            renk     = discord.Color.dark_red()
+            başlık = "🧛 Vampirler Kazandı!"
+            renk   = 0x8B0000
             açıklama = "Vampirler köyü ele geçirdi! Geceler artık daha karanlık... 🌙"
-            tag      = "vampire evil laugh win"
+            tag    = "vampire evil laugh win"
 
         gif = await giphy(tag)
-        e   = discord.Embed(title=başlık, description=açıklama, color=renk)
-        if gif:
-            e.set_image(url=gif)
 
         satırlar = []
         for oyuncu in self.oyuncular:
-            rol    = self.roller[oyuncu.id]
-            durum  = "✅" if oyuncu in self.yaşayanlar else "💀"
+            rol   = self.roller[oyuncu.id]
+            durum = "✅" if oyuncu in self.yaşayanlar else "💀"
             satırlar.append(f"{durum} {oyuncu.mention} — {ROL_EMOJI[rol]} {rol.capitalize()}")
 
-        e.add_field(name="Tüm Roller", value="\n".join(satırlar), inline=False)
-        e.timestamp = discord.utils.utcnow()
+        items: list[dict] = [
+            c_text(f"**{başlık}**\n\n{açıklama}\n\n**Tüm Roller:**\n" + "\n".join(satırlar))
+        ]
+        if gif:
+            items.append(c_separator())
+            items.append(c_media(gif))
+        son_kart = (c_container(*items, color=renk),)
 
-        tekrar = VampirTekrarView(self.oyuncular)
-        msg = await self.kanal.send(embed=e, view=tekrar)
+        tekrar = VampirTekrarView(self.oyuncular, son_kart)
+        msg = await channel_send(self.kanal, *son_kart, view=tekrar)
         tekrar.msg = msg
-
-    # ── Oyunu Başlat ──────────────────────────────────────────────────────────
 
     async def başlat(self):
         roller_listesi = _rol_dagit(len(self.oyuncular))
@@ -566,7 +557,6 @@ class VampirKoyluOyunu:
         for oyuncu, rol in zip(self.oyuncular, roller_listesi):
             self.roller[oyuncu.id] = rol
 
-        # Her oyuncuya DM ile rolünü gönder
         dm_hatası = []
         for oyuncu in self.oyuncular:
             rol = self.roller[oyuncu.id]
@@ -591,44 +581,26 @@ class VampirKoyluOyunu:
             f"{ROL_EMOJI[r]} {r.capitalize()}: {sayım[r]}"
             for r in _ROL_SIRA if r in sayım
         )
+        dm_uyarı = f"\n\n⚠️ DM gönderilemeyen oyuncular: {', '.join(dm_hatası)}" if dm_hatası else ""
 
-        dm_uyarı = ""
-        if dm_hatası:
-            dm_uyarı = f"\n\n⚠️ DM gönderilemeyen oyuncular: {', '.join(dm_hatası)}"
-
-        e = discord.Embed(
-            title="🧛 Vampir Köylü Başlıyor!",
-            description=(
-                f"**{len(self.oyuncular)} oyuncu** ile oyun başlıyor!\n\n"
-                "📬 **Herkes rolünü DM olarak aldı.** Gelen kutunuzu kontrol edin!\n"
-                "Vampirler takım arkadaşlarını tanır. Özel roller gece eylem yapar."
-                f"{dm_uyarı}"
-            ),
-            color=discord.Color.dark_red(),
+        baslangic_text = (
+            f"**🧛 Vampir Köylü Başlıyor!**\n\n"
+            f"**{len(self.oyuncular)} oyuncu** ile oyun başlıyor!\n\n"
+            "📬 **Herkes rolünü DM olarak aldı.** Gelen kutunuzu kontrol edin!\n"
+            "Vampirler takım arkadaşlarını tanır. Özel roller gece eylem yapar."
+            f"{dm_uyarı}\n\n"
+            f"**Rol Dağılımı:**\n{rol_satır}\n\n"
+            f"**Oyuncular ({len(self.oyuncular)}):**\n"
+            + "\n".join(f"• {o.mention}" for o in self.oyuncular)
+            + "\n\n"
+            "🌙 **Gece:** Vampirler kurban seçer, Doktor korur, Kahin rol öğrenir.\n"
+            "☀️ **Gündüz:** Herkes tartışır ve oy kullanarak birini idam eder.\n"
+            "🏆 **Köylüler:** Tüm vampirleri bulun!\n"
+            "🧛 **Vampirler:** Köylülerle eşit veya daha fazla olun!"
         )
-        e.add_field(name="Rol Dağılımı", value=rol_satır, inline=False)
-        e.add_field(
-            name=f"Oyuncular ({len(self.oyuncular)})",
-            value="\n".join(f"• {o.mention}" for o in self.oyuncular),
-            inline=False,
-        )
-        e.add_field(
-            name="Nasıl Oynanır?",
-            value=(
-                "🌙 **Gece:** Vampirler kurban seçer, Doktor korur, Kahin rol öğrenir.\n"
-                "☀️ **Gündüz:** Herkes tartışır ve oy kullanarak birini idam eder.\n"
-                "🏆 **Köylüler:** Tüm vampirleri bulun!\n"
-                "🧛 **Vampirler:** Köylülerle eşit veya daha fazla olun!"
-            ),
-            inline=False,
-        )
-        e.timestamp = discord.utils.utcnow()
-        await self.kanal.send(embed=e)
-
+        await channel_send(self.kanal, c_container(c_text(baslangic_text), color=0x8B0000))
         await asyncio.sleep(5)
         await self._gece_başlat()
-
-    # ── Gece Fazı ─────────────────────────────────────────────────────────────
 
     async def _gece_başlat(self):
         self.gece_sayısı += 1
@@ -638,27 +610,22 @@ class VampirKoyluOyunu:
         self.gece_tamamlayanlar.clear()
         self._gece_cozuluyor = False
 
-        e = discord.Embed(
-            title=f"🌙 {self.gece_sayısı}. Gece Başladı!",
-            description=(
-                "Köy uykuya dalıyor...\n\n"
-                "🧛 **Vampirler** • 👨‍⚕️ **Doktor** • 🔮 **Kahin** → Butona basarak gece eylemini seç.\n"
-                "👨‍🌾 **Köylüler** → Sabahı bekle. 💤\n\n"
-                "*(Rolünü hatırlamak için DM'ine bakabilirsin)*"
-            ),
-            color=discord.Color.from_rgb(15, 10, 50),
+        yaşayanlar_str = "\n".join(f"• {o.mention}" for o in self.yaşayanlar)
+        gece_text = (
+            f"**🌙 {self.gece_sayısı}. Gece Başladı!**\n\n"
+            "Köy uykuya dalıyor...\n\n"
+            "🧛 **Vampirler** • 👨‍⚕️ **Doktor** • 🔮 **Kahin** → Butona basarak gece eylemini seç.\n"
+            "👨‍🌾 **Köylüler** → Sabahı bekle. 💤\n\n"
+            "*(Rolünü hatırlamak için DM'ine bakabilirsin)*\n\n"
+            f"**Hayatta Kalanlar ({len(self.yaşayanlar)}):**\n{yaşayanlar_str}\n\n"
+            f"-# ⏱️ {GECE_SURESI} saniye"
         )
-        e.add_field(
-            name=f"Hayatta Kalanlar ({len(self.yaşayanlar)})",
-            value="\n".join(f"• {o.mention}" for o in self.yaşayanlar),
-            inline=False,
-        )
-        e.set_footer(text=f"⏱️ {GECE_SURESI} saniye")
-        e.timestamp = discord.utils.utcnow()
+        gece_kart = c_container(c_text(gece_text), color=0x0A0A32)
 
         view = GeceView(self)
+        view.kart = gece_kart
         self.aktif_gece_view = view
-        msg = await self.kanal.send(embed=e, view=view)
+        msg = await channel_send(self.kanal, gece_kart, view=view)
         view.msg = msg
         self.gece_mesaj = msg
 
@@ -674,15 +641,14 @@ class VampirKoyluOyunu:
                 v.stop()
                 for c in v.children:
                     c.disabled = True
-                if self.gece_mesaj:
+                if self.gece_mesaj and v.kart:
                     try:
-                        await self.gece_mesaj.edit(view=v)
+                        await msg_edit(self.gece_mesaj, v.kart, view=v)
                     except discord.HTTPException:
                         pass
             await self._gece_coz()
 
     async def _gece_coz(self):
-        # Vampir kurban
         kurban_id: int | None = None
         if self.vampir_oyları:
             kurban_id = Counter(self.vampir_oyları.values()).most_common(1)[0][0]
@@ -698,39 +664,42 @@ class VampirKoyluOyunu:
                 if öldü and öldü in self.yaşayanlar:
                     self.yaşayanlar.remove(öldü)
 
-        # Gece view kapat
         v = self.aktif_gece_view
         if v:
             for c in v.children:
                 c.disabled = True
-            if self.gece_mesaj:
+            if self.gece_mesaj and v.kart:
                 try:
-                    await self.gece_mesaj.edit(view=v)
+                    await msg_edit(self.gece_mesaj, v.kart, view=v)
                 except discord.HTTPException:
                     pass
 
-        # Sabah özeti
-        e = discord.Embed(title="🌅 Sabah Oldu!", color=discord.Color.from_rgb(255, 200, 50))
-
+        yaşayanlar_str = "\n".join(f"• {o.mention}" for o in self.yaşayanlar) or "—"
         if kurtarıldı:
-            e.description = "🌙 Gece geçti...\n\n💉 **Doktor birini kurtardı! Bu gece kimse ölmedi!**"
+            sabah_text = (
+                "**🌅 Sabah Oldu!**\n\n"
+                "🌙 Gece geçti...\n\n"
+                "💉 **Doktor birini kurtardı! Bu gece kimse ölmedi!**\n\n"
+                f"**Hayatta Kalanlar ({len(self.yaşayanlar)}):**\n{yaşayanlar_str}"
+            )
         elif öldü:
-            e.description = f"🌙 Gece geçti...\n\n💀 **{öldü.mention}** bu gece hayatını kaybetti!"
-            e.add_field(
-                name="Gerçek Rolü",
-                value=f"{ROL_EMOJI.get(self.roller[öldü.id], '❓')} {self.roller[öldü.id].capitalize()}",
-                inline=False,
+            rol_str = f"{ROL_EMOJI.get(self.roller[öldü.id], '❓')} {self.roller[öldü.id].capitalize()}"
+            sabah_text = (
+                "**🌅 Sabah Oldu!**\n\n"
+                f"🌙 Gece geçti...\n\n"
+                f"💀 **{öldü.mention}** bu gece hayatını kaybetti!\n"
+                f"Gerçek rolü: {rol_str}\n\n"
+                f"**Hayatta Kalanlar ({len(self.yaşayanlar)}):**\n{yaşayanlar_str}"
             )
         else:
-            e.description = "🌙 Gece geçti...\n\n😴 Bu gece kimse ölmedi."
+            sabah_text = (
+                "**🌅 Sabah Oldu!**\n\n"
+                "🌙 Gece geçti...\n\n"
+                "😴 Bu gece kimse ölmedi.\n\n"
+                f"**Hayatta Kalanlar ({len(self.yaşayanlar)}):**\n{yaşayanlar_str}"
+            )
 
-        e.add_field(
-            name=f"Hayatta Kalanlar ({len(self.yaşayanlar)})",
-            value="\n".join(f"• {o.mention}" for o in self.yaşayanlar) or "—",
-            inline=False,
-        )
-        e.timestamp = discord.utils.utcnow()
-        await self.kanal.send(embed=e)
+        await channel_send(self.kanal, c_container(c_text(sabah_text), color=0xFFC832))
 
         if öldü and self.roller.get(öldü.id) == "avcı":
             await self._avci_tetik(öldü, "gunduz")
@@ -742,32 +711,13 @@ class VampirKoyluOyunu:
         await asyncio.sleep(4)
         await self._gunduz_başlat()
 
-    # ── Gündüz Fazı ───────────────────────────────────────────────────────────
-
     async def _gunduz_başlat(self):
         self.gunduz_oyları.clear()
         self.gunduz_tamamlayanlar.clear()
 
-        e = discord.Embed(
-            title=f"☀️ Gündüz — {self.gece_sayısı}. Günün Oylaması",
-            description=(
-                "**Tartışın ve karar verin!**\n\n"
-                f"Köyde **{len(self.yaşayanlar)}** kişi hayatta.\n"
-                "Aralarında vampir var mı? Oylayın ve birini idam edin!"
-            ),
-            color=discord.Color.from_rgb(255, 220, 80),
-        )
-        e.add_field(
-            name=f"Hayatta Kalanlar ({len(self.yaşayanlar)})",
-            value="\n".join(f"• {o.mention}" for o in self.yaşayanlar),
-            inline=False,
-        )
-        e.set_footer(text=f"⏱️ {GUNDUZ_SURESI} saniye — 0/{len(self.yaşayanlar)} oy kullandı")
-        e.timestamp = discord.utils.utcnow()
-
         view = GunduzOyView(self)
         self.aktif_gunduz_view = view
-        msg = await self.kanal.send(embed=e, view=view)
+        msg = await channel_send(self.kanal, view._card(), view=view)
         view.msg = msg
         self.gunduz_mesaj = msg
 
@@ -778,7 +728,7 @@ class VampirKoyluOyunu:
                 c.disabled = True
             if self.gunduz_mesaj:
                 try:
-                    await self.gunduz_mesaj.edit(view=v)
+                    await msg_edit(self.gunduz_mesaj, v._card(), view=v)
                 except discord.HTTPException:
                     pass
 
@@ -797,23 +747,15 @@ class VampirKoyluOyunu:
                     elenecek = None
 
         if beraberlik:
-            e = discord.Embed(
-                title="⚖️ Oylar Eşit!",
-                description="Bu gündüz kimse idam edilmedi. Vampirler şimdilik güvende!",
-                color=discord.Color.greyple(),
-            )
-            e.timestamp = discord.utils.utcnow()
-            await self.kanal.send(embed=e)
-
+            await channel_send(self.kanal, c_container(
+                c_text("**⚖️ Oylar Eşit!**\n\nBu gündüz kimse idam edilmedi. Vampirler şimdilik güvende!"),
+                color=0x95A5A6,
+            ))
         elif not self.gunduz_oyları:
-            e = discord.Embed(
-                title="🤫 Kimse Oy Kullanmadı",
-                description="Bu gündüz kimse idam edilmedi.",
-                color=discord.Color.greyple(),
-            )
-            e.timestamp = discord.utils.utcnow()
-            await self.kanal.send(embed=e)
-
+            await channel_send(self.kanal, c_container(
+                c_text("**🤫 Kimse Oy Kullanmadı**\n\nBu gündüz kimse idam edilmedi."),
+                color=0x95A5A6,
+            ))
         elif elenecek:
             oy_detay = []
             for voter_id, target_id in self.gunduz_oyları.items():
@@ -822,20 +764,15 @@ class VampirKoyluOyunu:
                 if voter and target:
                     oy_detay.append(f"• {voter.display_name} → {target.display_name}")
 
-            e = discord.Embed(
-                title="⚖️ Mahkeme Kararı!",
-                description=f"**{elenecek.mention}** köy halkı tarafından ipe gönderildi!",
-                color=discord.Color.dark_red(),
+            rol_str = f"{ROL_EMOJI.get(self.roller[elenecek.id], '❓')} {self.roller[elenecek.id].capitalize()}"
+            oy_text = "\n".join(oy_detay[:10]) if oy_detay else ""
+            mahkeme_text = (
+                f"**⚖️ Mahkeme Kararı!**\n\n"
+                f"**{elenecek.mention}** köy halkı tarafından ipe gönderildi!\n"
+                f"Gerçek rolü: {rol_str}"
+                + (f"\n\n**Oy Dökümü:**\n{oy_text}" if oy_text else "")
             )
-            e.add_field(
-                name="Gerçek Rolü",
-                value=f"{ROL_EMOJI.get(self.roller[elenecek.id], '❓')} {self.roller[elenecek.id].capitalize()}",
-                inline=False,
-            )
-            if oy_detay:
-                e.add_field(name="Oy Dökümü", value="\n".join(oy_detay[:10]), inline=False)
-            e.timestamp = discord.utils.utcnow()
-            await self.kanal.send(embed=e)
+            await channel_send(self.kanal, c_container(c_text(mahkeme_text), color=0x8B0000))
 
             if self.roller[elenecek.id] == "avcı":
                 await self._avci_tetik(elenecek, "gece")
@@ -846,8 +783,6 @@ class VampirKoyluOyunu:
 
         await asyncio.sleep(4)
         await self._gece_başlat()
-
-    # ── Avcı Tetikleyici ──────────────────────────────────────────────────────
 
     async def _avci_tetik(self, avcı: discord.Member, sonraki_faz: str):
         if not self.yaşayanlar:
@@ -862,19 +797,16 @@ class VampirKoyluOyunu:
         self._avci_event.clear()
         self._avci_hedef = None
 
-        e = discord.Embed(
-            title="🏹 Son Nefes!",
-            description=(
-                f"**{avcı.mention}** bir **Avcı** idi!\n\n"
-                f"Son nefesinde birisini yanında götürebilir.\n"
-                f"⏳ **{AVCI_SURESI} saniye** içinde seçimini yap!"
-            ),
-            color=discord.Color.orange(),
+        avci_text = (
+            f"**🏹 Son Nefes!**\n\n"
+            f"**{avcı.mention}** bir **Avcı** idi!\n\n"
+            f"Son nefesinde birisini yanında götürebilir.\n"
+            f"⏳ **{AVCI_SURESI} saniye** içinde seçimini yap!"
         )
-        e.timestamp = discord.utils.utcnow()
+        avci_kart = c_container(c_text(avci_text), color=0xF0A030)
 
-        view = AvcıSonHamleView(self, avcı)
-        msg  = await self.kanal.send(embed=e, view=view)
+        view = AvcıSonHamleView(self, avcı, avci_kart)
+        msg  = await channel_send(self.kanal, avci_kart, view=view)
         view.msg = msg
 
         try:
@@ -886,18 +818,15 @@ class VampirKoyluOyunu:
             hedef = self._bul(self._avci_hedef)
             if hedef and hedef in self.yaşayanlar:
                 self.yaşayanlar.remove(hedef)
-                e2 = discord.Embed(
-                    title="🏹 Avcının Son Oku!",
-                    description=f"**{avcı.display_name}** son nefesinde **{hedef.mention}**'i yanında götürdü!",
-                    color=discord.Color.dark_orange(),
-                )
-                e2.add_field(
-                    name="Rolü",
-                    value=f"{ROL_EMOJI.get(self.roller[hedef.id], '❓')} {self.roller[hedef.id].capitalize()}",
-                    inline=False,
-                )
-                e2.timestamp = discord.utils.utcnow()
-                await self.kanal.send(embed=e2)
+                rol_str = f"{ROL_EMOJI.get(self.roller[hedef.id], '❓')} {self.roller[hedef.id].capitalize()}"
+                await channel_send(self.kanal, c_container(
+                    c_text(
+                        f"**🏹 Avcının Son Oku!**\n\n"
+                        f"**{avcı.display_name}** son nefesinde **{hedef.mention}**'i yanında götürdü!\n"
+                        f"Rolü: {rol_str}"
+                    ),
+                    color=0xE67E22,
+                ))
 
         if await self._kazanma_kontrol():
             return
@@ -915,14 +844,10 @@ class VampirKoylu(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(
-        name="vampirkoylu",
-        description="Arkadaşlarla Vampir Köylü oyna! (4-12 oyuncu)"
-    )
+    @app_commands.command(name="vampirkoylu", description="Arkadaşlarla Vampir Köylü oyna! (4-12 oyuncu)")
     async def vampirkoylu(self, interaction: discord.Interaction):
         view = VampirKoyluLobiView(interaction.user)  # type: ignore[arg-type]
-        await interaction.response.send_message(embed=view._embed(), view=view)
-        view.msg = await interaction.original_response()
+        view.msg = await respond(interaction, *view._card(), view=view)
 
 
 async def setup(bot: commands.Bot):

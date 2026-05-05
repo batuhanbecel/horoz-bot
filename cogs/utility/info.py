@@ -3,6 +3,10 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import timezone, datetime
 from ._shared import _emb
+from .._v2 import (
+    c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
+    respond, edit_original,
+)
 
 
 class Info(commands.Cog):
@@ -14,106 +18,133 @@ class Info(commands.Cog):
     @app_commands.command(name="ping", description="Botun gecikme süresini gösterir.")
     async def ping(self, interaction: discord.Interaction):
         ws = round(self.bot.latency * 1000)
-        color = discord.Color.green() if ws < 100 else discord.Color.orange() if ws < 200 else discord.Color.red()
+        color = 0x57F287 if ws < 100 else 0xFEE75C if ws < 200 else 0xED4245
 
         before = discord.utils.utcnow()
-        await interaction.response.send_message(embed=_emb("🏓 Pong!", "Ölçülüyor...", color))
+        await respond(interaction, c_container(c_text("**🏓 Pong!**\n\nÖlçülüyor..."), color=color))
         rt = round((discord.utils.utcnow() - before).total_seconds() * 1000)
 
         bar_len = min(int(ws / 20), 10)
-        bar     = "█" * bar_len + "░" * (10 - bar_len)
-        embed   = _emb("🏓 Pong!", f"`{bar}`\n\n📡 **WebSocket:** {ws} ms\n🔄 **Roundtrip:** {rt} ms", color)
-        await interaction.edit_original_response(embed=embed)
+        bar = "█" * bar_len + "░" * (10 - bar_len)
+        await edit_original(interaction, c_container(
+            c_text(
+                f"**🏓 Pong!**\n\n"
+                f"`{bar}`\n\n"
+                f"📡 **WebSocket:** {ws} ms\n"
+                f"🔄 **Roundtrip:** {rt} ms"
+            ),
+            color=color,
+        ))
 
     # /avatar
     @app_commands.command(name="avatar", description="Bir kullanıcının avatarını gösterir.")
     @app_commands.describe(üye="Avatarı gösterilecek üye (boş = kendiniz)")
     async def avatar(self, interaction: discord.Interaction, üye: discord.Member = None):
         target = üye or interaction.user
-        embed  = discord.Embed(title=f"🖼️ {target.display_name}", color=discord.Color.blurple())
-        embed.set_image(url=target.display_avatar.with_size(1024).url)
-        embed.description = (
+        av_url = str(target.display_avatar.with_size(1024).url)
+        links = (
             f"[PNG]({target.display_avatar.with_format('png').url}) · "
             f"[JPG]({target.display_avatar.with_format('jpg').url}) · "
             f"[WEBP]({target.display_avatar.with_format('webp').url})"
         )
-        embed.set_footer(text="Horoz Bot")
-        embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(embed=embed)
+        await respond(interaction, c_container(
+            c_section(
+                c_text(f"**🖼️ {target.display_name}**\n\n{links}"),
+                accessory=c_thumbnail(av_url),
+            ),
+            c_separator(),
+            c_media(av_url),
+            color=0x5865F2,
+        ))
 
     # /bot
     @app_commands.command(name="bot", description="Bot hakkında bilgi verir.")
     async def horoz_info(self, interaction: discord.Interaction):
-        delta  = datetime.now(timezone.utc) - self._start_time
+        delta = datetime.now(timezone.utc) - self._start_time
         h, rem = divmod(int(delta.total_seconds()), 3600)
-        m, s   = divmod(rem, 60)
+        m, s = divmod(rem, 60)
 
-        embed = discord.Embed(title="🐓 Horoz Bot", color=discord.Color.blurple())
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.add_field(name="🌐 Sunucu",     value=str(len(self.bot.guilds)),                                  inline=True)
-        embed.add_field(name="👥 Üye",        value=str(sum(g.member_count for g in self.bot.guilds)),           inline=True)
-        embed.add_field(name="📡 Gecikme",    value=f"{round(self.bot.latency * 1000)} ms",                     inline=True)
-        embed.add_field(name="⏱️ Çalışma",    value=f"{h}s {m}d {s}sn",                                        inline=True)
-        embed.add_field(name="🐍 discord.py", value=discord.__version__,                                        inline=True)
-        embed.add_field(name="📦 GitHub",     value="[batuhanbecel/horoz-bot](https://github.com/batuhanbecel/horoz-bot)", inline=True)
-        embed.set_footer(text="Horoz Bot")
-        embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(embed=embed)
+        text = (
+            "**🐓 Horoz Bot**\n\n"
+            f"🌐 **Sunucu:** {len(self.bot.guilds)}\n"
+            f"👥 **Üye:** {sum(g.member_count for g in self.bot.guilds)}\n"
+            f"📡 **Gecikme:** {round(self.bot.latency * 1000)} ms\n"
+            f"⏱️ **Çalışma:** {h}s {m}d {s}sn\n"
+            f"🐍 **discord.py:** {discord.__version__}\n"
+            f"📦 **GitHub:** [batuhanbecel/horoz-bot](https://github.com/batuhanbecel/horoz-bot)"
+        )
+        await respond(interaction, c_container(
+            c_section(
+                c_text(text),
+                accessory=c_thumbnail(str(self.bot.user.display_avatar.url)),
+            ),
+            color=0x5865F2,
+        ))
 
     # /profil
     @app_commands.command(name="profil", description="Bir kullanıcı hakkında bilgi verir.")
     @app_commands.describe(üye="Bilgi alınacak üye (boş = kendiniz)")
     async def profil(self, interaction: discord.Interaction, üye: discord.Member = None):
         target = üye or interaction.user
-        color  = target.color if target.color != discord.Color.default() else discord.Color.blurple()
-
-        embed = discord.Embed(title=f"👤 {target.display_name}", color=color)
-        embed.set_thumbnail(url=target.display_avatar.url)
-        embed.add_field(name="Kullanıcı", value=str(target),                           inline=True)
-        embed.add_field(name="ID",        value=f"`{target.id}`",                       inline=True)
-        embed.add_field(name="Bot?",      value="✅ Evet" if target.bot else "❌ Hayır", inline=True)
+        color = target.color.value if target.color != discord.Color.default() else 0x5865F2
 
         created = target.created_at.replace(tzinfo=timezone.utc)
-        embed.add_field(name="📅 Hesap Açıldı", value=f"<t:{int(created.timestamp())}:F>", inline=True)
+        lines = [
+            f"**👤 {target.display_name}**",
+            "",
+            f"👤 **Kullanıcı:** {target}",
+            f"🆔 **ID:** `{target.id}`",
+            f"🤖 **Bot:** {'✅ Evet' if target.bot else '❌ Hayır'}",
+            f"📅 **Hesap Açıldı:** <t:{int(created.timestamp())}:F>",
+        ]
 
-        if isinstance(target, discord.Member):
+        if isinstance(target, discord.Member) and target.joined_at:
             joined = target.joined_at.replace(tzinfo=timezone.utc)
-            embed.add_field(name="📥 Sunucuya Katılım", value=f"<t:{int(joined.timestamp())}:F>", inline=True)
-            embed.add_field(name="​", value="​", inline=True)
+            lines.append(f"📥 **Sunucuya Katılım:** <t:{int(joined.timestamp())}:F>")
             roles = [r.mention for r in reversed(target.roles) if r.name != "@everyone"]
-            embed.add_field(
-                name=f"🏷️ Roller ({len(roles)})",
-                value=", ".join(roles[:10]) or "Yok",
-                inline=False,
-            )
+            lines.append(f"🏷️ **Roller ({len(roles)}):** {', '.join(roles[:10]) or 'Yok'}")
 
-        embed.set_footer(text="Horoz Bot")
-        embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(embed=embed)
+        await respond(interaction, c_container(
+            c_section(
+                c_text("\n".join(lines)),
+                accessory=c_thumbnail(str(target.display_avatar.url)),
+            ),
+            color=color,
+        ))
 
     # /sunucu
     @app_commands.command(name="sunucu", description="Sunucu hakkında bilgi verir.")
     async def sunucu(self, interaction: discord.Interaction):
         guild = interaction.guild
-        embed = discord.Embed(title=f"🏠 {guild.name}", color=discord.Color.blurple())
-        if guild.icon:
-            embed.set_thumbnail(url=guild.icon.url)
-        if guild.banner:
-            embed.set_image(url=guild.banner.with_size(1024).url)
-
         created = guild.created_at.replace(tzinfo=timezone.utc)
-        embed.add_field(name="👑 Sahip",       value=guild.owner.mention if guild.owner else "Bilinmiyor",        inline=True)
-        embed.add_field(name="🆔 ID",          value=f"`{guild.id}`",                                             inline=True)
-        embed.add_field(name="📅 Oluşturuldu", value=f"<t:{int(created.timestamp())}:R>",                         inline=True)
-        embed.add_field(name="👥 Üye",         value=str(guild.member_count),                                     inline=True)
-        embed.add_field(name="💬 Kanal",       value=f"{len(guild.text_channels)} metin · {len(guild.voice_channels)} ses", inline=True)
-        embed.add_field(name="🏷️ Rol",         value=str(len(guild.roles)),                                       inline=True)
-        embed.add_field(name="✨ Boost",        value=f"Seviye **{guild.premium_tier}** — {guild.premium_subscription_count} boost", inline=True)
-        embed.add_field(name="🔒 Doğrulama",   value=str(guild.verification_level).title(),                       inline=True)
-        embed.add_field(name="😀 Emoji",        value=f"{len(guild.emojis)}/{guild.emoji_limit}",                  inline=True)
-        embed.set_footer(text="Horoz Bot")
-        embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(embed=embed)
+
+        lines = [
+            f"**🏠 {guild.name}**",
+            "",
+            f"👑 **Sahip:** {guild.owner.mention if guild.owner else 'Bilinmiyor'}",
+            f"🆔 **ID:** `{guild.id}`",
+            f"📅 **Oluşturuldu:** <t:{int(created.timestamp())}:R>",
+            f"👥 **Üye:** {guild.member_count}",
+            f"💬 **Kanal:** {len(guild.text_channels)} metin · {len(guild.voice_channels)} ses",
+            f"🏷️ **Rol:** {len(guild.roles)}",
+            f"✨ **Boost:** Seviye **{guild.premium_tier}** — {guild.premium_subscription_count} boost",
+            f"🔒 **Doğrulama:** {str(guild.verification_level).title()}",
+            f"😀 **Emoji:** {len(guild.emojis)}/{guild.emoji_limit}",
+        ]
+
+        icon_url = str(guild.icon.url) if guild.icon else None
+        main = (
+            c_section(c_text("\n".join(lines)), accessory=c_thumbnail(icon_url))
+            if icon_url
+            else c_text("\n".join(lines))
+        )
+
+        card_items = [main]
+        if guild.banner:
+            card_items.append(c_separator())
+            card_items.append(c_media(str(guild.banner.with_size(1024).url)))
+
+        await respond(interaction, c_container(*card_items, color=0x5865F2))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message

@@ -339,7 +339,7 @@ class AdamAsmacaView(discord.ui.View):
         if harf not in self.kelime:
             self.yanlis += 1
 
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         assert self.msg
 
         if self._bitti():
@@ -359,7 +359,7 @@ class AdamAsmacaView(discord.ui.View):
         if interaction.user.id != self.oyuncu.id:
             return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
 
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         assert self.msg
 
         if tahmin == self.kelime:

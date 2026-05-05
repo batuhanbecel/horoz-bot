@@ -129,7 +129,9 @@ class IsimSehirLobiView(discord.ui.View):
     @discord.ui.button(label="Ayrıl", emoji="🚪", style=discord.ButtonStyle.secondary)
     async def ayrıl_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         if interaction.user.id == self.kurucu.id:
-            return await interaction.response.send_message("Kurucu lobiden ayrılamaz, iptal etmek için bekleyin.", ephemeral=True)
+            return await interaction.response.send_message(
+                "Kurucu ayrılamaz. Lobi kapatmak için **İptal** butonunu kullan.", ephemeral=True
+            )
         if interaction.user not in self.oyuncular:
             return await interaction.response.send_message("Bu lobide değilsin!", ephemeral=True)
         self.oyuncular.remove(interaction.user)
@@ -137,7 +139,7 @@ class IsimSehirLobiView(discord.ui.View):
         assert self.msg
         await self.msg.edit(embed=self._embed())
 
-    @discord.ui.button(label="Oyunu Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
     async def başlat_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         if interaction.user.id != self.kurucu.id:
             return await interaction.response.send_message("Sadece kurucu başlatabilir!", ephemeral=True)
@@ -152,6 +154,53 @@ class IsimSehirLobiView(discord.ui.View):
         await self.msg.edit(embed=self._embed(), view=self)
         oyun = IsimSehirOyunu(list(self.oyuncular), interaction.channel)  # type: ignore[arg-type]
         await oyun.yeni_tur()
+
+    @discord.ui.button(label="İptal", emoji="✖️", style=discord.ButtonStyle.danger)
+    async def iptal_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
+        if interaction.user.id != self.kurucu.id:
+            return await interaction.response.send_message("Sadece kurucu iptal edebilir!", ephemeral=True)
+        self._başladı = True
+        self.stop()
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="🚫 Lobi İptal Edildi",
+                description=f"{interaction.user.mention} lobi iptal etti.",
+                color=discord.Color.greyple(),
+                timestamp=discord.utils.utcnow(),
+            ),
+            view=self,
+        )
+
+
+# ── Tekrar Oyna View ─────────────────────────────────────────────────────────────
+
+class IsimSehirTekrarView(discord.ui.View):
+    def __init__(self, oyuncular: list[discord.Member]):
+        super().__init__(timeout=120)
+        self.oyuncular = oyuncular
+        self.msg: discord.Message | None = None
+
+    async def on_timeout(self):
+        for c in self.children:
+            c.disabled = True
+        if self.msg:
+            try:
+                await self.msg.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+    @discord.ui.button(label="Tekrar Oyna", emoji="🔄", style=discord.ButtonStyle.success)
+    async def tekrar(self, interaction: discord.Interaction, btn: discord.ui.Button):
+        if interaction.user not in self.oyuncular:
+            return await interaction.response.send_message("Bu oyuna dahil değildin!", ephemeral=True)
+        btn.disabled = True
+        self.stop()
+        await interaction.response.edit_message(view=self)
+        lobi = IsimSehirLobiView(interaction.user)
+        msg  = await interaction.channel.send(embed=lobi._embed(), view=lobi)
+        lobi.msg = msg
 
 
 # ── Oyun Motoru ──────────────────────────────────────────────────────────────────
@@ -274,7 +323,9 @@ class IsimSehirOyunu:
         )
         e.set_footer(text=f"{TOPLAM_TUR} tur oynadınız.")
         e.timestamp = discord.utils.utcnow()
-        await self.kanal.send(embed=e)
+        tekrar = IsimSehirTekrarView(self.oyuncular)
+        msg    = await self.kanal.send(embed=e, view=tekrar)
+        tekrar.msg = msg
 
 
 # ── Cog ──────────────────────────────────────────────────────────────────────────

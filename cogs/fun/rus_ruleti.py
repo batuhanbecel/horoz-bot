@@ -65,7 +65,7 @@ class LobiView(discord.ui.View):
         elif self.msg:
             await self.msg.edit(embed=self._embed(), view=self)
 
-    @discord.ui.button(label="Katıl", emoji="🙋", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Katıl", emoji="✋", style=discord.ButtonStyle.success)
     async def katıl(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user in self.oyuncular:
             return await interaction.response.send_message("Zaten lobidesin!", ephemeral=True)
@@ -81,15 +81,16 @@ class LobiView(discord.ui.View):
         if interaction.user not in self.oyuncular:
             return await interaction.response.send_message("Lobide değilsin!", ephemeral=True)
         if interaction.user == self.başlatan:
-            return await interaction.response.send_message("Başlatan ayrılamaz.", ephemeral=True)
+            return await interaction.response.send_message(
+                "Kurucu ayrılamaz. Lobi kapatmak için **İptal** butonunu kullan.", ephemeral=True
+            )
         self.oyuncular.remove(interaction.user)
-        # re-enable join button if it was disabled
         for c in self.children:
             if hasattr(c, "label") and c.label == "Katıl":
                 c.disabled = False
         await self._güncelle(interaction)
 
-    @discord.ui.button(label="Başlat", emoji="🎯", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
     async def başlat(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user.id != self.başlatan.id:
             return await interaction.response.send_message("Sadece başlatan başlatabilir.", ephemeral=True)
@@ -104,6 +105,24 @@ class LobiView(discord.ui.View):
         )
         self.stop()
         await _oyunu_başlat(interaction, self.oyuncular)
+
+    @discord.ui.button(label="İptal", emoji="✖️", style=discord.ButtonStyle.danger)
+    async def iptal(self, interaction: discord.Interaction, btn: discord.ui.Button):
+        if interaction.user.id != self.başlatan.id:
+            return await interaction.response.send_message("Sadece başlatan iptal edebilir.", ephemeral=True)
+        self.started = True
+        self.stop()
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="🚫 Lobi İptal Edildi",
+                description=f"{interaction.user.mention} lobi iptal etti.",
+                color=discord.Color.greyple(),
+                timestamp=discord.utils.utcnow(),
+            ),
+            view=self,
+        )
 
     async def on_timeout(self):
         if self.started:

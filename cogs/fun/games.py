@@ -3,7 +3,34 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import asyncio
+import os
+import aiohttp
 from ._shared import fun_embed, SEKIZ_TOP_YANIT
+
+_GIPHY_KEY = os.getenv("GIPHY_API_KEY", "")
+
+
+async def _giphy(tag: str) -> str | None:
+    """Giphy'den rastgele bir GIF URL'si döndürür. Başarısız olursa None."""
+    if not _GIPHY_KEY:
+        return None
+    url = (
+        "https://api.giphy.com/v1/gifs/search"
+        f"?api_key={_GIPHY_KEY}&q={tag}&limit=25&rating=pg-13&lang=tr"
+    )
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
+                if r.status != 200:
+                    return None
+                payload = await r.json()
+                results = payload.get("data", [])
+                if not results:
+                    return None
+                gif = random.choice(results)
+                return gif["images"]["original"]["url"]
+    except Exception:
+        return None
 
 # ── Taş Kağıt Makas ────────────────────────────────────────────────────────────
 
@@ -468,7 +495,7 @@ class Games(commands.Cog):
         if cm < 5:
             emoji = "🤏"
             bar   = "8" + "." * cm + "D"
-            gif   = "https://media1.tenor.com/m/tNfI0rRRWucAAAAd/meh-mediocre.gif"
+            tag   = "tiny disappointing"
             yorum = random.choice([
                 "Ciğerim bu iş böyle olmaz...",
                 "Yok gibi ama var işte, maşallah",
@@ -478,7 +505,7 @@ class Games(commands.Cog):
         elif cm < 10:
             emoji = "😐"
             bar   = "8" + "-" * cm + "D"
-            gif   = "https://media1.tenor.com/m/J06vocxeJUkAAAAd/its-not-small-community.gif"
+            tag   = "meh mediocre"
             yorum = random.choice([
                 "Yani... çalışıyor en azından",
                 "Eh, yoksulluğun utanacak bir yanı yok",
@@ -488,7 +515,7 @@ class Games(commands.Cog):
         elif cm < 15:
             emoji = "😎"
             bar   = "8" + "=" * cm + "D"
-            gif   = "https://media1.tenor.com/m/YnSWHa_QQ-AAAAAd/good-news.gif"
+            tag   = "not bad okay"
             yorum = random.choice([
                 "Tıkırında, ne eksik ne fazla",
                 "Standart paket, fabrika çıkışı",
@@ -498,7 +525,7 @@ class Games(commands.Cog):
         elif cm < 20:
             emoji = "🔥"
             bar   = "8" + "=" * cm + "D"
-            gif   = "https://media1.tenor.com/m/6vjzHxepwDkAAAAd/pout-kiss.gif"
+            tag   = "impressive nice"
             yorum = random.choice([
                 "E iyimiş be abi, kimden aldın bunu",
                 "Sormak istemiyorum ama nasıl taşıyorsun",
@@ -508,7 +535,7 @@ class Games(commands.Cog):
         elif cm < 30:
             emoji = "🚀"
             bar   = "8" + "=" * 22 + "D 🚀"
-            gif   = "https://media1.tenor.com/m/E4bRB3CkCmwAAAAd/collecting-reed-bill.gif"
+            tag   = "wow amazing reaction"
             yorum = random.choice([
                 "OHAAA KAMIŞA BAK LAN",
                 "Tarzan mı büyüttü seni kardeşim",
@@ -518,7 +545,7 @@ class Games(commands.Cog):
         else:
             emoji = "💀"
             bar   = "8" + "=" * 30 + "D 💀"
-            gif   = "https://media1.tenor.com/m/eWTgbLsT5bcAAAAd/rocket-to-the-moon.gif"
+            tag   = "mind blown shocked"
             yorum = random.choice([
                 "Kardeş bu silah ruhsatı istiyor",
                 "Hastane acil servis alarma geçsin",
@@ -526,16 +553,20 @@ class Games(commands.Cog):
                 "Devlet senden haberdar mı, ihbar etmem lazım",
             ])
 
+        await interaction.response.defer()
+        gif = await _giphy(tag)
+
         embed = discord.Embed(
             title=f"{emoji} Bilimsel Pipi Ölçümü™",
             description=f"{hedef.mention} — **{cm} cm**\n`{bar}`\n\n💬 {yorum}",
             color=discord.Color.from_rgb(255, 105, 180),
         )
-        embed.set_image(url=gif)
+        if gif:
+            embed.set_image(url=gif)
         embed.set_thumbnail(url=hedef.display_avatar.url)
         embed.set_footer(text="Horoz Bot Ölçüm Laboratuvarı™ • Sonuçlar yüzde yüz bilimseldir")
         embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
 
 async def setup(bot: commands.Bot):

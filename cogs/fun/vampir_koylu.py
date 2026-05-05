@@ -326,11 +326,9 @@ class AvcıSonHamleView(discord.ui.View):
 # ── Tekrar Oyna View ──────────────────────────────────────────────────────────
 
 class VampirTekrarView(discord.ui.View):
-    def __init__(self, oyuncular: list[discord.Member], kanal, kurucu: discord.Member):
+    def __init__(self, oyuncular: list[discord.Member]):
         super().__init__(timeout=120)
         self.oyuncular = oyuncular
-        self.kanal     = kanal
-        self.kurucu    = kurucu
         self.msg: discord.Message | None = None
 
     async def on_timeout(self):
@@ -344,15 +342,16 @@ class VampirTekrarView(discord.ui.View):
 
     @discord.ui.button(label="Tekrar Oyna", emoji="🔄", style=discord.ButtonStyle.success)
     async def tekrar_btn(self, interaction: discord.Interaction, btn: discord.ui.Button):
-        if interaction.user.id != self.kurucu.id:
+        if interaction.user not in self.oyuncular:
             return await interaction.response.send_message(
-                "Sadece oyunu kuran kişi tekrar başlatabilir!", ephemeral=True
+                "Bu oyuna dahil değildin!", ephemeral=True
             )
         btn.disabled = True
         self.stop()
         await interaction.response.edit_message(view=self)
-        oyun = VampirKoyluOyunu(self.oyuncular, self.kanal, self.kurucu)
-        await oyun.başlat()
+        lobi = VampirKoyluLobiView(interaction.user)
+        msg  = await interaction.channel.send(embed=lobi._embed(), view=lobi)
+        lobi.msg = msg
 
 
 # ── Lobi View ─────────────────────────────────────────────────────────────────
@@ -416,7 +415,9 @@ class VampirKoyluLobiView(discord.ui.View):
     @discord.ui.button(label="Ayrıl", emoji="🚪", style=discord.ButtonStyle.secondary)
     async def ayrıl_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         if interaction.user.id == self.kurucu.id:
-            return await interaction.response.send_message("Kurucu lobiden ayrılamaz!", ephemeral=True)
+            return await interaction.response.send_message(
+                "Kurucu ayrılamaz. Lobi kapatmak için **İptal** butonunu kullan.", ephemeral=True
+            )
         if interaction.user not in self.oyuncular:
             return await interaction.response.send_message("Bu lobide değilsin!", ephemeral=True)
         self.oyuncular.remove(interaction.user)
@@ -424,7 +425,7 @@ class VampirKoyluLobiView(discord.ui.View):
         assert self.msg
         await self.msg.edit(embed=self._embed())
 
-    @discord.ui.button(label="Oyunu Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
     async def başlat_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         if interaction.user.id != self.kurucu.id:
             return await interaction.response.send_message("Sadece kurucu başlatabilir!", ephemeral=True)
@@ -441,6 +442,24 @@ class VampirKoyluLobiView(discord.ui.View):
         await self.msg.edit(embed=self._embed(), view=self)
         oyun = VampirKoyluOyunu(list(self.oyuncular), interaction.channel, self.kurucu)  # type: ignore[arg-type]
         await oyun.başlat()
+
+    @discord.ui.button(label="İptal", emoji="✖️", style=discord.ButtonStyle.danger)
+    async def iptal_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
+        if interaction.user.id != self.kurucu.id:
+            return await interaction.response.send_message("Sadece kurucu iptal edebilir!", ephemeral=True)
+        self._başladı = True
+        self.stop()
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="🚫 Lobi İptal Edildi",
+                description=f"{interaction.user.mention} lobi iptal etti.",
+                color=discord.Color.greyple(),
+                timestamp=discord.utils.utcnow(),
+            ),
+            view=self,
+        )
 
 
 # ── Oyun Motoru ───────────────────────────────────────────────────────────────
@@ -532,7 +551,7 @@ class VampirKoyluOyunu:
         e.add_field(name="Tüm Roller", value="\n".join(satırlar), inline=False)
         e.timestamp = discord.utils.utcnow()
 
-        tekrar = VampirTekrarView(self.oyuncular, self.kanal, self.kurucu)
+        tekrar = VampirTekrarView(self.oyuncular)
         msg = await self.kanal.send(embed=e, view=tekrar)
         tekrar.msg = msg
 

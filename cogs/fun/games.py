@@ -467,7 +467,7 @@ class Games(commands.Cog):
 
         if cm < 5:
             emoji = "🤏"
-            bar   = "8" + "." * cm
+            bar   = "8" + "." * cm + "D"
             gif   = "https://tenor.com/pGMLgI9r1XT.gif"
             yorum = random.choice([
                 "Ciğer bu iş böyle olmaz...",
@@ -477,7 +477,7 @@ class Games(commands.Cog):
             ])
         elif cm < 10:
             emoji = "😐"
-            bar   = "8" + "-" * cm
+            bar   = "8" + "-" * cm + "D"
             gif   = "https://tenor.com/dxoyIB0zYGP.gif"
             yorum = random.choice([
                 "Yani... çalışıyor en azından",
@@ -487,7 +487,7 @@ class Games(commands.Cog):
             ])
         elif cm < 15:
             emoji = "😎"
-            bar   = "8" + "=" * cm
+            bar   = "8" + "=" * cm + "D"
             gif   = "https://tenor.com/bXq2c.gif"
             yorum = random.choice([
                 "Tıkırında, ne eksik ne fazla",
@@ -507,7 +507,7 @@ class Games(commands.Cog):
             ])
         elif cm < 30:
             emoji = "🚀"
-            bar   = "8" + "=" * 20 + "=D 🚀"
+            bar   = "8" + "=" * 22 + "D 🚀"
             gif   = "https://tenor.com/bwVKu.gif"
             yorum = random.choice([
                 "OHAAA KAMIŞA BAK LAN",
@@ -517,7 +517,7 @@ class Games(commands.Cog):
             ])
         else:
             emoji = "💀"
-            bar   = "8" + "=" * 25 + "======D 💀"
+            bar   = "8" + "=" * 30 + "D 💀"
             gif   = "https://tenor.com/bGiZT.gif"
             yorum = random.choice([
                 "Kardeş bu silah ruhsatı istiyor",
@@ -528,18 +528,13 @@ class Games(commands.Cog):
 
         embed = discord.Embed(
             title=f"{emoji} Bilimsel Pipi Ölçümü™",
+            description=f"{hedef.mention} — **{cm} cm**\n`{bar}`\n\n💬 {yorum}",
             color=discord.Color.from_rgb(255, 105, 180),
         )
-        embed.add_field(name="👤 Kişi",    value=hedef.mention,    inline=True)
-        embed.add_field(name="📏 Boyut",   value=f"**{cm} cm**",   inline=True)
-        embed.add_field(name="​",           value="​",               inline=True)
-        embed.add_field(name="Ölçüm",      value=f"`{bar}`",        inline=False)
-        embed.add_field(name="💬 Yorum",   value=yorum,             inline=False)
-        embed.set_image(url=gif)
-        embed.set_footer(text="Horoz Bot Ölçüm Laboratuvarı™ • Sonuçlar yüzde yüz bilimseldir")
         embed.set_thumbnail(url=hedef.display_avatar.url)
+        embed.set_footer(text="Horoz Bot Ölçüm Laboratuvarı™ • Sonuçlar yüzde yüz bilimseldir")
         embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(content=gif, embed=embed)
 
 
 async def setup(bot: commands.Bot):

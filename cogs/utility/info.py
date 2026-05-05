@@ -13,11 +13,17 @@ class Info(commands.Cog):
     # /ping
     @app_commands.command(name="ping", description="Botun gecikme süresini gösterir.")
     async def ping(self, interaction: discord.Interaction):
-        latency = round(self.bot.latency * 1000)
-        color   = discord.Color.green() if latency < 100 else discord.Color.orange() if latency < 200 else discord.Color.red()
-        bar_len = min(int(latency / 20), 10)
+        ws = round(self.bot.latency * 1000)
+        color = discord.Color.green() if ws < 100 else discord.Color.orange() if ws < 200 else discord.Color.red()
+
+        before = discord.utils.utcnow()
+        await interaction.response.defer()
+        rt = round((discord.utils.utcnow() - before).total_seconds() * 1000)
+
+        bar_len = min(int(ws / 20), 10)
         bar     = "█" * bar_len + "░" * (10 - bar_len)
-        await interaction.response.send_message(embed=_emb("🏓 Pong!", f"`{bar}` **{latency} ms**", color))
+        embed   = _emb("🏓 Pong!", f"`{bar}`\n\n📡 **WebSocket:** {ws} ms\n🔄 **Roundtrip:** {rt} ms", color)
+        await interaction.followup.send(embed=embed)
 
     # /avatar
     @app_commands.command(name="avatar", description="Bir kullanıcının avatarını gösterir.")

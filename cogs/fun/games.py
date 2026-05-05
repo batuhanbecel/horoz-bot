@@ -459,6 +459,88 @@ class Games(commands.Cog):
         await interaction.response.send_message(embed=view._embed(), view=view)
         view.msg = await interaction.original_response()
 
+    @app_commands.command(name="kaccm", description="Pipi ölçer. Bilimsel kesinlik garantili.")
+    @app_commands.describe(kişi="Ölçülecek kişi (boş = kendin)")
+    async def kaccm(self, interaction: discord.Interaction, kişi: discord.Member | None = None):
+        hedef = kişi or interaction.user
+        cm = random.randint(1, 35)
+
+        if cm < 5:
+            emoji = "🤏"
+            bar   = "8" + "." * cm
+            gif   = "https://tenor.com/pGMLgI9r1XT.gif"
+            yorum = random.choice([
+                "Ciğer bu iş böyle olmaz...",
+                "Yok gibi ama var işte, maşallah",
+                "Minyatür sanat eseri sayılır",
+                "Kaybedersin onu bir gün farkında bile olmazsın",
+            ])
+        elif cm < 10:
+            emoji = "😐"
+            bar   = "8" + "-" * cm
+            gif   = "https://tenor.com/dxoyIB0zYGP.gif"
+            yorum = random.choice([
+                "Yani... çalışıyor en azından",
+                "Eh, yoksulluğun utanacak bir yanı yok",
+                "Kimseye söyleme, sırrın saklı",
+                "Ortalama altı ama gurur duyabilirsin herhalde",
+            ])
+        elif cm < 15:
+            emoji = "😎"
+            bar   = "8" + "=" * cm
+            gif   = "https://tenor.com/bXq2c.gif"
+            yorum = random.choice([
+                "Tıkırında, ne eksik ne fazla",
+                "Standart paket, fabrika çıkışı",
+                "İşi görür, kimse şikayet etmez",
+                "Normal insan işte, tebrikler",
+            ])
+        elif cm < 20:
+            emoji = "🔥"
+            bar   = "8" + "=" * cm + "D"
+            gif   = "https://tenor.com/ukUQgPg9ond.gif"
+            yorum = random.choice([
+                "E iyimiş be abi, kimden aldın bunu",
+                "Sormak istemiyorum ama nasıl taşıyorsun",
+                "Arkadaşlarına söyleme kıskanırlar",
+                "Oha be, adam gibi adam çıktın",
+            ])
+        elif cm < 30:
+            emoji = "🚀"
+            bar   = "8" + "=" * 20 + "=D 🚀"
+            gif   = "https://tenor.com/bwVKu.gif"
+            yorum = random.choice([
+                "OHAAA KAMIŞA BAK LAN",
+                "Tarzan mı büyüttü seni kardeşim",
+                "Bununla mı geziyorsun her gün, nasıl sığıyor",
+                "Saygıyla eğiliyorum, devam et",
+            ])
+        else:
+            emoji = "💀"
+            bar   = "8" + "=" * 25 + "======D 💀"
+            gif   = "https://tenor.com/bGiZT.gif"
+            yorum = random.choice([
+                "Kardeş bu silah ruhsatı istiyor",
+                "Hastane acil servis alarma geçsin",
+                "Bu bir pipi değil bu bir altyapı projesi",
+                "Devlet senden haberdar mı, ihbar etmem lazım",
+            ])
+
+        embed = discord.Embed(
+            title=f"{emoji} Bilimsel Pipi Ölçümü™",
+            color=discord.Color.from_rgb(255, 105, 180),
+        )
+        embed.add_field(name="👤 Kişi",    value=hedef.mention,    inline=True)
+        embed.add_field(name="📏 Boyut",   value=f"**{cm} cm**",   inline=True)
+        embed.add_field(name="​",           value="​",               inline=True)
+        embed.add_field(name="Ölçüm",      value=f"`{bar}`",        inline=False)
+        embed.add_field(name="💬 Yorum",   value=yorum,             inline=False)
+        embed.set_image(url=gif)
+        embed.set_footer(text="Horoz Bot Ölçüm Laboratuvarı™ • Sonuçlar yüzde yüz bilimseldir")
+        embed.set_thumbnail(url=hedef.display_avatar.url)
+        embed.timestamp = discord.utils.utcnow()
+        await interaction.response.send_message(embed=embed)
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Games(bot))

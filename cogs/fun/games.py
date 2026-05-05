@@ -468,7 +468,7 @@ class Games(commands.Cog):
         if cm < 5:
             emoji = "🤏"
             bar   = "8" + "." * cm + "D"
-            gif   = "https://tenor.com/tr/view/meh-mediocre-so-so-kinda-maybe-gif-13031104854113737447"
+            gif   = "https://media1.tenor.com/m/tNfI0rRRWucAAAAd/meh-mediocre.gif"
             yorum = random.choice([
                 "Ciğerim bu iş böyle olmaz...",
                 "Yok gibi ama var işte, maşallah",
@@ -478,7 +478,7 @@ class Games(commands.Cog):
         elif cm < 10:
             emoji = "😐"
             bar   = "8" + "-" * cm + "D"
-            gif   = "https://tenor.com/tr/view/its-not-small-community-troy-troy-barnes-donald-glover-gif-2832394325115938121"
+            gif   = "https://media1.tenor.com/m/J06vocxeJUkAAAAd/its-not-small-community.gif"
             yorum = random.choice([
                 "Yani... çalışıyor en azından",
                 "Eh, yoksulluğun utanacak bir yanı yok",
@@ -488,7 +488,7 @@ class Games(commands.Cog):
         elif cm < 15:
             emoji = "😎"
             bar   = "8" + "=" * cm + "D"
-            gif   = "https://tenor.com/tr/view/good-news-thumbs-up-gif-26519262"
+            gif   = "https://media1.tenor.com/m/YnSWHa_QQ-AAAAAd/good-news.gif"
             yorum = random.choice([
                 "Tıkırında, ne eksik ne fazla",
                 "Standart paket, fabrika çıkışı",
@@ -498,7 +498,7 @@ class Games(commands.Cog):
         elif cm < 20:
             emoji = "🔥"
             bar   = "8" + "=" * cm + "D"
-            gif   = "https://tenor.com/tr/view/pout-kiss-blowing-a-kiss-suspense-christian-bale-gif-16931550113965916217"
+            gif   = "https://media1.tenor.com/m/6vjzHxepwDkAAAAd/pout-kiss.gif"
             yorum = random.choice([
                 "E iyimiş be abi, kimden aldın bunu",
                 "Sormak istemiyorum ama nasıl taşıyorsun",
@@ -508,7 +508,7 @@ class Games(commands.Cog):
         elif cm < 30:
             emoji = "🚀"
             bar   = "8" + "=" * 22 + "D 🚀"
-            gif   = "https://tenor.com/tr/view/collecting-reed-bill-the-great-human-race-move-the-reed-put-it-down-gif-20202472"
+            gif   = "https://media1.tenor.com/m/E4bRB3CkCmwAAAAd/collecting-reed-bill.gif"
             yorum = random.choice([
                 "OHAAA KAMIŞA BAK LAN",
                 "Tarzan mı büyüttü seni kardeşim",
@@ -518,7 +518,7 @@ class Games(commands.Cog):
         else:
             emoji = "💀"
             bar   = "8" + "=" * 30 + "D 💀"
-            gif   = "https://tenor.com/tr/view/rocket-to-the-moon-pump-iota-astronaut-gif-22436791"
+            gif   = "https://media1.tenor.com/m/eWTgbLsT5bcAAAAd/rocket-to-the-moon.gif"
             yorum = random.choice([
                 "Kardeş bu silah ruhsatı istiyor",
                 "Hastane acil servis alarma geçsin",
@@ -531,10 +531,11 @@ class Games(commands.Cog):
             description=f"{hedef.mention} — **{cm} cm**\n`{bar}`\n\n💬 {yorum}",
             color=discord.Color.from_rgb(255, 105, 180),
         )
+        embed.set_image(url=gif)
         embed.set_thumbnail(url=hedef.display_avatar.url)
         embed.set_footer(text="Horoz Bot Ölçüm Laboratuvarı™ • Sonuçlar yüzde yüz bilimseldir")
         embed.timestamp = discord.utils.utcnow()
-        await interaction.response.send_message(content=gif, embed=embed)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot: commands.Bot):

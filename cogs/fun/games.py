@@ -468,9 +468,9 @@ class Games(commands.Cog):
         if cm < 5:
             emoji = "🤏"
             bar   = "8" + "." * cm + "D"
-            gif   = "https://tenor.com/pGMLgI9r1XT.gif"
+            gif   = "https://tenor.com/tr/view/meh-mediocre-so-so-kinda-maybe-gif-13031104854113737447"
             yorum = random.choice([
-                "Ciğer bu iş böyle olmaz...",
+                "Ciğerim bu iş böyle olmaz...",
                 "Yok gibi ama var işte, maşallah",
                 "Minyatür sanat eseri sayılır",
                 "Kaybedersin onu bir gün farkında bile olmazsın",
@@ -478,7 +478,7 @@ class Games(commands.Cog):
         elif cm < 10:
             emoji = "😐"
             bar   = "8" + "-" * cm + "D"
-            gif   = "https://tenor.com/dxoyIB0zYGP.gif"
+            gif   = "https://tenor.com/tr/view/its-not-small-community-troy-troy-barnes-donald-glover-gif-2832394325115938121"
             yorum = random.choice([
                 "Yani... çalışıyor en azından",
                 "Eh, yoksulluğun utanacak bir yanı yok",
@@ -488,7 +488,7 @@ class Games(commands.Cog):
         elif cm < 15:
             emoji = "😎"
             bar   = "8" + "=" * cm + "D"
-            gif   = "https://tenor.com/bXq2c.gif"
+            gif   = "https://tenor.com/tr/view/good-news-thumbs-up-gif-26519262"
             yorum = random.choice([
                 "Tıkırında, ne eksik ne fazla",
                 "Standart paket, fabrika çıkışı",
@@ -498,7 +498,7 @@ class Games(commands.Cog):
         elif cm < 20:
             emoji = "🔥"
             bar   = "8" + "=" * cm + "D"
-            gif   = "https://tenor.com/ukUQgPg9ond.gif"
+            gif   = "https://tenor.com/tr/view/pout-kiss-blowing-a-kiss-suspense-christian-bale-gif-16931550113965916217"
             yorum = random.choice([
                 "E iyimiş be abi, kimden aldın bunu",
                 "Sormak istemiyorum ama nasıl taşıyorsun",
@@ -508,7 +508,7 @@ class Games(commands.Cog):
         elif cm < 30:
             emoji = "🚀"
             bar   = "8" + "=" * 22 + "D 🚀"
-            gif   = "https://tenor.com/bwVKu.gif"
+            gif   = "https://tenor.com/tr/view/collecting-reed-bill-the-great-human-race-move-the-reed-put-it-down-gif-20202472"
             yorum = random.choice([
                 "OHAAA KAMIŞA BAK LAN",
                 "Tarzan mı büyüttü seni kardeşim",
@@ -518,7 +518,7 @@ class Games(commands.Cog):
         else:
             emoji = "💀"
             bar   = "8" + "=" * 30 + "D 💀"
-            gif   = "https://tenor.com/bGiZT.gif"
+            gif   = "https://tenor.com/tr/view/rocket-to-the-moon-pump-iota-astronaut-gif-22436791"
             yorum = random.choice([
                 "Kardeş bu silah ruhsatı istiyor",
                 "Hastane acil servis alarma geçsin",

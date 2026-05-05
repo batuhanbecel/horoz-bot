@@ -1,9 +1,14 @@
+import io
+import asyncio
+
 import discord
+import aiohttp
 from discord import app_commands
 from discord.ext import commands
 import random
-import math
+
 from ._shared import giphy
+from ._render import render_arena
 
 # ── Sabitler ────────────────────────────────────────────────────────────────────
 
@@ -17,38 +22,38 @@ MAKS_TUR = 20
 # ── Yardımcı fonksiyonlar ────────────────────────────────────────────────────────
 
 def _hasar(saldirgan: str, savunmaci: str) -> tuple[int, str]:
-    """Saldırganın eylemi → savunmacıya verilen (hasar, açıklama)."""
     if saldirgan == "kalkan":
         return 0, ""
 
     if saldirgan == "kılıç":
         if savunmaci == "kalkan":
-            return 0, "🛡️ Kalkan engelledi!"
+            return 0, "Kalkan engelledi!"
         dmg = random.randint(20, 35)
         if random.random() < 0.15:
             dmg = int(dmg * 1.6)
-            return dmg, f"⚡ Kritik Kılıç! **{dmg}** hasar"
-        return dmg, f"⚔️ Kılıç **{dmg}** hasar verdi"
+            return dmg, f"Kritik Kilic! {dmg} hasar"
+        return dmg, f"Kilic {dmg} hasar verdi"
 
     # büyü
     if random.random() > 0.80:
-        return 0, "🔮 Büyü ıskaladı!"
+        return 0, "Buyu iskaladi!"
     dmg = random.randint(30, 45)
     if savunmaci == "kalkan":
         dmg = int(dmg * 0.45)
-        return dmg, f"🛡️ Kalkan büyüyü hafifletti → **{dmg}** hasar"
+        return dmg, f"Kalkan buyuyu hafifletti -> {dmg} hasar"
     if random.random() < 0.12:
         dmg = int(dmg * 1.6)
-        return dmg, f"⚡ Kritik Büyü! **{dmg}** hasar"
-    return dmg, f"🔮 Büyü **{dmg}** hasar verdi"
+        return dmg, f"Kritik Buyu! {dmg} hasar"
+    return dmg, f"Buyu {dmg} hasar verdi"
 
 
-def _kalp(hp: int) -> str:
-    """150 HP → 5 kalp (❤️ dolu, 💔 kırık)."""
-    if hp <= 0:
-        return "💔💔💔💔💔"
-    full = min(5, math.ceil(hp / MAKS_HP * 5))
-    return "❤️" * full + "💔" * (5 - full)
+async def _fetch_bytes(url: str) -> bytes | None:
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(url, timeout=aiohttp.ClientTimeout(total=4)) as r:
+                return await r.read() if r.status == 200 else None
+    except Exception:
+        return None
 
 
 # ── Tekrar Oyna ─────────────────────────────────────────────────────────────────
@@ -75,9 +80,11 @@ class ArenaTekrarView(discord.ui.View):
             return await interaction.response.send_message("Bu oyuna dahil değilsin!", ephemeral=True)
         btn.disabled = True
         self.stop()
-        await interaction.response.edit_message(view=self)
+        await interaction.response.defer()
         view = ArenaView(self.p1, self.p2)
-        msg = await interaction.channel.send(embed=view._embed(), view=view)
+        f, e = await view._render()
+        e.description = f"{self.p1.mention}  ⚔️  {self.p2.mention}\n\n⏳ Her iki oyuncu da eylemini seçsin."
+        msg = await interaction.channel.send(file=f, embed=e, view=view)
         view.msg = msg
 
 
@@ -90,46 +97,26 @@ class ArenaView(discord.ui.View):
         self.hp        = [MAKS_HP, MAKS_HP]
         self.seçimler: dict[int, str] = {}
         self.tur       = 1
-        self.log: list[str] = []
         self.msg: discord.Message | None = None
 
-    def _embed(self, son_log: str = "") -> discord.Embed:
+    async def _render(self, son_log: str = "") -> tuple[discord.File, discord.Embed]:
         p1, p2 = self.oyuncular
-
-        durum = []
-        for oyuncu in self.oyuncular:
-            if oyuncu.id in self.seçimler:
-                durum.append(f"✅ **{oyuncu.display_name}** seçimini yaptı")
-            else:
-                durum.append(f"⏳ **{oyuncu.display_name}** bekleniyor...")
-
-        e = discord.Embed(
-            title="⚔️  A R E N A  D Ö V Ü Ş Ü",
-            description="\n\n".join(durum),
-            color=discord.Color.from_rgb(180, 30, 30),
+        av1, av2 = await asyncio.gather(
+            _fetch_bytes(str(p1.display_avatar.url)),
+            _fetch_bytes(str(p2.display_avatar.url)),
         )
-
-        e.add_field(name=f"🗡️ {p1.display_name}", value=_kalp(self.hp[0]), inline=True)
-        e.add_field(name=f"Tur {self.tur} / {MAKS_TUR}", value="⚔️",              inline=True)
-        e.add_field(name=f"🗡️ {p2.display_name}", value=_kalp(self.hp[1]), inline=True)
-
-        if son_log:
-            e.add_field(name=f"Tur {self.tur - 1} Özeti", value=son_log, inline=False)
-
+        data = render_arena(
+            p1_name=p1.display_name, p1_hp=self.hp[0], p1_secti=p1.id in self.seçimler,
+            p2_name=p2.display_name, p2_hp=self.hp[1], p2_secti=p2.id in self.seçimler,
+            max_hp=MAKS_HP, tur=self.tur, maks_tur=MAKS_TUR,
+            son_log=son_log, p1_avatar_bytes=av1, p2_avatar_bytes=av2,
+        )
+        f = discord.File(io.BytesIO(data), filename="arena.png")
+        e = discord.Embed(color=discord.Color.from_rgb(180, 30, 30))
+        e.set_image(url="attachment://arena.png")
         e.set_footer(text="⚔️ Kılıç: güvenli  •  🔮 Büyü: güçlü  •  🛡️ Kalkan: savunma")
         e.timestamp = discord.utils.utcnow()
-        return e
-
-    def _embed_bitis(self, başlık: str, renk: discord.Color, son_log: str) -> discord.Embed:
-        p1, p2 = self.oyuncular
-        e = discord.Embed(title=başlık, color=renk)
-        e.add_field(name=f"🗡️ {p1.display_name}", value=_kalp(self.hp[0]), inline=True)
-        e.add_field(name="─ ⚔️ ─",                value="Son Durum",        inline=True)
-        e.add_field(name=f"🗡️ {p2.display_name}", value=_kalp(self.hp[1]), inline=True)
-        if son_log:
-            e.add_field(name="Son Tur", value=son_log, inline=False)
-        e.timestamp = discord.utils.utcnow()
-        return e
+        return f, e
 
     async def _eylem_seç(self, interaction: discord.Interaction, eylem: str):
         uid = interaction.user.id
@@ -145,7 +132,8 @@ class ArenaView(discord.ui.View):
         )
 
         assert self.msg
-        await self.msg.edit(embed=self._embed())
+        f, e = await self._render()
+        await self.msg.edit(attachments=[f], embed=e)
 
         if len(self.seçimler) < 2:
             return
@@ -161,15 +149,14 @@ class ArenaView(discord.ui.View):
         self.hp[1] = max(0, self.hp[1] - d_on_p2)
 
         p1n, p2n = self.oyuncular[0].display_name, self.oyuncular[1].display_name
-        log_satirlari = [
-            f"**{p1n}** → {_EYLEM_EMOJI[e1]} {_EYLEM_LABEL[e1]}   |   "
-            f"**{p2n}** → {_EYLEM_EMOJI[e2]} {_EYLEM_LABEL[e2]}",
+        log_lines = [
+            f"{p1n} -> {_EYLEM_LABEL[e1]}   |   {p2n} -> {_EYLEM_LABEL[e2]}",
         ]
         if acik2:
-            log_satirlari.append(f"• {p1n}: {acik2}")
+            log_lines.append(f"{p1n}: {acik2}")
         if acik1:
-            log_satirlari.append(f"• {p2n}: {acik1}")
-        son_log = "\n".join(log_satirlari)
+            log_lines.append(f"{p2n}: {acik1}")
+        son_log = "\n".join(log_lines)
 
         self.tur += 1
         self.seçimler.clear()
@@ -191,24 +178,33 @@ class ArenaView(discord.ui.View):
                 kazanan = p1n if self.hp[0] > self.hp[1] else p2n
                 başlık, renk, tag = f"⏱️ {kazanan} daha fazla canla hayatta kaldı!", discord.Color.gold(), "victory winner"
 
-            gif   = await giphy(tag)
-            embed = self._embed_bitis(başlık, renk, son_log)
+            gif = await giphy(tag)
+            embed = discord.Embed(title=başlık, color=renk)
+            embed.add_field(name=p1n, value=f"{self.hp[0]} / {MAKS_HP} HP", inline=True)
+            embed.add_field(name=p2n, value=f"{self.hp[1]} / {MAKS_HP} HP", inline=True)
+            embed.add_field(name="📋 Son Eylem", value=son_log, inline=False)
             if gif:
                 embed.set_image(url=gif)
+            embed.timestamp = discord.utils.utcnow()
             tekrar = ArenaTekrarView(self.oyuncular[0], self.oyuncular[1])
-            await self.msg.edit(embed=embed, view=tekrar)
+            await self.msg.edit(attachments=[], embed=embed, view=tekrar)
             tekrar.msg = self.msg
             return
 
-        await self.msg.edit(embed=self._embed(son_log), view=self)
+        f, e = await self._render(son_log)
+        await self.msg.edit(attachments=[f], embed=e, view=self)
 
     async def on_timeout(self):
         for c in self.children:
             c.disabled = True
         if self.msg:
             try:
-                e = self._embed_bitis("⏰ Süre Doldu — Dövüş İptal!", discord.Color.greyple(), "")
-                await self.msg.edit(embed=e, view=self)
+                e = discord.Embed(
+                    title="⏰ Süre Doldu — Dövüş İptal!",
+                    color=discord.Color.greyple(),
+                    timestamp=discord.utils.utcnow(),
+                )
+                await self.msg.edit(attachments=[], embed=e, view=self)
             except discord.HTTPException:
                 pass
 
@@ -239,15 +235,13 @@ class Arena(commands.Cog):
         if rakip.bot:
             return await interaction.response.send_message("Botlarla dövüşemezsin!", ephemeral=True)
 
+        await interaction.response.defer()
         p1   = interaction.user
         view = ArenaView(p1, rakip)
-        e    = view._embed()
-        e.description = (
-            f"{p1.mention}  ⚔️  {rakip.mention}\n\n"
-            f"⏳ Her iki oyuncu da eylemini seçsin."
-        )
-        await interaction.response.send_message(embed=e, view=view)
-        view.msg = await interaction.original_response()
+        f, e = await view._render()
+        e.description = f"{p1.mention}  ⚔️  {rakip.mention}\n\n⏳ Her iki oyuncu da eylemini seçsin."
+        msg = await interaction.followup.send(file=f, embed=e, view=view)
+        view.msg = msg
 
 
 async def setup(bot: commands.Bot):

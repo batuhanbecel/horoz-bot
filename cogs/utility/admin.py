@@ -4,7 +4,7 @@ from discord.ext import commands
 import os
 import sys
 from .._v2 import (
-    COLORS, c_card, c_info_card, c_text, c_section, c_thumbnail, c_separator, c_container,
+    COLORS, c_card, c_info_card, c_text, c_separator, c_container,
     respond, followup as v2_followup, error_response,
 )
 
@@ -16,8 +16,6 @@ class Admin(commands.Cog):
     # /yardım ─ kategorize edilmiş komut menüsü
     @app_commands.command(name="yardım", description="Tüm komutları listeler.")
     async def yardım(self, interaction: discord.Interaction):
-        thumb = str(interaction.client.user.display_avatar.url)
-
         moderation = (
             "**👤 /üye** · `uyar` `at` `yasakla` `sustur` `sus-kaldır`\n"
             "**🔒 /kanal** · `temizle` `yavaşmod` `kilitle` `kilit-aç`\n"
@@ -44,7 +42,6 @@ class Admin(commands.Cog):
 
         await respond(interaction, c_info_card(
             "🐓 Horoz Bot — Komut Listesi",
-            thumbnail=thumb,
             groups=[
                 moderation,
                 music,
@@ -63,13 +60,12 @@ class Admin(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def tazele(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        thumb = str(interaction.client.user.display_avatar.url)
         self.bot.tree.clear_commands(guild=interaction.guild)
         await self.bot.tree.sync(guild=interaction.guild)
         synced = await self.bot.tree.sync()
 
         await v2_followup(interaction, c_container(
-            c_section(c_text("## ✅ Komutlar Tazelendi"), accessory=c_thumbnail(thumb)),
+            c_text("## ✅ Komutlar Tazelendi"),
             c_separator(),
             c_text(
                 f"🌐 **Global Komut:** `{len(synced)}` adet senkronize edildi\n"
@@ -85,9 +81,8 @@ class Admin(commands.Cog):
     @app_commands.command(name="restart", description="Botu yeniden başlatır ve komutları tazeler.")
     @app_commands.checks.has_permissions(administrator=True)
     async def restart(self, interaction: discord.Interaction):
-        thumb = str(interaction.client.user.display_avatar.url)
         await respond(interaction, c_container(
-            c_section(c_text("## 🔄 Yeniden Başlatılıyor..."), accessory=c_thumbnail(thumb)),
+            c_text("## 🔄 Yeniden Başlatılıyor..."),
             c_separator(),
             c_text(
                 f"⏳ Bot kapatılıyor, birkaç saniye sonra geri dönecek.\n"

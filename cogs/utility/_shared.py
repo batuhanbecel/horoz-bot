@@ -28,13 +28,11 @@ class MesajModal(discord.ui.Modal):
         self.kanal = kanal
 
     async def on_submit(self, interaction: discord.Interaction):
-        thumb = str(interaction.client.user.display_avatar.url)
         try:
             await self.kanal.send(self.içerik.value)
             preview = self.içerik.value[:120] + ("..." if len(self.içerik.value) > 120 else "")
             await respond(interaction, c_action_card(
                 "✅ Mesaj Gönderildi",
-                target_avatar=thumb,
                 fields=[
                     ("📌 Kanal", self.kanal.mention),
                     ("👤 Gönderen", interaction.user.mention),
@@ -44,7 +42,7 @@ class MesajModal(discord.ui.Modal):
             ), ephemeral=True)
         except discord.Forbidden:
             await respond(interaction,
-                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", thumbnail=thumb, color=COLORS.DANGER),
+                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
                 ephemeral=True,
             )
 
@@ -64,7 +62,6 @@ class EmbedModal(discord.ui.Modal):
         self.renk  = renk
 
     async def on_submit(self, interaction: discord.Interaction):
-        thumb = str(interaction.client.user.display_avatar.url)
         try:
             await channel_send(self.kanal, c_container(
                 c_text(f"## {self.başlık_f.value}"),
@@ -76,7 +73,6 @@ class EmbedModal(discord.ui.Modal):
             ))
             await respond(interaction, c_action_card(
                 "✅ Embed Gönderildi",
-                target_avatar=thumb,
                 fields=[
                     ("📌 Kanal", self.kanal.mention),
                     ("📰 Başlık", f"`{self.başlık_f.value}`"),
@@ -86,7 +82,7 @@ class EmbedModal(discord.ui.Modal):
             ), ephemeral=True)
         except discord.Forbidden:
             await respond(interaction,
-                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", thumbnail=thumb, color=COLORS.DANGER),
+                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
                 ephemeral=True,
             )
 
@@ -105,27 +101,30 @@ class DuyuruModal(discord.ui.Modal):
         self.ping  = ping
 
     async def on_submit(self, interaction: discord.Interaction):
-        thumb = str(interaction.client.user.display_avatar.url)
-        guild_icon = str(interaction.guild.icon.url) if interaction.guild and interaction.guild.icon else thumb
+        # Sunucu duyurusunda guild ikonu = içerik bağlamı, kalsın
+        guild_icon = str(interaction.guild.icon.url) if interaction.guild and interaction.guild.icon else None
         try:
+            duyuru_items: list[dict] = []
+            if guild_icon:
+                duyuru_items.append(c_section(
+                    c_text(f"## 📣 Duyuru\n-# {interaction.guild.name if interaction.guild else ''}"),
+                    accessory=c_thumbnail(guild_icon),
+                ))
+            else:
+                duyuru_items.append(c_text(f"## 📣 Duyuru"))
+            duyuru_items.extend([
+                c_separator(),
+                c_text(self.içerik_f.value),
+                c_separator(),
+                c_text(f"-# 📢 Duyuran: {interaction.user.mention}"),
+            ])
             await channel_send(
                 self.kanal,
-                c_container(
-                    c_section(
-                        c_text(f"## 📣 Duyuru\n-# {interaction.guild.name if interaction.guild else ''}"),
-                        accessory=c_thumbnail(guild_icon),
-                    ),
-                    c_separator(),
-                    c_text(self.içerik_f.value),
-                    c_separator(),
-                    c_text(f"-# 📢 Duyuran: {interaction.user.mention}"),
-                    color=COLORS.GAME,
-                ),
+                c_container(*duyuru_items, color=COLORS.GAME),
                 content=self.ping or None,
             )
             await respond(interaction, c_action_card(
                 "✅ Duyuru Gönderildi",
-                target_avatar=thumb,
                 fields=[
                     ("📌 Kanal", self.kanal.mention),
                     ("🔔 Ping", f"`{self.ping}`" if self.ping else "_Yok_"),
@@ -135,6 +134,6 @@ class DuyuruModal(discord.ui.Modal):
             ), ephemeral=True)
         except discord.Forbidden:
             await respond(interaction,
-                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", thumbnail=thumb, color=COLORS.DANGER),
+                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
                 ephemeral=True,
             )

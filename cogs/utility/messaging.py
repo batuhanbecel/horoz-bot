@@ -19,8 +19,7 @@ class Messaging(commands.Cog):
     async def yaz(self, interaction: discord.Interaction, kanal: discord.TextChannel):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
-                       thumbnail=str(interaction.client.user.display_avatar.url), color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
                 ephemeral=True,
             )
         await interaction.response.send_modal(MesajModal(kanal))
@@ -40,8 +39,7 @@ class Messaging(commands.Cog):
     async def embed_gonder(self, interaction: discord.Interaction, kanal: discord.TextChannel, renk: str = "mavi"):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
-                       thumbnail=str(interaction.client.user.display_avatar.url), color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
                 ephemeral=True,
             )
         await interaction.response.send_modal(EmbedModal(kanal, RENK_MAP.get(renk, 0x3498DB)))
@@ -57,8 +55,7 @@ class Messaging(commands.Cog):
     async def duyuru(self, interaction: discord.Interaction, kanal: discord.TextChannel, ping: str = ""):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
-                       thumbnail=str(interaction.client.user.display_avatar.url), color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
                 ephemeral=True,
             )
         await interaction.response.send_modal(DuyuruModal(kanal, ping))
@@ -72,14 +69,11 @@ class Messaging(commands.Cog):
         dakika: app_commands.Range[int, 1, 1440],
         mesaj: str = "Hatırlatma!",
     ):
-        thumb = str(interaction.client.user.display_avatar.url)
-        user_thumb = str(interaction.user.display_avatar.url)
         from datetime import timedelta
         when = discord.utils.utcnow() + timedelta(minutes=dakika)
 
         await respond(interaction, c_action_card(
             "⏰ Hatırlatma Kuruldu",
-            target_avatar=user_thumb,
             fields=[
                 ("⏱️ Süre", f"`{dakika}` dakika sonra"),
                 ("🕐 Zaman", f"<t:{int(when.timestamp())}:F>\n┗ <t:{int(when.timestamp())}:R>"),
@@ -96,7 +90,7 @@ class Messaging(commands.Cog):
             try:
                 dm = await interaction.user.create_dm()
                 await channel_send(dm, c_container(
-                    c_section(c_text("## ⏰ Hatırlatma!"), accessory=c_thumbnail(thumb)),
+                    c_text("## ⏰ Hatırlatma!"),
                     c_separator(),
                     c_text(f"📝 {mesaj}"),
                     c_separator(),

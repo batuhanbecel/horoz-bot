@@ -13,14 +13,13 @@ class Info(commands.Cog):
         self.bot = bot
         self._start_time = datetime.now(timezone.utc)
 
-    # /ping ─ multi-section latency card
+    # /ping ─ latency card (sade)
     @app_commands.command(name="ping", description="Botun gecikme süresini gösterir.")
     async def ping(self, interaction: discord.Interaction):
         ws = round(self.bot.latency * 1000)
-        thumb = str(self.bot.user.display_avatar.url)
 
         before = discord.utils.utcnow()
-        await respond(interaction, c_card("## 🏓 Pong!", body="`▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱` Ölçülüyor...", thumbnail=thumb, color=COLORS.PRIMARY))
+        await respond(interaction, c_card("## 🏓 Pong!", body="`▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱` Ölçülüyor...", color=COLORS.PRIMARY))
         rt = round((discord.utils.utcnow() - before).total_seconds() * 1000)
 
         ws_color = COLORS.SUCCESS if ws < 100 else COLORS.WARNING if ws < 200 else COLORS.DANGER
@@ -30,7 +29,7 @@ class Info(commands.Cog):
         bar = c_progress(min(ws, 360), 360, length=18)
 
         await edit_original(interaction, c_container(
-            c_section(c_text("## 🏓 Pong!"), accessory=c_thumbnail(thumb)),
+            c_text("## 🏓 Pong!"),
             c_separator(),
             c_text(f"`{bar}`\n-# Gecikme grafiği · 0 — 360 ms"),
             c_separator(),

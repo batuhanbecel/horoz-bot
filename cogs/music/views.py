@@ -40,7 +40,7 @@ class PlayerView(discord.ui.View):
         p = self.player()
         if not vc or not p.current:
             return await v2_respond(interaction,
-                _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING, self._bot_thumb(interaction)),
+                _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING),
                 ephemeral=True,
             )
         track = p.current
@@ -54,27 +54,26 @@ class PlayerView(discord.ui.View):
     @discord.ui.button(emoji="⏸️", style=discord.ButtonStyle.primary, row=0)
     async def duraklat(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = self.vc(interaction)
-        thumb = self._bot_thumb(interaction)
         if not vc:
             return await v2_respond(interaction,
-                _ephemeral_status("❌", "Hata", "Bot ses kanalında değil.", COLORS.DANGER, thumb),
+                _ephemeral_status("❌", "Hata", "Bot ses kanalında değil.", COLORS.DANGER),
                 ephemeral=True,
             )
         if vc.is_playing():
             vc.pause()
             await v2_respond(interaction,
-                _ephemeral_status("⏸️", "Duraklatıldı", "Müzik duraklatıldı.", COLORS.WARNING, thumb),
+                _ephemeral_status("⏸️", "Duraklatıldı", "Müzik duraklatıldı.", COLORS.WARNING),
                 ephemeral=True,
             )
         elif vc.is_paused():
             vc.resume()
             await v2_respond(interaction,
-                _ephemeral_status("▶️", "Devam Ediyor", "Müzik devam ediyor.", COLORS.SUCCESS, thumb),
+                _ephemeral_status("▶️", "Devam Ediyor", "Müzik devam ediyor.", COLORS.SUCCESS),
                 ephemeral=True,
             )
         else:
             await v2_respond(interaction,
-                _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING, thumb),
+                _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING),
                 ephemeral=True,
             )
 
@@ -84,7 +83,7 @@ class PlayerView(discord.ui.View):
         p = self.player()
         if not vc or not (vc.is_playing() or vc.is_paused()):
             return await v2_respond(interaction,
-                _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING, self._bot_thumb(interaction)),
+                _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING),
                 ephemeral=True,
             )
         p.force_next = True
@@ -97,7 +96,7 @@ class PlayerView(discord.ui.View):
         p = self.player()
         if not vc:
             return await v2_respond(interaction,
-                _ephemeral_status("❌", "Hata", "Bot ses kanalında değil.", COLORS.DANGER, self._bot_thumb(interaction)),
+                _ephemeral_status("❌", "Hata", "Bot ses kanalında değil.", COLORS.DANGER),
                 ephemeral=True,
             )
         p.queue.clear()
@@ -122,7 +121,7 @@ class PlayerView(discord.ui.View):
         if vc and vc.source:
             vc.source.volume = p.volume
         await v2_respond(interaction,
-            _ephemeral_status("🔉", "Ses Azaltıldı", f"Yeni seviye: **`{int(p.volume * 100)}%`**", COLORS.MUSIC, self._bot_thumb(interaction)),
+            _ephemeral_status("🔉", "Ses Azaltıldı", f"Yeni seviye: **`{int(p.volume * 100)}%`**", COLORS.MUSIC),
             ephemeral=True,
         )
 
@@ -134,7 +133,7 @@ class PlayerView(discord.ui.View):
         if vc and vc.source:
             vc.source.volume = p.volume
         await v2_respond(interaction,
-            _ephemeral_status("🔊", "Ses Artırıldı", f"Yeni seviye: **`{int(p.volume * 100)}%`**", COLORS.MUSIC, self._bot_thumb(interaction)),
+            _ephemeral_status("🔊", "Ses Artırıldı", f"Yeni seviye: **`{int(p.volume * 100)}%`**", COLORS.MUSIC),
             ephemeral=True,
         )
 
@@ -145,40 +144,36 @@ class PlayerView(discord.ui.View):
         durum = "Açık 🔂" if p.loop else "Kapalı"
         body = "Şu an çalan şarkı sürekli tekrar edecek." if p.loop else "Döngü kapatıldı."
         await v2_respond(interaction,
-            _ephemeral_status("🔁", f"Döngü {durum}", body, COLORS.MUSIC, self._bot_thumb(interaction)),
+            _ephemeral_status("🔁", f"Döngü {durum}", body, COLORS.MUSIC),
             ephemeral=True,
         )
 
     @discord.ui.button(emoji="🔀", label="Karıştır", style=discord.ButtonStyle.secondary, row=1)
     async def karistir(self, interaction: discord.Interaction, button: discord.ui.Button):
         p = self.player()
-        thumb = self._bot_thumb(interaction)
         if len(p.queue) < 2:
             return await v2_respond(interaction,
-                _ephemeral_status("⚠️", "Yeterli Şarkı Yok", "Karıştırmak için en az **2 şarkı** gerekli.", COLORS.WARNING, thumb),
+                _ephemeral_status("⚠️", "Yeterli Şarkı Yok", "Karıştırmak için en az **2 şarkı** gerekli.", COLORS.WARNING),
                 ephemeral=True,
             )
         q = list(p.queue)
         random.shuffle(q)
         p.queue = deque(q)
         await v2_respond(interaction,
-            _ephemeral_status("🔀", "Karıştırıldı", f"`{len(q)}` şarkı rastgele sıralandı.", COLORS.SUCCESS, thumb),
+            _ephemeral_status("🔀", "Karıştırıldı", f"`{len(q)}` şarkı rastgele sıralandı.", COLORS.SUCCESS),
             ephemeral=True,
         )
 
     @discord.ui.button(emoji="📋", label="Sıra", style=discord.ButtonStyle.secondary, row=1)
     async def sira(self, interaction: discord.Interaction, button: discord.ui.Button):
         p = self.player()
-        thumb = self._bot_thumb(interaction)
         if not p.current and not p.queue:
             return await v2_respond(interaction,
-                _ephemeral_status("📋", "Sıra Boş", "Sıra boş — `/müzik çal` ile şarkı ekleyin.", COLORS.WARNING, thumb),
+                _ephemeral_status("📋", "Sıra Boş", "Sıra boş — `/müzik çal` ile şarkı ekleyin.", COLORS.WARNING),
                 ephemeral=True,
             )
 
-        sections: list[dict] = [
-            c_section(c_text("## 📋 Müzik Sırası"), accessory=c_thumbnail(thumb)),
-        ]
+        sections: list[dict] = [c_text("## 📋 Müzik Sırası")]
         if p.current:
             sections.append(c_separator())
             sections.append(c_text(
@@ -205,10 +200,9 @@ class SearchButton(discord.ui.Button):
         self.cog = cog
 
     async def callback(self, interaction: discord.Interaction):
-        thumb = str(interaction.client.user.display_avatar.url)
         if interaction.user != self.user:
             return await v2_respond(interaction,
-                _ephemeral_status("🚫", "Erişim Engellendi", "Bu seçim size ait değil.", COLORS.DANGER, thumb),
+                _ephemeral_status("🚫", "Erişim Engellendi", "Bu seçim size ait değil.", COLORS.DANGER),
                 ephemeral=True,
             )
 
@@ -220,7 +214,7 @@ class SearchButton(discord.ui.Button):
         url = self.entry.get("url") or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None)
         if not url:
             return await v2_respond(interaction,
-                _ephemeral_status("❌", "URL Çözülemedi", "Bu sonuç için URL alınamadı.", COLORS.DANGER, thumb),
+                _ephemeral_status("❌", "URL Çözülemedi", "Bu sonuç için URL alınamadı.", COLORS.DANGER),
                 ephemeral=True,
             )
 

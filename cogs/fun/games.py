@@ -526,10 +526,7 @@ class Games(commands.Cog):
             body += f"\n\n{durum}"
 
         await respond(interaction, c_container(
-            c_section(
-                c_text(f"## 🎲 {adet}d{yüz} Zar Atıldı!"),
-                accessory=c_thumbnail(str(interaction.user.display_avatar.url)),
-            ),
+            c_text(f"## 🎲 {adet}d{yüz} Zar Atıldı!"),
             c_separator(),
             c_text(body),
             c_separator(),
@@ -542,12 +539,13 @@ class Games(commands.Cog):
     async def sekiz_top(self, interaction: discord.Interaction, soru: str):
         yanıt = random.choice(SEKIZ_TOP_YANIT)
         card = c_container(
-            c_section(
-                c_text(f"## 🎱 Sihirli 8-Top\n**Soru:** {soru}"),
-                accessory=c_thumbnail(interaction.client.user.display_avatar.url),
-            ),
+            c_text(f"## 🎱 Sihirli 8-Top"),
             c_separator(),
-            c_text(f"**💬 Cevap:** {yanıt}"),
+            c_text(f"**❓ Soru**\n{soru}"),
+            c_separator(),
+            c_text(f"**💬 Cevap**\n{yanıt}"),
+            c_separator(),
+            c_text(f"-# Soran: {interaction.user.mention}"),
             color=_C_DARK,
         )
         await respond(interaction, card)

@@ -29,16 +29,15 @@ class StickerStealer(commands.Cog):
 
     async def _ctx_sticker_ekle(self, interaction: discord.Interaction, message: discord.Message):
         await interaction.response.defer(ephemeral=True)
-        thumb = str(interaction.client.user.display_avatar.url)
         try:
             if not interaction.user.guild_permissions.manage_emojis_and_stickers:
                 return await v2_followup(interaction,
-                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
+                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
                     ephemeral=True,
                 )
             if not message.stickers:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Sticker Bulunamadı", body="Bu mesajda sticker yok.", thumbnail=thumb, color=COLORS.WARNING),
+                    c_card("## ⚠️ Sticker Bulunamadı", body="Bu mesajda sticker yok.", color=COLORS.WARNING),
                     ephemeral=True,
                 )
 
@@ -46,7 +45,7 @@ class StickerStealer(commands.Cog):
 
             if sticker.format == discord.StickerFormatType.lottie:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Desteklenmiyor", body="**Lottie** animasyonlu sticker'lar eklenemez.", thumbnail=thumb, color=COLORS.WARNING),
+                    c_card("## ⚠️ Desteklenmiyor", body="**Lottie** animasyonlu sticker'lar eklenemez.", color=COLORS.WARNING),
                     ephemeral=True,
                 )
 
@@ -54,7 +53,7 @@ class StickerStealer(commands.Cog):
             data = await fetch_bytes(str(sticker.url))
             if not data:
                 return await v2_followup(interaction,
-                    c_card("## ❌ İndirme Hatası", body="Sticker indirilemedi.", thumbnail=thumb, color=COLORS.DANGER),
+                    c_card("## ❌ İndirme Hatası", body="Sticker indirilemedi.", color=COLORS.DANGER),
                     ephemeral=True,
                 )
 
@@ -81,12 +80,12 @@ class StickerStealer(commands.Cog):
 
         except discord.HTTPException as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=f"```{ex}```", thumbnail=thumb, color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
                 ephemeral=True,
             )
         except Exception as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=str(ex), color=COLORS.DANGER),
                 ephemeral=True,
             )
 

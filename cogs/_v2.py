@@ -145,18 +145,18 @@ def c_kv_block(pairs: list[tuple[str, str | int]]) -> str:
 
 def c_action_card(
     title: str,
-    target_avatar: str,
-    fields: list[tuple[str, str | int]],
+    target_avatar: str | None = None,
+    fields: list[tuple[str, str | int]] | None = None,
     *,
     footer: str | None = None,
     color: int = COLORS.MOD,
 ) -> dict:
-    """Eylem kartı: başlık + hedef üye avatarı + label/değer çiftleri."""
-    items: list[dict] = [
-        c_section(c_text(f"## {title}"), accessory=c_thumbnail(target_avatar)),
-        c_separator(),
-        c_text(c_kv_block(fields)),
-    ]
+    """Eylem kartı: başlık + (opsiyonel) hedef avatarı + label/değer çiftleri."""
+    header = (
+        c_section(c_text(f"## {title}"), accessory=c_thumbnail(target_avatar))
+        if target_avatar else c_text(f"## {title}")
+    )
+    items: list[dict] = [header, c_separator(), c_text(c_kv_block(fields or []))]
     if footer:
         items.append(c_separator())
         items.append(c_text(f"-# {footer}"))

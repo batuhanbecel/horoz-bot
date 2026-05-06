@@ -35,10 +35,19 @@ def c_separator(spacing: int = 2) -> dict:
 
 
 def c_section(*texts: dict, accessory: dict | None = None) -> dict:
-    d: dict[str, Any] = {"type": SECTION, "components": list(texts)}
-    if accessory:
-        d["accessory"] = accessory
-    return d
+    """Section component — accessory zorunludur. Verilmediğinde sessizce
+    sade bir text component'e fallback yaparız (Discord API section'ı
+    accessory olmadan reddeder).
+    """
+    if accessory is None:
+        # Tek text varsa direkt onu döndür; birden fazla varsa birleştir
+        if len(texts) == 1:
+            return texts[0]
+        merged = "\n".join(
+            t.get("content", "") for t in texts if t.get("type") == TEXT
+        )
+        return c_text(merged)
+    return {"type": SECTION, "components": list(texts), "accessory": accessory}
 
 
 def c_container(*items: dict, color: int | None = None) -> dict:

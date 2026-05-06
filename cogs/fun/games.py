@@ -109,7 +109,7 @@ class TKMView(discord.ui.View):
         )
         if açıklama:
             body += f"\n\n{açıklama}"
-        items: list[dict] = [c_section(c_text(body))]
+        items: list[dict] = [c_text(body)]
         if gif_url:
             items.append(c_media(gif_url))
         return c_container(*items, color=color)

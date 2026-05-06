@@ -8,8 +8,9 @@ from collections import deque
 from ._shared import (
     YTDL_FLAT_OPTIONS, YTDL_STREAM_OPTIONS, FFMPEG_OPTIONS, MAX_PLAYLIST,
     Track, GuildPlayer, duration_fmt, is_url, is_playlist_url, yt_thumbnail,
-    now_playing_card,
+    detect_platform, now_playing_card,
 )
+from .spotify import is_spotify_url, is_spotify_collection, fetch_spotify_tracks, format_query
 from .views import PlayerView, SearchView
 from .._v2 import (
     COLORS, c_text, c_section, c_thumbnail, c_separator, c_container,
@@ -265,8 +266,8 @@ class Music(commands.Cog):
         guild_only=True,
     )
 
-    @music.command(name="çal", description="Şarkı adı, YouTube URL'si veya playlist çalar.")
-    @app_commands.describe(sorgu="Şarkı adı, YouTube linki veya playlist linki")
+    @music.command(name="çal", description="Şarkı adı, YouTube/Spotify URL'si veya playlist çalar.")
+    @app_commands.describe(sorgu="Şarkı adı, YouTube/Spotify linki veya playlist")
     async def cal(self, interaction: discord.Interaction, sorgu: str):
         vc = await self.ensure_voice(interaction)
         if not vc:
@@ -277,6 +278,92 @@ class Music(commands.Cog):
         player.text_channel_id = interaction.channel_id
         is_playing_now = vc.is_playing() or vc.is_paused()
 
+        # ── Spotify URL: track / album / playlist ────────────────────────
+        if is_url(sorgu) and is_spotify_url(sorgu):
+            queries = await fetch_spotify_tracks(sorgu)
+            if not queries:
+                from .spotify import is_available
+                msg = ("Spotify entegrasyonu yapılandırılmamış. `SPOTIFY_CLIENT_ID` ve "
+                       "`SPOTIFY_CLIENT_SECRET` env değişkenleri eksik.") if not is_available() \
+                      else "Spotify track/album/playlist alınamadı veya boş."
+                return await v2_followup(interaction,
+                    c_card("## ❌ Spotify Hatası", body=msg, color=COLORS.DANGER),
+                )
+
+            collection = is_spotify_collection(sorgu)
+
+            if not collection:
+                # Tek şarkı — YouTube'da ara, Spotify metadata bağla
+                artist, title = queries[0]
+                yt_query = format_query(artist, title)
+                track = await self.fetch_single(yt_query, interaction.user)
+                if not track:
+                    return await v2_followup(interaction,
+                        c_card("## ❌ Şarkı Bulunamadı", body=f"`{title}` Spotify'da bulundu ama YouTube'da arama başarısız.", color=COLORS.DANGER),
+                    )
+                track.platform = "spotify"
+                track.source_url = sorgu
+                track.title = f"{artist} - {title}" if artist else title
+
+                if is_playing_now:
+                    player.queue.append(track)
+                    await v2_followup(interaction, self._track_card(
+                        "📋 Sıraya Eklendi (🟢 Spotify)",
+                        track,
+                        color=COLORS.MUSIC,
+                        queue_pos=len(player.queue),
+                    ))
+                else:
+                    player.queue.appendleft(track)
+                    await self._play_next(interaction.guild_id, vc)
+                    await v2_followup(interaction, self._track_card(
+                        "✅ Çalmaya Başlıyor (🟢 Spotify)",
+                        track,
+                        color=COLORS.SUCCESS,
+                    ))
+                return
+
+            # Album / Playlist — paralel YouTube araması yap
+            queries = queries[:MAX_PLAYLIST]
+            tracks: list[Track] = []
+            for artist, title in queries:
+                yt_query = format_query(artist, title)
+                t = await self.fetch_single(yt_query, interaction.user)
+                if t:
+                    t.platform = "spotify"
+                    t.source_url = sorgu
+                    t.title = f"{artist} - {title}" if artist else title
+                    tracks.append(t)
+
+            if not tracks:
+                return await v2_followup(interaction,
+                    c_card("## ❌ Playlist Boş", body="Spotify'dan şarkılar alındı ama YouTube'da hiçbiri bulunamadı.", color=COLORS.DANGER),
+                )
+
+            for t in tracks:
+                player.queue.append(t)
+
+            total_dur = sum(t.duration for t in tracks)
+            title_str = "✅ Spotify Yüklendi" if not is_playing_now else "📋 Spotify Sıraya Eklendi"
+            color = COLORS.SUCCESS if not is_playing_now else COLORS.MUSIC
+
+            await v2_followup(interaction, c_action_card(
+                title_str,
+                target_avatar=str(interaction.user.display_avatar.url),
+                fields=[
+                    ("🎧 Kaynak", "🟢 Spotify"),
+                    ("🎵 Şarkı Sayısı", f"`{len(tracks)}` / `{len(queries)}` (YT'de bulunan)"),
+                    ("⏱️ Toplam Süre", f"`{duration_fmt(total_dur)}`"),
+                    ("👤 İsteyen", interaction.user.mention),
+                ],
+                color=color,
+            ))
+
+            if not is_playing_now:
+                await self._play_next(interaction.guild_id, vc)
+            return
+
+        # ── YouTube playlist ────────────────────────────────────────────
         if is_url(sorgu) and is_playlist_url(sorgu):
             tracks = await self.fetch_playlist(sorgu, interaction.user)
             if not tracks:
@@ -284,6 +371,7 @@ class Music(commands.Cog):
                     c_card("## ❌ Playlist Bulunamadı", body="Playlist boş veya erişilemez.", color=COLORS.DANGER),
                 )
             for t in tracks:
+                t.platform = detect_platform(t.webpage_url)
                 player.queue.append(t)
 
             total_dur = sum(t.duration for t in tracks)
@@ -305,11 +393,13 @@ class Music(commands.Cog):
                 await self._play_next(interaction.guild_id, vc)
             return
 
+        # ── Tek YouTube/diğer şarkı veya arama metni ────────────────────
         track = await self.fetch_single(sorgu, interaction.user)
         if not track:
             return await v2_followup(interaction,
                 c_card("## ❌ Şarkı Bulunamadı", body=f"`{sorgu}` için sonuç yok.", color=COLORS.DANGER),
             )
+        track.platform = detect_platform(track.webpage_url)
 
         if is_playing_now:
             player.queue.append(track)

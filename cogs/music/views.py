@@ -4,6 +4,7 @@ import discord
 import random
 from collections import deque
 from ._shared import GuildPlayer, Track, now_playing_card, stopped_card, duration_fmt, yt_thumbnail
+from .lyrics import fetch_for_track
 from .._v2 import (
     COLORS, msg_edit, c_text, c_section, c_thumbnail, c_separator, c_container,
     c_card, respond as v2_respond, followup as v2_followup, update as v2_update,
@@ -162,6 +163,45 @@ class PlayerView(discord.ui.View):
         random.shuffle(q)
         p.queue = deque(q)
         await self._refresh(interaction)
+
+    @discord.ui.button(emoji="📜", style=discord.ButtonStyle.secondary, row=1)
+    async def sozler(self, interaction: discord.Interaction, button: discord.ui.Button):
+        p = self.player()
+        if not p.current:
+            return await v2_respond(interaction,
+                _ephemeral_status("⚠️", "Şarkı Yok", "Çalan bir şarkı yok.", COLORS.WARNING),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        artist, title, lyrics = await fetch_for_track(p.current.title)
+
+        if not lyrics:
+            return await v2_followup(interaction,
+                c_card(
+                    "## 📜 Sözler Bulunamadı",
+                    body=(
+                        f"`{p.current.title}` için sözler alınamadı.\n\n"
+                        f"-# Çalışan: lyrics.ovh · Bazı şarkılar veritabanında yok."
+                    ),
+                    color=COLORS.WARNING,
+                ),
+                ephemeral=True,
+            )
+
+        # Discord text component limiti 4000, biraz boşluk bırak
+        if len(lyrics) > 3500:
+            lyrics = lyrics[:3500].rstrip() + "\n\n_(devamı çok uzun — kesildi)_"
+
+        header = f"## 📜 {title}" + (f"\n-# {artist}" if artist else "")
+        await v2_followup(interaction, c_container(
+            c_text(header),
+            c_separator(),
+            c_text(lyrics),
+            c_separator(),
+            c_text("-# 🎵 Sözler: lyrics.ovh"),
+            color=COLORS.MUSIC,
+        ), ephemeral=True)
 
     @discord.ui.button(emoji="📋", style=discord.ButtonStyle.secondary, row=1)
     async def sira(self, interaction: discord.Interaction, button: discord.ui.Button):

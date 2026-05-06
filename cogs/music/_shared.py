@@ -40,6 +40,8 @@ class Track:
     requester: discord.Member
     duration: int = 0
     stream_url: str | None = None
+    platform: str = "youtube"          # youtube / spotify / soundcloud / other
+    source_url: str | None = None      # platform == 'spotify' → orjinal Spotify URL
 
 
 @dataclass
@@ -79,6 +81,55 @@ def yt_thumbnail(url: str) -> str | None:
     return None
 
 
+# ── Platform tespiti & etiketleri ─────────────────────────────────────────────
+
+_PLATFORM_LABELS = {
+    "youtube":    "<:youtube:0> YouTube",  # discord emoji ID yoksa fallback altta
+    "spotify":    "🟢 Spotify",
+    "soundcloud": "🟠 SoundCloud",
+    "twitch":     "🟣 Twitch",
+    "vimeo":      "🔵 Vimeo",
+    "bandcamp":   "🟫 Bandcamp",
+    "other":      "🌐 Diğer",
+}
+
+# Custom emoji ID yoksa unicode fallback
+_PLATFORM_LABELS_FALLBACK = {
+    "youtube":    "▶️ YouTube",
+    "spotify":    "🟢 Spotify",
+    "soundcloud": "🟠 SoundCloud",
+    "twitch":     "🟣 Twitch",
+    "vimeo":      "🔵 Vimeo",
+    "bandcamp":   "🟫 Bandcamp",
+    "other":      "🌐 Diğer",
+}
+
+
+def detect_platform(url: str) -> str:
+    """URL'den platform tespiti."""
+    if not url:
+        return "other"
+    url_l = url.lower()
+    if "open.spotify.com" in url_l:
+        return "spotify"
+    if "youtube.com" in url_l or "youtu.be" in url_l or "music.youtube" in url_l:
+        return "youtube"
+    if "soundcloud.com" in url_l:
+        return "soundcloud"
+    if "twitch.tv" in url_l:
+        return "twitch"
+    if "vimeo.com" in url_l:
+        return "vimeo"
+    if "bandcamp.com" in url_l:
+        return "bandcamp"
+    return "other"
+
+
+def platform_label(platform: str) -> str:
+    """Platform için Discord emoji + isim etiketi."""
+    return _PLATFORM_LABELS_FALLBACK.get(platform, _PLATFORM_LABELS_FALLBACK["other"])
+
+
 def now_playing_card(track: Track, player: GuildPlayer) -> dict:
     """Müzik çalar kartı: thumbnail + başlık + meta. Player state'ine göre dinamik."""
     thumb = yt_thumbnail(track.webpage_url) or str(track.requester.display_avatar.url)
@@ -93,6 +144,11 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
         title = "▶️ Şimdi Çalıyor"
         color = COLORS.MUSIC
 
+    # Platform göstergesi — Spotify'dan geldiyse hem orijinal hem stream linki olur
+    platform_line = f"🎧 **Kaynak:** {platform_label(track.platform)}"
+    if track.platform == "spotify" and track.source_url:
+        platform_line += f"  ·  [Spotify]({track.source_url})"
+
     items: list[dict] = [
         c_section(
             c_text(f"## {title}\n### [{track.title}]({track.webpage_url})"),
@@ -102,6 +158,7 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
         c_text(
             f"⏱️ **Süre:** `{duration}`\n"
             f"👤 **İsteyen:** {track.requester.mention}\n"
+            f"{platform_line}\n"
             f"🔊 **Ses:** `{int(player.volume * 100)}%` · "
             f"🔁 **Döngü:** {loop_str} · "
             f"📋 **Sırada:** `{len(player.queue)}` şarkı"

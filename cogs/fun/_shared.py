@@ -1,4 +1,3 @@
-import discord
 import aiohttp
 import os
 import random
@@ -44,12 +43,6 @@ TÜRKÇE_AYLAR = {
     "mayıs": 5, "haziran": 6, "temmuz": 7, "ağustos": 8,
     "eylül": 9, "ekim": 10, "kasım": 11, "aralık": 12,
 }
-
-
-def fun_embed(title: str, description: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
-    e = discord.Embed(title=title, description=description, color=color)
-    e.timestamp = discord.utils.utcnow()
-    return e
 
 
 def normalize_saat(saat: str) -> str:

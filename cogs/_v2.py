@@ -76,6 +76,25 @@ def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None
             pass
 
 
+# ── Convenience card builders ─────────────────────────────────────────────────
+
+def c_error(msg: str) -> dict:
+    return c_container(c_text(f"**❌ Hata**\n\n{msg}"), color=0xED4245)
+
+
+def c_success(msg: str) -> dict:
+    return c_container(c_text(f"**✅ Başarılı**\n\n{msg}"), color=0x57F287)
+
+
+async def error_response(interaction: discord.Interaction, msg: str) -> None:
+    """Hata mesajı gönderir — interaction daha önce yanıtlanmış olsa da çalışır."""
+    card = c_error(msg)
+    if interaction.response.is_done():
+        await followup(interaction, card, ephemeral=True)
+    else:
+        await respond(interaction, card, ephemeral=True)
+
+
 # ── Interaction response helpers ──────────────────────────────────────────────
 
 async def respond(
@@ -188,14 +207,15 @@ async def channel_send(
     channel: discord.abc.Messageable,
     *components: dict,
     view: discord.ui.View | None = None,
+    content: str | None = None,
 ) -> discord.Message:
     """Metin kanalına V2 mesaj gönderir (interaction dışı). Message döner."""
     state = channel._state  # type: ignore[attr-defined]
     route = Route("POST", "/channels/{channel_id}/messages", channel_id=channel.id)  # type: ignore[attr-defined]
-    data = await state.http.request(
-        route,
-        json={"flags": _V2, "components": _build(components, view)},
-    )
+    payload: dict = {"flags": _V2, "components": _build(components, view)}
+    if content:
+        payload["content"] = content
+    data = await state.http.request(route, json=payload)
     msg = discord.Message(state=state, channel=channel, data=data)  # type: ignore[arg-type]
     if view:
         state.store_view(view, msg.id)

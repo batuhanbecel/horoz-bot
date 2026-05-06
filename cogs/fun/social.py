@@ -2,8 +2,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import timedelta
-from ._shared import fun_embed, parse_datetime
-from .._v2 import c_text, c_container, respond, update
+from ._shared import parse_datetime
+from .._v2 import (
+    c_text, c_separator, c_media, c_container, respond, update,
+    followup as v2_followup, channel_send, error_response,
+)
 
 
 # ── Anket ─────────────────────────────────────────────────────────────────────
@@ -97,21 +100,22 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
 
         start_time = parse_datetime(self.tarih.value, self.baslangic.value)
         if start_time is None:
-            return await interaction.followup.send(
-                embed=fun_embed(
-                    "Hata",
-                    "Tarih/saat formatı tanınamadı.\n"
-                    "Desteklenen formatlar:\n"
-                    "• `25.05.2026`  `20:00` veya `20.00`\n"
-                    "• `25 Mayıs 2026`  `20:00`",
-                    discord.Color.red(),
+            return await v2_followup(interaction,
+                c_container(
+                    c_text(
+                        "**❌ Geçersiz Tarih/Saat**\n\n"
+                        "Desteklenen formatlar:\n"
+                        "• `25.05.2026`  `20:00` veya `20.00`\n"
+                        "• `25 Mayıs 2026`  `20:00`"
+                    ),
+                    color=0xED4245,
                 ),
                 ephemeral=True,
             )
 
         if start_time <= discord.utils.utcnow():
-            return await interaction.followup.send(
-                embed=fun_embed("Hata", "Başlangıç zamanı geçmişte olamaz.", discord.Color.red()),
+            return await v2_followup(interaction,
+                c_container(c_text("**❌ Hata**\n\nBaşlangıç zamanı geçmişte olamaz."), color=0xED4245),
                 ephemeral=True,
             )
 
@@ -119,8 +123,8 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
         if self.bitis.value.strip():
             end_time = parse_datetime(self.tarih.value, self.bitis.value)
             if end_time is None:
-                return await interaction.followup.send(
-                    embed=fun_embed("Hata", "Bitiş saati formatı tanınamadı.", discord.Color.red()),
+                return await v2_followup(interaction,
+                    c_container(c_text("**❌ Hata**\n\nBitiş saati formatı tanınamadı."), color=0xED4245),
                     ephemeral=True,
                 )
 
@@ -130,8 +134,8 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
         image_bytes: bytes | None = None
         if self.e_resim:
             if not (self.e_resim.content_type and self.e_resim.content_type.startswith("image/")):
-                return await interaction.followup.send(
-                    embed=fun_embed("Hata", "Yüklenen dosya bir resim olmalıdır.", discord.Color.red()),
+                return await v2_followup(interaction,
+                    c_container(c_text("**❌ Hata**\n\nYüklenen dosya bir resim olmalıdır."), color=0xED4245),
                     ephemeral=True,
                 )
             image_bytes = await self.e_resim.read()
@@ -159,66 +163,66 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
         try:
             ev = await interaction.guild.create_scheduled_event(**event_kwargs)
         except discord.HTTPException as exc:
-            return await interaction.followup.send(
-                embed=fun_embed("Hata", f"Etkinlik oluşturulamadı: {exc}", discord.Color.red()),
+            return await v2_followup(interaction,
+                c_container(c_text(f"**❌ Hata**\n\nEtkinlik oluşturulamadı: {exc}"), color=0xED4245),
                 ephemeral=True,
             )
 
         event_url = f"https://discord.com/events/{interaction.guild.id}/{ev.id}"
 
-        embed = discord.Embed(
-            title=f"📅 {self.e_başlık}",
-            description=self.açıklama.value,
-            color=discord.Color.purple(),
-            url=event_url,
-            timestamp=start_time,
-        )
-        embed.add_field(name="📆 Başlangıç", value=f"<t:{int(start_time.timestamp())}:F>", inline=True)
+        lines = [
+            f"**📅 {self.e_başlık}**",
+            "",
+            self.açıklama.value,
+            "",
+            f"📆 **Başlangıç:** <t:{int(start_time.timestamp())}:F>",
+        ]
         if end_time:
-            embed.add_field(name="🏁 Bitiş", value=f"<t:{int(end_time.timestamp())}:t>", inline=True)
+            lines.append(f"🏁 **Bitiş:** <t:{int(end_time.timestamp())}:t>")
         if self.e_kanal:
-            embed.add_field(name="🔊 Kanal", value=self.e_kanal.mention, inline=True)
+            lines.append(f"🔊 **Kanal:** {self.e_kanal.mention}")
         elif self.konum.value:
-            embed.add_field(name="📍 Konum", value=self.konum.value, inline=True)
-        embed.add_field(name="🔗 Bağlantı", value=f"[Discord'da Aç]({event_url})", inline=False)
+            lines.append(f"📍 **Konum:** {self.konum.value}")
+        lines.append(f"🔗 **Bağlantı:** [Discord'da Aç]({event_url})")
+        lines.append(f"\n-# Oluşturan: {interaction.user.display_name}")
+
+        items: list[dict] = [c_text("\n".join(lines))]
         if self.e_resim:
-            embed.set_image(url=self.e_resim.url)
-        embed.set_footer(
-            text=f"Oluşturan: {interaction.user.display_name}",
-            icon_url=interaction.user.display_avatar.url,
+            items.append(c_separator())
+            items.append(c_media(self.e_resim.url))
+
+        await v2_followup(interaction,
+            c_container(*items, color=0x9B59B6),
+            ephemeral=True,
         )
-        await interaction.followup.send(embed=embed, ephemeral=True)
 
         if self.e_duyuru:
-            duyuru = discord.Embed(
-                title=f"📣 Yeni Etkinlik: {self.e_başlık}",
-                description=f"{self.açıklama.value}\n\n[**→ Etkinliğe Git**]({event_url})",
-                color=discord.Color.purple(),
-                url=event_url,
-                timestamp=start_time,
-            )
-            duyuru.add_field(name="📆 Başlangıç", value=f"<t:{int(start_time.timestamp())}:F>", inline=True)
+            duyuru_lines = [
+                f"**📣 Yeni Etkinlik: {self.e_başlık}**",
+                "",
+                self.açıklama.value,
+                "",
+                f"📆 **Başlangıç:** <t:{int(start_time.timestamp())}:F>",
+            ]
             if self.e_kanal:
-                duyuru.add_field(name="🔊 Kanal", value=self.e_kanal.mention, inline=True)
+                duyuru_lines.append(f"🔊 **Kanal:** {self.e_kanal.mention}")
             elif self.konum.value:
-                duyuru.add_field(name="📍 Konum", value=self.konum.value, inline=True)
+                duyuru_lines.append(f"📍 **Konum:** {self.konum.value}")
+            duyuru_lines.append(f"\n[**→ Etkinliğe Git**]({event_url})")
+            duyuru_lines.append(f"\n-# Oluşturan: {interaction.user.display_name}")
+
+            duyuru_items: list[dict] = [c_text("\n".join(duyuru_lines))]
             if self.e_resim:
-                duyuru.set_image(url=self.e_resim.url)
-            duyuru.set_footer(
-                text=f"Oluşturan: {interaction.user.display_name}",
-                icon_url=interaction.user.display_avatar.url,
-            )
+                duyuru_items.append(c_separator())
+                duyuru_items.append(c_media(self.e_resim.url))
+
             try:
-                await self.e_duyuru.send(embed=duyuru)
+                await channel_send(self.e_duyuru, c_container(*duyuru_items, color=0x9B59B6))
             except discord.Forbidden:
                 pass
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
-        msg = str(error)
-        if interaction.response.is_done():
-            await interaction.followup.send(embed=fun_embed("Hata", msg, discord.Color.red()), ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=fun_embed("Hata", msg, discord.Color.red()), ephemeral=True)
+        await error_response(interaction, str(error))
 
 
 # ── Social Cog ────────────────────────────────────────────────────────────────
@@ -273,10 +277,7 @@ class Social(commands.Cog):
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         msg = "Bu komutu kullanmak için gerekli yetkiye sahip değilsiniz." \
             if isinstance(error, app_commands.MissingPermissions) else str(error)
-        if interaction.response.is_done():
-            await interaction.followup.send(embed=fun_embed("Hata", msg, discord.Color.red()), ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=fun_embed("Hata", msg, discord.Color.red()), ephemeral=True)
+        await error_response(interaction, msg)
 
 
 async def setup(bot: commands.Bot):

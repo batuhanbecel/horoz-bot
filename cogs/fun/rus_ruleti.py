@@ -3,10 +3,10 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import asyncio
-from ._shared import fun_embed, giphy
+from ._shared import giphy
 from .._v2 import (
     c_text, c_thumbnail, c_section, c_container, c_separator, c_media,
-    respond, update, channel_send, msg_edit,
+    respond, update, channel_send, msg_edit, error_response,
 )
 
 MAX_OYUNCU = 6
@@ -350,11 +350,7 @@ class RusRuleti(commands.Cog):
         lobi.msg = await respond(interaction, *lobi._card(), view=lobi)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
-        await send(
-            embed=fun_embed("❌ Hata", str(error), discord.Color.red()),
-            ephemeral=True,
-        )
+        await error_response(interaction, str(error))
 
 
 async def setup(bot: commands.Bot):

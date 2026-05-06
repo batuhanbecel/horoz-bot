@@ -2,10 +2,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import timezone, datetime
-from ._shared import _emb
 from .._v2 import (
     c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
-    respond, edit_original,
+    respond, edit_original, error_response,
 )
 
 
@@ -147,8 +146,7 @@ class Info(commands.Cog):
         await respond(interaction, c_container(*card_items, color=0x5865F2))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
-        await send(embed=_emb("❌ Hata", str(error), discord.Color.red()), ephemeral=True)
+        await error_response(interaction, str(error))
 
 
 async def setup(bot: commands.Bot):

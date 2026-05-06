@@ -2,8 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import asyncio
-from ._shared import _emb, RENK_MAP, MesajModal, EmbedModal, DuyuruModal
-from .._v2 import c_text, c_container, respond
+from ._shared import RENK_MAP, MesajModal, EmbedModal, DuyuruModal
+from .._v2 import c_text, c_container, respond, channel_send, error_response
 
 
 class Messaging(commands.Cog):
@@ -15,8 +15,8 @@ class Messaging(commands.Cog):
     @app_commands.describe(kanal="Mesajın gönderileceği kanal")
     async def yaz(self, interaction: discord.Interaction, kanal: discord.TextChannel):
         if not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir.", discord.Color.red()),
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
                 ephemeral=True,
             )
         await interaction.response.send_modal(MesajModal(kanal))
@@ -35,11 +35,11 @@ class Messaging(commands.Cog):
     ])
     async def embed_gonder(self, interaction: discord.Interaction, kanal: discord.TextChannel, renk: str = "mavi"):
         if not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir.", discord.Color.red()),
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
                 ephemeral=True,
             )
-        await interaction.response.send_modal(EmbedModal(kanal, RENK_MAP.get(renk, discord.Color.blue())))
+        await interaction.response.send_modal(EmbedModal(kanal, RENK_MAP.get(renk, 0x3498DB)))
 
     # /duyuru
     @app_commands.command(name="duyuru", description="Seçilen kanala duyuru gönderir.")
@@ -51,8 +51,8 @@ class Messaging(commands.Cog):
     ])
     async def duyuru(self, interaction: discord.Interaction, kanal: discord.TextChannel, ping: str = ""):
         if not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir.", discord.Color.red()),
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
                 ephemeral=True,
             )
         await interaction.response.send_modal(DuyuruModal(kanal, ping))
@@ -80,19 +80,24 @@ class Messaging(commands.Cog):
         async def _remind():
             await asyncio.sleep(dakika * 60)
             try:
-                await interaction.user.send(embed=_emb(
-                    "⏰ Hatırlatma!",
-                    f"{mesaj}\n\n*{dakika} dk önce **{interaction.guild.name}** sunucusunda ayarlandı.*",
-                    discord.Color.gold(),
-                ))
+                dm = await interaction.user.create_dm()
+                await channel_send(dm,
+                    c_container(
+                        c_text(
+                            f"**⏰ Hatırlatma!**\n\n"
+                            f"{mesaj}\n\n"
+                            f"-# {dakika} dk önce **{interaction.guild.name}** sunucusunda ayarlandı."
+                        ),
+                        color=0xF1C40F,
+                    ),
+                )
             except discord.Forbidden:
                 pass
 
         asyncio.create_task(_remind())
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
-        await send(embed=_emb("❌ Hata", str(error), discord.Color.red()), ephemeral=True)
+        await error_response(interaction, str(error))
 
 
 async def setup(bot: commands.Bot):

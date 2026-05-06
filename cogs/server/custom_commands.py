@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from database import db
-from .._v2 import c_text, c_container, respond, followup as v2_followup
+from .._v2 import c_text, c_container, respond, followup as v2_followup, error_response
 
 
 class CustomCommands(commands.Cog):
@@ -117,11 +117,7 @@ class CustomCommands(commands.Cog):
         return [app_commands.Choice(name=n, value=n) for n in names if current.lower() in n.lower()][:25]
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
-        await send(
-            embed=discord.Embed(title="❌ Hata", description=str(error), color=discord.Color.red()),
-            ephemeral=True,
-        )
+        await error_response(interaction, str(error))
 
 
 async def setup(bot: commands.Bot):

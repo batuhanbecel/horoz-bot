@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import os
 import sys
-from .._v2 import c_text, c_container, c_separator, respond, followup as v2_followup
+from .._v2 import c_text, c_container, respond, followup as v2_followup, error_response
 
 
 class Admin(commands.Cog):
@@ -76,12 +76,9 @@ class Admin(commands.Cog):
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        msg  = "Bu komutu kullanmak için **Yönetici** yetkisi gereklidir." if isinstance(error, app_commands.MissingPermissions) else str(error)
-        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
-        await send(
-            embed=discord.Embed(title="❌ Hata", description=msg, color=discord.Color.red()),
-            ephemeral=True,
-        )
+        msg = "Bu komutu kullanmak için **Yönetici** yetkisi gereklidir." \
+            if isinstance(error, app_commands.MissingPermissions) else str(error)
+        await error_response(interaction, msg)
 
 
 async def setup(bot: commands.Bot):

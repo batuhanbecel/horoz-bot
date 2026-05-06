@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import io
 import aiohttp
+from .._v2 import c_text, c_section, c_container, c_thumbnail, followup as v2_followup
 
 
 async def fetch_bytes(url: str) -> bytes | None:
@@ -12,13 +13,6 @@ async def fetch_bytes(url: str) -> bytes | None:
                 return await r.read() if r.status == 200 else None
     except Exception:
         return None
-
-
-def _emb(title: str, desc: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
-    e = discord.Embed(title=title, description=desc, color=color)
-    e.set_footer(text="Horoz Bot • Emoji")
-    e.timestamp = discord.utils.utcnow()
-    return e
 
 
 class StickerStealer(commands.Cog):
@@ -34,29 +28,30 @@ class StickerStealer(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         try:
             if not interaction.user.guild_permissions.manage_emojis_and_stickers:
-                return await interaction.followup.send(
-                    embed=_emb("❌ Yetersiz Yetki", "Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", discord.Color.red()),
+                return await v2_followup(interaction,
+                    c_container(c_text("**❌ Yetersiz Yetki**\n\nBu işlem için **Emojileri Yönet** yetkisi gereklidir."), color=0xED4245),
                     ephemeral=True,
                 )
             if not message.stickers:
-                return await interaction.followup.send(
-                    embed=_emb("⚠️ Sticker Bulunamadı", "Bu mesajda sticker yok.", discord.Color.orange()),
+                return await v2_followup(interaction,
+                    c_container(c_text("**⚠️ Sticker Bulunamadı**\n\nBu mesajda sticker yok."), color=0xE67E22),
                     ephemeral=True,
                 )
 
             sticker = await message.stickers[0].fetch()
 
             if sticker.format == discord.StickerFormatType.lottie:
-                return await interaction.followup.send(
-                    embed=_emb("⚠️ Desteklenmiyor", "Lottie animasyonlu sticker'lar eklenemez.", discord.Color.orange()),
+                return await v2_followup(interaction,
+                    c_container(c_text("**⚠️ Desteklenmiyor**\n\nLottie animasyonlu sticker'lar eklenemez."), color=0xE67E22),
                     ephemeral=True,
                 )
 
             ext  = "gif" if sticker.format == discord.StickerFormatType.gif else "png"
             data = await fetch_bytes(str(sticker.url))
             if not data:
-                return await interaction.followup.send(
-                    embed=_emb("❌ İndirme Hatası", "Sticker indirilemedi.", discord.Color.red()), ephemeral=True
+                return await v2_followup(interaction,
+                    c_container(c_text("**❌ İndirme Hatası**\n\nSticker indirilemedi."), color=0xED4245),
+                    ephemeral=True,
                 )
 
             new_s = await interaction.guild.create_sticker(
@@ -65,18 +60,30 @@ class StickerStealer(commands.Cog):
                 emoji="⭐",
                 file=discord.File(io.BytesIO(data), filename=f"sticker.{ext}"),
             )
-            embed = _emb("✅ Sticker Eklendi", f"**{new_s.name}** sunucuya eklendi!", discord.Color.green())
-            embed.add_field(name="İsim", value=new_s.name,      inline=True)
-            embed.add_field(name="ID",   value=str(new_s.id),   inline=True)
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await v2_followup(interaction,
+                c_container(
+                    c_section(
+                        c_text(
+                            f"**✅ Sticker Eklendi**\n\n"
+                            f"**{new_s.name}** sunucuya eklendi!\n"
+                            f"🆔 **ID:** `{new_s.id}`"
+                        ),
+                        accessory=c_thumbnail(str(sticker.url)),
+                    ),
+                    color=0x57F287,
+                ),
+                ephemeral=True,
+            )
 
         except discord.HTTPException as ex:
-            await interaction.followup.send(
-                embed=_emb("❌ Hata", str(ex), discord.Color.red()), ephemeral=True
+            await v2_followup(interaction,
+                c_container(c_text(f"**❌ Hata**\n\n{ex}"), color=0xED4245),
+                ephemeral=True,
             )
         except Exception as ex:
-            await interaction.followup.send(
-                embed=_emb("❌ Hata", str(ex), discord.Color.red()), ephemeral=True
+            await v2_followup(interaction,
+                c_container(c_text(f"**❌ Hata**\n\n{ex}"), color=0xED4245),
+                ephemeral=True,
             )
 
 

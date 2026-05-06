@@ -1,47 +1,40 @@
 import discord
-from ._shared import LogBase, embed
+from discord.ext import commands
+from ._shared import LogBase
+from .._v2 import c_text, c_section, c_container, c_thumbnail
 
 
 class VoiceLogs(LogBase):
-    @discord.ext.commands.Cog.listener()
+    @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if member.bot:
             return
         guild = member.guild
 
         if before.channel is None and after.channel is not None:
-            e = embed("🔊 Ses Kanalına Katıldı", color=discord.Color.green())
-            e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
-            e.add_field(name="Kanal",     value=after.channel.mention,           inline=True)
-
+            text = f"**🔊 Ses Kanalına Katıldı**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {after.channel.mention}"
+            color = 0x57F287
         elif before.channel is not None and after.channel is None:
-            e = embed("🔇 Ses Kanalından Ayrıldı", color=discord.Color.red())
-            e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
-            e.add_field(name="Kanal",     value=before.channel.mention,          inline=True)
-
+            text = f"**🔇 Ses Kanalından Ayrıldı**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {before.channel.mention}"
+            color = 0xED4245
         elif before.channel != after.channel:
-            e = embed("🔀 Ses Kanalı Değiştirdi", color=discord.Color.yellow())
-            e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
-            e.add_field(name="Önceki",    value=before.channel.mention,          inline=True)
-            e.add_field(name="Yeni",      value=after.channel.mention,           inline=True)
-
+            text = f"**🔀 Ses Kanalı Değiştirdi**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Önceki:** {before.channel.mention}\n📌 **Yeni:** {after.channel.mention}"
+            color = 0xFEE75C
         elif before.self_mute != after.self_mute:
             action = "Kendini Susturdu 🔇" if after.self_mute else "Sesini Açtı 🔊"
-            e = embed(f"🎙️ {action}", color=discord.Color.light_grey())
-            e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`",              inline=False)
-            e.add_field(name="Kanal",     value=(after.channel or before.channel).mention,   inline=True)
-
+            text = f"**🎙️ {action}**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {(after.channel or before.channel).mention}"
+            color = 0x95A5A6
         elif before.mute != after.mute:
             action = "Sunucu Tarafından Susturuldu" if after.mute else "Susturma Kaldırıldı"
-            e = embed(f"🎙️ {action}", color=discord.Color.orange())
-            e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`",              inline=False)
-            e.add_field(name="Kanal",     value=(after.channel or before.channel).mention,   inline=True)
-
+            text = f"**🎙️ {action}**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {(after.channel or before.channel).mention}"
+            color = 0xE67E22
         else:
             return
 
-        e.add_field(name="ID", value=str(member.id), inline=True)
-        await self.log(guild, embed=e)
+        await self.log(guild, c_container(
+            c_section(c_text(text), accessory=c_thumbnail(str(member.display_avatar.url))),
+            color=color,
+        ))
 
 
 async def setup(bot):

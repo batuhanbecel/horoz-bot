@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import discord
 import random
-from ._shared import GuildPlayer, Track, now_playing_card, stopped_card, duration_fmt, music_embed
-from .._v2 import msg_edit, c_text, c_container, respond as v2_respond
+from ._shared import GuildPlayer, Track, now_playing_card, stopped_card, duration_fmt
+from .._v2 import msg_edit, c_text, c_container, respond as v2_respond, followup as v2_followup
 
 if TYPE_CHECKING:
     from .player import Music
@@ -169,15 +169,15 @@ class SearchButton(discord.ui.Button):
 
         if vc.is_playing() or vc.is_paused():
             player.queue.append(track)
-            await interaction.followup.send(
-                embed=music_embed("Sıraya Eklendi", f"**{track.title}** sıraya eklendi."),
+            await v2_followup(interaction,
+                c_container(c_text(f"**📋 Sıraya Eklendi**\n\n**{track.title}** sıraya eklendi."), color=0x5865F2),
                 ephemeral=True,
             )
         else:
             player.queue.appendleft(track)
             await self.cog._play_next(interaction.guild_id, vc)
-            await interaction.followup.send(
-                embed=music_embed("▶️ Çalıyor", f"**{track.title}**", discord.Color.green()),
+            await v2_followup(interaction,
+                c_container(c_text(f"**▶️ Çalıyor**\n\n**{track.title}**"), color=0x57F287),
                 ephemeral=True,
             )
         self.view.stop()

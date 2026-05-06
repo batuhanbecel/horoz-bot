@@ -7,7 +7,7 @@ import random
 from collections import deque
 from ._shared import (
     YTDL_FLAT_OPTIONS, YTDL_STREAM_OPTIONS, FFMPEG_OPTIONS, MAX_PLAYLIST,
-    Track, GuildPlayer, duration_fmt, is_url, is_playlist_url, music_embed,
+    Track, GuildPlayer, duration_fmt, is_url, is_playlist_url,
     now_playing_card,
 )
 from .views import PlayerView, SearchView

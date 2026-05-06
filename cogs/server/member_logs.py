@@ -2,7 +2,8 @@ import discord
 from discord.ext import commands
 import asyncio
 from datetime import timezone
-from ._shared import LogBase, embed, get_audit, WELCOME_CHANNEL_ID, LEAVE_EMOJI_ID
+from ._shared import LogBase, get_audit, WELCOME_CHANNEL_ID, LEAVE_EMOJI_ID
+from .._v2 import c_text, c_section, c_container, c_thumbnail
 
 
 class MemberLogs(LogBase):
@@ -26,13 +27,19 @@ class MemberLogs(LogBase):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        e = embed("📥 Üye Katıldı", color=discord.Color.green())
-        e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
-        e.add_field(name="ID", value=str(member.id), inline=True)
         created = member.created_at.replace(tzinfo=timezone.utc)
-        e.add_field(name="Hesap Oluşturulma", value=f"<t:{int(created.timestamp())}:R>", inline=True)
-        e.set_thumbnail(url=member.display_avatar.url)
-        await self.log(member.guild, embed=e)
+        await self.log(member.guild, c_container(
+            c_section(
+                c_text(
+                    f"**📥 Üye Katıldı**\n\n"
+                    f"👤 **Kullanıcı:** {member.mention} `{member}`\n"
+                    f"🆔 **ID:** `{member.id}`\n"
+                    f"📅 **Hesap Oluşturulma:** <t:{int(created.timestamp())}:R>"
+                ),
+                accessory=c_thumbnail(str(member.display_avatar.url)),
+            ),
+            color=0x57F287,
+        ))
 
         ch = await self._welcome_channel(member.guild)
         if ch:
@@ -48,19 +55,28 @@ class MemberLogs(LogBase):
 
         kick_entry = await get_audit(member.guild, discord.AuditLogAction.kick, member.id)
         if kick_entry and (discord.utils.utcnow() - kick_entry.created_at).total_seconds() < 5:
-            e = embed("👢 Üye Atıldı", color=discord.Color.orange())
-            e.add_field(name="Kullanıcı",    value=f"{member.mention} `{member}`",                    inline=False)
-            e.add_field(name="Atan Yetkili", value=f"{kick_entry.user.mention} `{kick_entry.user}`",  inline=True)
-            e.add_field(name="Sebep",        value=kick_entry.reason or "Belirtilmedi",                inline=True)
+            text = (
+                f"**👢 Üye Atıldı**\n\n"
+                f"👤 **Kullanıcı:** {member.mention} `{member}`\n"
+                f"👮 **Atan Yetkili:** {kick_entry.user.mention} `{kick_entry.user}`\n"
+                f"📝 **Sebep:** {kick_entry.reason or 'Belirtilmedi'}\n"
+                f"🆔 **ID:** `{member.id}`"
+            )
+            color = 0xE67E22
         else:
-            e = embed("📤 Üye Ayrıldı", color=discord.Color.light_grey())
-            e.add_field(name="Kullanıcı", value=f"{member.mention} `{member}`", inline=False)
             roles = [r.mention for r in member.roles if r.name != "@everyone"]
-            if roles:
-                e.add_field(name="Rolleri", value=", ".join(roles[:10]), inline=False)
-        e.add_field(name="ID", value=str(member.id), inline=True)
-        e.set_thumbnail(url=member.display_avatar.url)
-        await self.log(member.guild, embed=e)
+            text = (
+                f"**📤 Üye Ayrıldı**\n\n"
+                f"👤 **Kullanıcı:** {member.mention} `{member}`\n"
+                + (f"🏷️ **Rolleri:** {', '.join(roles[:10])}\n" if roles else "")
+                + f"🆔 **ID:** `{member.id}`"
+            )
+            color = 0x95A5A6
+
+        await self.log(member.guild, c_container(
+            c_section(c_text(text), accessory=c_thumbnail(str(member.display_avatar.url))),
+            color=color,
+        ))
 
         ch = await self._welcome_channel(member.guild)
         if ch:
@@ -69,24 +85,33 @@ class MemberLogs(LogBase):
     @commands.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user: discord.User):
         entry = await get_audit(guild, discord.AuditLogAction.ban, user.id)
-        e = embed("🔨 Üye Yasaklandı", color=discord.Color.red())
-        e.add_field(name="Kullanıcı", value=f"{user.mention} `{user}`", inline=False)
+        lines = [
+            f"**🔨 Üye Yasaklandı**\n",
+            f"👤 **Kullanıcı:** {user.mention} `{user}`",
+            f"🆔 **ID:** `{user.id}`",
+        ]
         if entry:
-            e.add_field(name="Yakan Yetkili", value=f"{entry.user.mention} `{entry.user}`", inline=True)
-            e.add_field(name="Sebep",         value=entry.reason or "Belirtilmedi",           inline=True)
-        e.add_field(name="ID", value=str(user.id), inline=True)
-        e.set_thumbnail(url=user.display_avatar.url)
-        await self.log(guild, embed=e)
+            lines.append(f"👮 **Yakan Yetkili:** {entry.user.mention} `{entry.user}`")
+            lines.append(f"📝 **Sebep:** {entry.reason or 'Belirtilmedi'}")
+        await self.log(guild, c_container(
+            c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(user.display_avatar.url))),
+            color=0xED4245,
+        ))
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild: discord.Guild, user: discord.User):
         entry = await get_audit(guild, discord.AuditLogAction.unban, user.id)
-        e = embed("✅ Yasak Kaldırıldı", color=discord.Color.green())
-        e.add_field(name="Kullanıcı", value=f"{user.mention} `{user}`", inline=False)
+        lines = [
+            f"**✅ Yasak Kaldırıldı**\n",
+            f"👤 **Kullanıcı:** {user.mention} `{user}`",
+            f"🆔 **ID:** `{user.id}`",
+        ]
         if entry:
-            e.add_field(name="Kaldıran Yetkili", value=f"{entry.user.mention} `{entry.user}`", inline=True)
-        e.add_field(name="ID", value=str(user.id), inline=True)
-        await self.log(guild, embed=e)
+            lines.append(f"👮 **Kaldıran Yetkili:** {entry.user.mention} `{entry.user}`")
+        await self.log(guild, c_container(
+            c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(user.display_avatar.url))),
+            color=0x57F287,
+        ))
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
@@ -97,20 +122,30 @@ class MemberLogs(LogBase):
         if before_to != after_to:
             if after_to is not None:
                 entry = await get_audit(guild, discord.AuditLogAction.member_update, after.id)
-                e = embed("🔇 Üye Susturuldu (Timeout)", color=discord.Color.dark_red())
-                e.add_field(name="Kullanıcı", value=f"{after.mention} `{after}`",         inline=False)
-                e.add_field(name="Bitiş",     value=f"<t:{int(after_to.timestamp())}:R>", inline=True)
+                lines = [
+                    f"**🔇 Üye Susturuldu (Timeout)**\n",
+                    f"👤 **Kullanıcı:** {after.mention} `{after}`",
+                    f"⏰ **Bitiş:** <t:{int(after_to.timestamp())}:R>",
+                    f"🆔 **ID:** `{after.id}`",
+                ]
                 if entry:
-                    e.add_field(name="Yetkili", value=entry.user.mention,                 inline=True)
-                    e.add_field(name="Sebep",   value=entry.reason or "Belirtilmedi",      inline=True)
+                    lines.append(f"👮 **Yetkili:** {entry.user.mention}")
+                    lines.append(f"📝 **Sebep:** {entry.reason or 'Belirtilmedi'}")
+                color = 0xED4245
             else:
                 entry = await get_audit(guild, discord.AuditLogAction.member_update, after.id)
-                e = embed("🔈 Timeout Kaldırıldı", color=discord.Color.green())
-                e.add_field(name="Kullanıcı", value=f"{after.mention} `{after}`", inline=False)
+                lines = [
+                    f"**🔈 Timeout Kaldırıldı**\n",
+                    f"👤 **Kullanıcı:** {after.mention} `{after}`",
+                    f"🆔 **ID:** `{after.id}`",
+                ]
                 if entry:
-                    e.add_field(name="Yetkili", value=entry.user.mention, inline=True)
-            e.add_field(name="ID", value=str(after.id), inline=True)
-            await self.log(guild, embed=e)
+                    lines.append(f"👮 **Yetkili:** {entry.user.mention}")
+                color = 0x57F287
+            await self.log(guild, c_container(
+                c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(after.display_avatar.url))),
+                color=color,
+            ))
             return
 
         added   = [r for r in after.roles if r not in before.roles]
@@ -119,28 +154,47 @@ class MemberLogs(LogBase):
             entry = await get_audit(guild, discord.AuditLogAction.member_role_update, after.id)
             mod = entry.user.mention if entry else "Bilinmiyor"
             if added:
-                e = embed("🟢 Rol Eklendi", color=discord.Color.blue())
-                e.add_field(name="Kullanıcı",     value=f"{after.mention} `{after}`",          inline=False)
-                e.add_field(name="Eklenen Rol(ler)", value=" ".join(r.mention for r in added), inline=True)
-                e.add_field(name="Yetkili",       value=mod,                                   inline=True)
-                await self.log(guild, embed=e)
+                await self.log(guild, c_container(
+                    c_section(
+                        c_text(
+                            f"**🟢 Rol Eklendi**\n\n"
+                            f"👤 **Kullanıcı:** {after.mention} `{after}`\n"
+                            f"🏷️ **Eklenen:** {' '.join(r.mention for r in added)}\n"
+                            f"👮 **Yetkili:** {mod}"
+                        ),
+                        accessory=c_thumbnail(str(after.display_avatar.url)),
+                    ),
+                    color=0x3498DB,
+                ))
             if removed:
-                e = embed("🔴 Rol Kaldırıldı", color=discord.Color.orange())
-                e.add_field(name="Kullanıcı",        value=f"{after.mention} `{after}`",             inline=False)
-                e.add_field(name="Kaldırılan Rol(ler)", value=" ".join(r.mention for r in removed), inline=True)
-                e.add_field(name="Yetkili",          value=mod,                                      inline=True)
-                await self.log(guild, embed=e)
+                await self.log(guild, c_container(
+                    c_section(
+                        c_text(
+                            f"**🔴 Rol Kaldırıldı**\n\n"
+                            f"👤 **Kullanıcı:** {after.mention} `{after}`\n"
+                            f"🏷️ **Kaldırılan:** {' '.join(r.mention for r in removed)}\n"
+                            f"👮 **Yetkili:** {mod}"
+                        ),
+                        accessory=c_thumbnail(str(after.display_avatar.url)),
+                    ),
+                    color=0xE67E22,
+                ))
             return
 
         if before.nick != after.nick:
             entry = await get_audit(guild, discord.AuditLogAction.member_update, after.id)
-            e = embed("✏️ Takma Ad Değişti", color=discord.Color.blurple())
-            e.add_field(name="Kullanıcı", value=f"{after.mention} `{after}`", inline=False)
-            e.add_field(name="Eskisi",    value=before.nick or "Yok",          inline=True)
-            e.add_field(name="Yenisi",    value=after.nick or "Yok",           inline=True)
+            lines = [
+                f"**✏️ Takma Ad Değişti**\n",
+                f"👤 **Kullanıcı:** {after.mention} `{after}`",
+                f"📝 **Eskisi:** {before.nick or 'Yok'}",
+                f"📝 **Yenisi:** {after.nick or 'Yok'}",
+            ]
             if entry:
-                e.add_field(name="Yetkili", value=entry.user.mention, inline=True)
-            await self.log(guild, embed=e)
+                lines.append(f"👮 **Yetkili:** {entry.user.mention}")
+            await self.log(guild, c_container(
+                c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(after.display_avatar.url))),
+                color=0x5865F2,
+            ))
 
 
 async def setup(bot: commands.Bot):

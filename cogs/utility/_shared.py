@@ -1,24 +1,18 @@
 import discord
+from .._v2 import c_text, c_container, c_separator, c_media, respond, channel_send
 
-RENK_MAP: dict[str, discord.Color] = {
-    "mavi":    discord.Color.blue(),
-    "yesil":   discord.Color.green(),
-    "kirmizi": discord.Color.red(),
-    "altin":   discord.Color.gold(),
-    "mor":     discord.Color.purple(),
-    "turuncu": discord.Color.orange(),
-    "pembe":   discord.Color.magenta(),
+RENK_MAP: dict[str, int] = {
+    "mavi":    0x3498DB,
+    "yesil":   0x2ECC71,
+    "kirmizi": 0xED4245,
+    "altin":   0xF1C40F,
+    "mor":     0x9B59B6,
+    "turuncu": 0xE67E22,
+    "pembe":   0xFF73FA,
 }
 
 
-def _emb(title: str, desc: str = "", color: discord.Color = discord.Color.blurple()) -> discord.Embed:
-    e = discord.Embed(title=title, description=desc, color=color)
-    e.set_footer(text="Horoz Bot")
-    e.timestamp = discord.utils.utcnow()
-    return e
-
-
-class MesajModal(discord.ui.Modal, title="Mesaj Gönder"):
+class MesajModal(discord.ui.Modal):
     içerik = discord.ui.TextInput(
         label="Mesaj İçeriği",
         style=discord.TextStyle.paragraph,
@@ -27,24 +21,24 @@ class MesajModal(discord.ui.Modal, title="Mesaj Gönder"):
     )
 
     def __init__(self, kanal: discord.TextChannel):
-        super().__init__()
+        super().__init__(title="Mesaj Gönder")
         self.kanal = kanal
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
             await self.kanal.send(self.içerik.value)
-            await interaction.response.send_message(
-                embed=_emb("✅ Mesaj Gönderildi", f"{self.kanal.mention} kanalına mesaj gönderildi.", discord.Color.green()),
+            await respond(interaction,
+                c_container(c_text(f"**✅ Mesaj Gönderildi**\n\n{self.kanal.mention} kanalına mesaj gönderildi."), color=0x57F287),
                 ephemeral=True,
             )
         except discord.Forbidden:
-            await interaction.response.send_message(
-                embed=_emb("❌ Hata", f"{self.kanal.mention} kanalına yazma iznim yok.", discord.Color.red()),
+            await respond(interaction,
+                c_container(c_text(f"**❌ Hata**\n\n{self.kanal.mention} kanalına yazma iznim yok."), color=0xED4245),
                 ephemeral=True,
             )
 
 
-class EmbedModal(discord.ui.Modal, title="Embed Mesaj Gönder"):
+class EmbedModal(discord.ui.Modal):
     başlık_f = discord.ui.TextInput(label="Başlık", placeholder="Embed başlığı", max_length=256)
     içerik_f = discord.ui.TextInput(
         label="İçerik",
@@ -53,29 +47,33 @@ class EmbedModal(discord.ui.Modal, title="Embed Mesaj Gönder"):
         max_length=4000,
     )
 
-    def __init__(self, kanal: discord.TextChannel, renk: discord.Color):
-        super().__init__()
+    def __init__(self, kanal: discord.TextChannel, renk: int):
+        super().__init__(title="Embed Mesaj Gönder")
         self.kanal = kanal
         self.renk  = renk
 
     async def on_submit(self, interaction: discord.Interaction):
-        embed = discord.Embed(title=self.başlık_f.value, description=self.içerik_f.value, color=self.renk)
-        embed.set_footer(text=f"Gönderen: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
-        embed.timestamp = discord.utils.utcnow()
+        lines = [
+            f"**{self.başlık_f.value}**",
+            "",
+            self.içerik_f.value,
+            "",
+            f"-# Gönderen: {interaction.user.display_name}",
+        ]
         try:
-            await self.kanal.send(embed=embed)
-            await interaction.response.send_message(
-                embed=_emb("✅ Embed Gönderildi", f"{self.kanal.mention} kanalına embed gönderildi.", discord.Color.green()),
+            await channel_send(self.kanal, c_container(c_text("\n".join(lines)), color=self.renk))
+            await respond(interaction,
+                c_container(c_text(f"**✅ Embed Gönderildi**\n\n{self.kanal.mention} kanalına embed gönderildi."), color=0x57F287),
                 ephemeral=True,
             )
         except discord.Forbidden:
-            await interaction.response.send_message(
-                embed=_emb("❌ Hata", f"{self.kanal.mention} kanalına yazma iznim yok.", discord.Color.red()),
+            await respond(interaction,
+                c_container(c_text(f"**❌ Hata**\n\n{self.kanal.mention} kanalına yazma iznim yok."), color=0xED4245),
                 ephemeral=True,
             )
 
 
-class DuyuruModal(discord.ui.Modal, title="Duyuru Gönder"):
+class DuyuruModal(discord.ui.Modal):
     içerik_f = discord.ui.TextInput(
         label="Duyuru İçeriği",
         style=discord.TextStyle.paragraph,
@@ -84,22 +82,30 @@ class DuyuruModal(discord.ui.Modal, title="Duyuru Gönder"):
     )
 
     def __init__(self, kanal: discord.TextChannel, ping: str):
-        super().__init__()
+        super().__init__(title="Duyuru Gönder")
         self.kanal = kanal
         self.ping  = ping
 
     async def on_submit(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="📣 Duyuru", description=self.içerik_f.value, color=discord.Color.gold())
-        embed.set_footer(text=f"Duyuran: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
-        embed.timestamp = discord.utils.utcnow()
+        lines = [
+            "**📣 Duyuru**",
+            "",
+            self.içerik_f.value,
+            "",
+            f"-# Duyuran: {interaction.user.display_name}",
+        ]
         try:
-            await self.kanal.send(content=self.ping or None, embed=embed)
-            await interaction.response.send_message(
-                embed=_emb("✅ Duyuru Gönderildi", f"{self.kanal.mention} kanalına duyuru gönderildi.", discord.Color.green()),
+            await channel_send(
+                self.kanal,
+                c_container(c_text("\n".join(lines)), color=0xF1C40F),
+                content=self.ping or None,
+            )
+            await respond(interaction,
+                c_container(c_text(f"**✅ Duyuru Gönderildi**\n\n{self.kanal.mention} kanalına duyuru gönderildi."), color=0x57F287),
                 ephemeral=True,
             )
         except discord.Forbidden:
-            await interaction.response.send_message(
-                embed=_emb("❌ Hata", f"{self.kanal.mention} kanalına yazma iznim yok.", discord.Color.red()),
+            await respond(interaction,
+                c_container(c_text(f"**❌ Hata**\n\n{self.kanal.mention} kanalına yazma iznim yok."), color=0xED4245),
                 ephemeral=True,
             )

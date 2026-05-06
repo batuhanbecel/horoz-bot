@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from database import db
-from ._shared import _emb
+from .._v2 import c_text, c_section, c_container, c_thumbnail, respond, error_response
 
 
 class InfractionMod(commands.Cog):
@@ -19,59 +19,72 @@ class InfractionMod(commands.Cog):
     @app_commands.describe(üye="İhlalleri görüntülenecek üye")
     async def listele(self, interaction: discord.Interaction, üye: discord.Member):
         if not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir."), ephemeral=True
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
+                ephemeral=True,
             )
         rows = await db.get_infractions(interaction.guild_id, üye.id)
         if not rows:
-            return await interaction.response.send_message(
-                embed=_emb("✅ Temiz Geçmiş", f"{üye.mention} için kayıtlı ihlal bulunamadı.", discord.Color.green()),
+            return await respond(interaction,
+                c_container(c_text(f"**✅ Temiz Geçmiş**\n\n{üye.mention} için kayıtlı ihlal bulunamadı."), color=0x57F287),
                 ephemeral=True,
             )
 
-        embed = discord.Embed(
-            title=f"📋 İhlal Geçmişi — {üye.display_name}",
-            description=f"Toplam **{len(rows)}** ihlal",
-            color=discord.Color.orange(),
-        )
-        embed.set_thumbnail(url=üye.display_avatar.url)
-        embed.set_footer(text="Horoz Bot • Moderasyon")
-        embed.timestamp = discord.utils.utcnow()
-
         TYPE_EMOJI = {"warn": "⚠️", "kick": "👢", "ban": "🔨", "mute": "🔇"}
+        lines = [
+            f"**📋 İhlal Geçmişi — {üye.display_name}**",
+            f"Toplam **{len(rows)}** ihlal",
+            "",
+        ]
         for i, row in enumerate(rows[:10], 1):
             mod = interaction.guild.get_member(row["mod_id"])
             mod_name = mod.display_name if mod else f"ID:{row['mod_id']}"
             emoji = TYPE_EMOJI.get(row["type"], "•")
-            embed.add_field(
-                name=f"{emoji} #{i} — {row['type'].upper()}",
-                value=f"**Tarih:** {row['created_at'][:10]}\n**Mod:** {mod_name}\n**Sebep:** {row['reason'] or 'Belirtilmedi'}",
-                inline=True,
-            )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            lines.append(f"{emoji} **#{i} — {row['type'].upper()}**")
+            lines.append(f"📅 {row['created_at'][:10]} · 👮 {mod_name} · 📝 {row['reason'] or 'Belirtilmedi'}")
+            lines.append("")
+
+        await respond(interaction,
+            c_container(
+                c_section(
+                    c_text("\n".join(lines)),
+                    accessory=c_thumbnail(str(üye.display_avatar.url)),
+                ),
+                color=0xE67E22,
+            ),
+            ephemeral=True,
+        )
 
     # /ihlal sil
     @ihlal.command(name="sil", description="Bir üyenin tüm ihlallerini temizler.")
     @app_commands.describe(üye="İhlalleri temizlenecek üye")
     async def sil(self, interaction: discord.Interaction, üye: discord.Member):
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "Bu komut için **Yönetici** yetkisi gereklidir."), ephemeral=True
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\nBu komut için **Yönetici** yetkisi gereklidir."), color=0xED4245),
+                ephemeral=True,
             )
         await db.clear_infractions(interaction.guild_id, üye.id)
 
-        embed = _emb("🗑️ İhlaller Temizlendi", color=discord.Color.green())
-        embed.add_field(name="Üye",   value=üye.mention,            inline=True)
-        embed.add_field(name="İşlem", value="Tüm ihlaller silindi", inline=True)
-        embed.set_thumbnail(url=üye.display_avatar.url)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await respond(interaction,
+            c_container(
+                c_section(
+                    c_text(
+                        f"**🗑️ İhlaller Temizlendi**\n\n"
+                        f"👤 **Üye:** {üye.mention}\n"
+                        f"✅ Tüm ihlaller silindi."
+                    ),
+                    accessory=c_thumbnail(str(üye.display_avatar.url)),
+                ),
+                color=0x57F287,
+            ),
+            ephemeral=True,
+        )
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
-        if isinstance(error, app_commands.BotMissingPermissions):
-            await send(embed=_emb("❌ Bot Yetki Hatası", "Botun bu işlem için yeterli yetkisi yok."), ephemeral=True)
-        else:
-            await send(embed=_emb("❌ Hata", str(error)), ephemeral=True)
+        msg = "Botun bu işlem için yeterli yetkisi yok." \
+            if isinstance(error, app_commands.BotMissingPermissions) else str(error)
+        await error_response(interaction, msg)
 
 
 async def setup(bot: commands.Bot):

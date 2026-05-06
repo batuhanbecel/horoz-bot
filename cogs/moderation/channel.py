@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from ._shared import _emb
+from .._v2 import c_text, c_container, respond, followup as v2_followup, error_response
 
 
 class ChannelMod(commands.Cog):
@@ -18,13 +18,14 @@ class ChannelMod(commands.Cog):
     @app_commands.describe(miktar="Silinecek mesaj sayısı (1-100)")
     async def temizle(self, interaction: discord.Interaction, miktar: app_commands.Range[int, 1, 100]):
         if not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Mesajları Yönet** yetkisi gereklidir."), ephemeral=True
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
+                ephemeral=True,
             )
         await interaction.response.defer(ephemeral=True)
         deleted = await interaction.channel.purge(limit=miktar)
-        await interaction.followup.send(
-            embed=_emb("🧹 Temizlendi", f"**{len(deleted)}** mesaj silindi.", discord.Color.green()),
+        await v2_followup(interaction,
+            c_container(c_text(f"**🧹 Temizlendi**\n\n**{len(deleted)}** mesaj silindi."), color=0x57F287),
             ephemeral=True,
         )
 
@@ -38,60 +39,75 @@ class ChannelMod(commands.Cog):
         kanal: discord.TextChannel = None,
     ):
         if not interaction.user.guild_permissions.manage_channels:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Kanalları Yönet** yetkisi gereklidir."), ephemeral=True
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Kanalları Yönet** yetkisi gereklidir."), color=0xED4245),
+                ephemeral=True,
             )
         target = kanal or interaction.channel
         await target.edit(slowmode_delay=saniye)
         if saniye == 0:
-            embed = _emb("🕐 Yavaş Mod Kapatıldı", f"{target.mention} kanalında yavaş mod kaldırıldı.", discord.Color.green())
+            msg = f"**🕐 Yavaş Mod Kapatıldı**\n\n{target.mention} kanalında yavaş mod kaldırıldı."
+            color = 0x57F287
         else:
-            embed = _emb("🕐 Yavaş Mod Açıldı", f"{target.mention} kanalında **{saniye} saniye** yavaş mod uygulandı.", discord.Color.orange())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            msg = f"**🕐 Yavaş Mod Açıldı**\n\n{target.mention} kanalında **{saniye} saniye** yavaş mod uygulandı."
+            color = 0xE67E22
+        await respond(interaction, c_container(c_text(msg), color=color), ephemeral=True)
 
     # /kanal kilitle
     @kanal.command(name="kilitle", description="Kanalı kilitler, üyeler mesaj gönderemez.")
     @app_commands.describe(kanal="Kilitlenecek kanal (boş = mevcut)", sebep="Kilitleme sebebi")
     async def kilitle(self, interaction: discord.Interaction, kanal: discord.TextChannel = None, sebep: str = "Belirtilmedi"):
         if not interaction.user.guild_permissions.manage_channels:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Kanalları Yönet** yetkisi gereklidir."), ephemeral=True
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Kanalları Yönet** yetkisi gereklidir."), color=0xED4245),
+                ephemeral=True,
             )
         target = kanal or interaction.channel
         ow = target.overwrites_for(interaction.guild.default_role)
         ow.send_messages = False
         await target.set_permissions(interaction.guild.default_role, overwrite=ow, reason=f"{interaction.user}: {sebep}")
 
-        embed = _emb("🔒 Kanal Kilitlendi")
-        embed.add_field(name="Kanal",     value=target.mention,           inline=True)
-        embed.add_field(name="Moderatör", value=interaction.user.mention, inline=True)
-        embed.add_field(name="Sebep",     value=sebep,                    inline=False)
-        await interaction.response.send_message(embed=embed)
+        await respond(interaction,
+            c_container(
+                c_text(
+                    f"**🔒 Kanal Kilitlendi**\n\n"
+                    f"📌 **Kanal:** {target.mention}\n"
+                    f"👮 **Moderatör:** {interaction.user.mention}\n"
+                    f"📝 **Sebep:** {sebep}"
+                ),
+                color=0xED4245,
+            ),
+        )
 
     # /kanal kilit-aç
     @kanal.command(name="kilit-aç", description="Kilitli kanalın kilidini açar.")
     @app_commands.describe(kanal="Kilidi açılacak kanal (boş = mevcut)")
     async def kilit_ac(self, interaction: discord.Interaction, kanal: discord.TextChannel = None):
         if not interaction.user.guild_permissions.manage_channels:
-            return await interaction.response.send_message(
-                embed=_emb("❌ Yetersiz Yetki", "**Kanalları Yönet** yetkisi gereklidir."), ephemeral=True
+            return await respond(interaction,
+                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Kanalları Yönet** yetkisi gereklidir."), color=0xED4245),
+                ephemeral=True,
             )
         target = kanal or interaction.channel
         ow = target.overwrites_for(interaction.guild.default_role)
         ow.send_messages = None
         await target.set_permissions(interaction.guild.default_role, overwrite=ow)
 
-        embed = _emb("🔓 Kilit Açıldı", color=discord.Color.green())
-        embed.add_field(name="Kanal",     value=target.mention,           inline=True)
-        embed.add_field(name="Moderatör", value=interaction.user.mention, inline=True)
-        await interaction.response.send_message(embed=embed)
+        await respond(interaction,
+            c_container(
+                c_text(
+                    f"**🔓 Kilit Açıldı**\n\n"
+                    f"📌 **Kanal:** {target.mention}\n"
+                    f"👮 **Moderatör:** {interaction.user.mention}"
+                ),
+                color=0x57F287,
+            ),
+        )
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
-        if isinstance(error, app_commands.BotMissingPermissions):
-            await send(embed=_emb("❌ Bot Yetki Hatası", "Botun bu işlem için yeterli yetkisi yok."), ephemeral=True)
-        else:
-            await send(embed=_emb("❌ Hata", str(error)), ephemeral=True)
+        msg = "Botun bu işlem için yeterli yetkisi yok." \
+            if isinstance(error, app_commands.BotMissingPermissions) else str(error)
+        await error_response(interaction, msg)
 
 
 async def setup(bot: commands.Bot):

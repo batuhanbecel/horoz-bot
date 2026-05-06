@@ -3,78 +3,98 @@ from discord import app_commands
 from discord.ext import commands
 import os
 import sys
-from .._v2 import c_card, c_text, c_container, respond, followup as v2_followup, error_response
+from .._v2 import (
+    COLORS, c_card, c_info_card, c_text, c_section, c_thumbnail, c_separator, c_container,
+    respond, followup as v2_followup, error_response,
+)
 
 
 class Admin(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # /yardım
+    # /yardım ─ kategorize edilmiş komut menüsü
     @app_commands.command(name="yardım", description="Tüm komutları listeler.")
     async def yardım(self, interaction: discord.Interaction):
-        body = "\n".join([
-            "**👤 /üye** • `uyar` `at` `yasakla` `sustur` `sus-kaldır`",
-            "**🔒 /kanal** • `temizle` `yavaşmod` `kilitle` `kilit-aç`",
-            "**⚠️ /ihlal** • `listele` `sil`",
-            "",
-            "**🎵 /müzik** • `çal` `ara` `atla` `duraklat` `devam` `dur` `ses` `sıra` `sıra-sil` `karıştır` `döngü` `şimdi`",
-            "",
-            "**🎮 Oyunlar** • `/yazıtura` `/zar` `/8top` `/kaccm` `/tkm` `/adamasmaca` `/arena` `/isimşehir` `/vampirkoylu` `/rusruleti`",
-            "",
-            "**📊 Sosyal** • `/anket` `/etkinlik`",
-            "",
-            "**😀 Emoji & Sticker** • `/emoji-ekle` `/oto-emoji` • Sağ tık → **Emojileri Ekle** | **Sticker'ı Ekle**",
-            "",
-            "**⚙️ Özel Komutlar** • `/komut-yarat` `/komut-liste` `/komut-sil` `/komut`",
-            "",
-            "**📢 Yönetim & Yayın** • `/yaz` `/embed` `/duyuru` `/tazele`",
-            "",
-            "**ℹ️ Araçlar** • `/yardım` `/ping` `/hatırlat` `/profil` `/sunucu` `/avatar` `/bot`",
-            "",
-            "-# Tüm komutlar slash (/) ile kullanılır.",
-        ])
-        await respond(interaction,
-            c_card(
-                "## 🐓 Horoz Bot — Komut Listesi",
-                body=body,
-                thumbnail=str(interaction.client.user.display_avatar.url),
-                color=0x5865F2,
-            ),
-            ephemeral=True,
+        thumb = str(interaction.client.user.display_avatar.url)
+
+        moderation = (
+            "**👤 /üye** · `uyar` `at` `yasakla` `sustur` `sus-kaldır`\n"
+            "**🔒 /kanal** · `temizle` `yavaşmod` `kilitle` `kilit-aç`\n"
+            "**⚠️ /ihlal** · `listele` `sil`"
         )
+        music = (
+            "**🎵 /müzik** · `çal` `ara` `atla` `duraklat` `devam` `dur`\n"
+            "                 `ses` `sıra` `sıra-sil` `karıştır` `döngü` `şimdi`"
+        )
+        games = (
+            "**🎮 Oyunlar**\n"
+            "`/yazıtura` `/zar` `/8top` `/kaccm` `/tkm`\n"
+            "`/adamasmaca` `/arena` `/isimşehir` `/vampirkoylu` `/rusruleti`"
+        )
+        social = "**📊 Sosyal** · `/anket` `/etkinlik`"
+        emoji = (
+            "**😀 Emoji & Sticker** · `/emoji-ekle` `/oto-emoji`\n"
+            "-# Sağ tık → **Emojileri Ekle** · **Sticker'ı Ekle**"
+        )
+        custom = "**⚙️ Özel Komutlar** · `/komut-yarat` `/komut-liste` `/komut-sil` `/komut`"
+        publish = "**📢 Yayın** · `/yaz` `/embed` `/duyuru`"
+        admin = "**🛠️ Yönetim** · `/tazele` `/restart`"
+        tools = "**ℹ️ Araçlar** · `/yardım` `/ping` `/hatırlat` `/profil` `/sunucu` `/avatar` `/bot`"
+
+        await respond(interaction, c_info_card(
+            "🐓 Horoz Bot — Komut Listesi",
+            thumbnail=thumb,
+            groups=[
+                moderation,
+                music,
+                games,
+                social + "\n" + emoji,
+                custom,
+                publish + "\n" + admin,
+                tools,
+            ],
+            footer="Tüm komutlar slash (/) ile kullanılır · Components V2",
+            color=COLORS.PRIMARY,
+        ), ephemeral=True)
 
     # /tazele
     @app_commands.command(name="tazele", description="Slash komutlarını Discord ile senkronize eder (eski komutları siler).")
     @app_commands.checks.has_permissions(administrator=True)
     async def tazele(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        thumb = str(interaction.client.user.display_avatar.url)
         self.bot.tree.clear_commands(guild=interaction.guild)
         await self.bot.tree.sync(guild=interaction.guild)
         synced = await self.bot.tree.sync()
-        await v2_followup(interaction,
-            c_card(
-                "## ✅ Komutlar Tazelendi",
-                body=f"**{len(synced)}** global slash komutu senkronize edildi.\nSunucuya özel eski komutlar temizlendi.",
-                thumbnail=str(interaction.client.user.display_avatar.url),
-                color=0x57F287,
+
+        await v2_followup(interaction, c_container(
+            c_section(c_text("## ✅ Komutlar Tazelendi"), accessory=c_thumbnail(thumb)),
+            c_separator(),
+            c_text(
+                f"🌐 **Global Komut:** `{len(synced)}` adet senkronize edildi\n"
+                f"🧹 **Sunucuya Özel:** Eski komutlar temizlendi\n"
+                f"🛡️ **Yetkili:** {interaction.user.mention}"
             ),
-            ephemeral=True,
-        )
+            c_separator(),
+            c_text("-# Komutların görünmesi 1-2 dakika sürebilir."),
+            color=COLORS.SUCCESS,
+        ), ephemeral=True)
 
     # /restart
     @app_commands.command(name="restart", description="Botu yeniden başlatır ve komutları tazeler.")
     @app_commands.checks.has_permissions(administrator=True)
     async def restart(self, interaction: discord.Interaction):
-        await respond(interaction,
-            c_card(
-                "## 🔄 Yeniden Başlatılıyor...",
-                body="Bot kapatılıyor, birkaç saniye sonra geri dönecek.",
-                thumbnail=str(interaction.client.user.display_avatar.url),
-                color=0xF0A030,
+        thumb = str(interaction.client.user.display_avatar.url)
+        await respond(interaction, c_container(
+            c_section(c_text("## 🔄 Yeniden Başlatılıyor..."), accessory=c_thumbnail(thumb)),
+            c_separator(),
+            c_text(
+                f"⏳ Bot kapatılıyor, birkaç saniye sonra geri dönecek.\n"
+                f"🛡️ **Yetkili:** {interaction.user.mention}"
             ),
-            ephemeral=True,
-        )
+            color=COLORS.WARNING,
+        ), ephemeral=True)
         await self.bot.close()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 

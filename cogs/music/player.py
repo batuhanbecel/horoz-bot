@@ -7,11 +7,15 @@ import random
 from collections import deque
 from ._shared import (
     YTDL_FLAT_OPTIONS, YTDL_STREAM_OPTIONS, FFMPEG_OPTIONS, MAX_PLAYLIST,
-    Track, GuildPlayer, duration_fmt, is_url, is_playlist_url,
+    Track, GuildPlayer, duration_fmt, is_url, is_playlist_url, yt_thumbnail,
     now_playing_card,
 )
 from .views import PlayerView, SearchView
-from .._v2 import c_text, c_container, c_card, c_separator, channel_send as v2_channel_send, followup as v2_followup, respond
+from .._v2 import (
+    COLORS, c_text, c_section, c_thumbnail, c_separator, c_container,
+    c_card, c_action_card, c_list_card, c_progress,
+    channel_send as v2_channel_send, followup as v2_followup, respond,
+)
 
 
 class Music(commands.Cog):
@@ -28,7 +32,7 @@ class Music(commands.Cog):
         if not interaction.user.voice or not interaction.user.voice.channel:
             thumb = str(interaction.client.user.display_avatar.url)
             await respond(interaction,
-                c_card("## ❌ Ses Kanalı Gerekli", body="Bir ses kanalında olmanız gerekiyor.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Ses Kanalı Gerekli", body="Bir ses kanalında olmanız gerekiyor.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
             return None
@@ -179,6 +183,30 @@ class Music(commands.Cog):
                 pass
             player.player_message = None
 
+    # ── Track card builder ─────────────────────────────────────────────────────
+
+    def _track_card(self, title: str, track: Track, *, status: str = "", color: int = COLORS.MUSIC, queue_pos: int | None = None) -> dict:
+        """Tek şarkı için tutarlı kart düzeni: section + thumbnail + meta."""
+        thumb = yt_thumbnail(track.webpage_url) or str(track.requester.display_avatar.url)
+        meta_lines = [
+            f"⏱️ **Süre:** `{duration_fmt(track.duration)}`",
+            f"👤 **İsteyen:** {track.requester.mention}",
+        ]
+        if queue_pos is not None:
+            meta_lines.append(f"📋 **Sırada:** `#{queue_pos}`")
+        if status:
+            meta_lines.append(status)
+
+        return c_container(
+            c_section(
+                c_text(f"## {title}\n### [{track.title}]({track.webpage_url})"),
+                accessory=c_thumbnail(thumb),
+            ),
+            c_separator(),
+            c_text("\n".join(meta_lines)),
+            color=color,
+        )
+
     # ── Commands ───────────────────────────────────────────────────────────────
 
     music = app_commands.Group(name="müzik", description="Müzik komutları")
@@ -200,46 +228,52 @@ class Music(commands.Cog):
             tracks = await self.fetch_playlist(sorgu, interaction.user)
             if not tracks:
                 return await v2_followup(interaction,
-                    c_card("## ❌ Hata", body="Playlist bulunamadı veya boş.", thumbnail=thumb, color=0xED4245),
+                    c_card("## ❌ Playlist Bulunamadı", body="Playlist boş veya erişilemez.", thumbnail=thumb, color=COLORS.DANGER),
                 )
             for t in tracks:
                 player.queue.append(t)
+
+            total_dur = sum(t.duration for t in tracks)
+            title = "✅ Playlist Yüklendi" if not is_playing_now else "📋 Playlist Sıraya Eklendi"
+            color = COLORS.SUCCESS if not is_playing_now else COLORS.MUSIC
+
+            await v2_followup(interaction, c_action_card(
+                title,
+                target_avatar=str(interaction.user.display_avatar.url),
+                fields=[
+                    ("🎵 Şarkı Sayısı", f"`{len(tracks)}`"),
+                    ("⏱️ Toplam Süre", f"`{duration_fmt(total_dur)}`"),
+                    ("👤 İsteyen", interaction.user.mention),
+                ],
+                color=color,
+            ))
+
             if not is_playing_now:
                 await self._play_next(interaction.guild_id, vc)
-                await v2_followup(interaction,
-                    c_card("## ✅ Playlist Yüklendi", body=f"**{len(tracks)}** şarkı yüklendi.", thumbnail=thumb, color=0x57F287),
-                )
-            else:
-                await v2_followup(interaction,
-                    c_card("## 📋 Playlist Sıraya Eklendi", body=f"**{len(tracks)}** şarkı sıraya eklendi.", thumbnail=thumb, color=0x5865F2),
-                )
             return
 
         track = await self.fetch_single(sorgu, interaction.user)
         if not track:
             return await v2_followup(interaction,
-                c_card("## ❌ Hata", body="Şarkı bulunamadı.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Şarkı Bulunamadı", body=f"`{sorgu}` için sonuç yok.", thumbnail=thumb, color=COLORS.DANGER),
             )
 
         if is_playing_now:
             player.queue.append(track)
-            await v2_followup(interaction,
-                c_card(
-                    "## 📋 Sıraya Eklendi",
-                    body=(
-                        f"**[{track.title}]({track.webpage_url})**\n"
-                        f"⏱️ `{duration_fmt(track.duration)}` · #{len(player.queue)}"
-                    ),
-                    thumbnail=thumb,
-                    color=0x5865F2,
-                ),
-            )
+            await v2_followup(interaction, self._track_card(
+                "📋 Sıraya Eklendi",
+                track,
+                color=COLORS.MUSIC,
+                queue_pos=len(player.queue),
+            ))
         else:
             player.queue.appendleft(track)
             await self._play_next(interaction.guild_id, vc)
-            await v2_followup(interaction,
-                c_card("## ✅ Eklendi", body=f"**{track.title}** çalmaya başlıyor.", thumbnail=thumb, color=0x57F287),
-            )
+            await v2_followup(interaction, self._track_card(
+                "✅ Çalmaya Başlıyor",
+                track,
+                color=COLORS.SUCCESS,
+            ))
 
     @music.command(name="ara", description="YouTube'da şarkı arar ve 5 sonuç listeler.")
     @app_commands.describe(sorgu="Aranacak şarkı")
@@ -259,17 +293,24 @@ class Music(commands.Cog):
 
         if not entries:
             return await v2_followup(interaction,
-                c_card("## ❌ Sonuç Bulunamadı", body="Arama için sonuç yok.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Sonuç Bulunamadı", body=f"`{sorgu}` için sonuç yok.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
-        lines = []
+        rows = []
         for i, e in enumerate(entries, 1):
             url = e.get("url") or f"https://www.youtube.com/watch?v={e.get('id', '')}"
-            lines.append(f"`{i}.` **[{e.get('title', 'Bilinmiyor')}]({url})** · `{duration_fmt(e.get('duration', 0))}`")
+            title = e.get("title", "Bilinmiyor")
+            dur = duration_fmt(e.get("duration", 0))
+            rows.append(f"`#{i}` **[{title}]({url})**\n┗ ⏱️ `{dur}`")
 
-        await v2_followup(interaction,
-            c_card(f"## 🔍 \"{sorgu}\" için sonuçlar", body="\n".join(lines), thumbnail=thumb, color=0x5865F2),
+        await v2_followup(interaction, c_list_card(
+            f"🔍 \"{sorgu}\" — Arama Sonuçları",
+            rows=rows,
+            thumbnail=thumb,
+            footer="Aşağıdan butona tıklayarak sıraya ekle",
+            color=COLORS.MUSIC,
+        ),
             view=SearchView(entries, interaction.user, self),
             ephemeral=True,
         )
@@ -280,15 +321,24 @@ class Music(commands.Cog):
         vc: discord.VoiceClient = interaction.guild.voice_client
         if not vc or not (vc.is_playing() or vc.is_paused()):
             return await respond(interaction,
-                c_card("## ❌ Hata", body="Şu anda çalan bir şey yok.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body="Şu anda çalan bir şey yok.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         p = self.get_player(interaction.guild_id)
+        skipped = p.current
         p.force_next = True
         vc.stop()
-        await respond(interaction,
-            c_card("## ⏭️ Atlandı", body="Şarkı atlandı.", thumbnail=thumb, color=0x57F287),
-        )
+
+        if skipped:
+            await respond(interaction, self._track_card(
+                "⏭️ Şarkı Atlandı",
+                skipped,
+                color=COLORS.SUCCESS,
+            ))
+        else:
+            await respond(interaction,
+                c_card("## ⏭️ Atlandı", body="Şarkı atlandı.", thumbnail=thumb, color=COLORS.SUCCESS),
+            )
 
     @music.command(name="duraklat", description="Çalmayı duraklatır.")
     async def duraklat(self, interaction: discord.Interaction):
@@ -296,13 +346,21 @@ class Music(commands.Cog):
         vc: discord.VoiceClient = interaction.guild.voice_client
         if not vc or not vc.is_playing():
             return await respond(interaction,
-                c_card("## ❌ Hata", body="Şu anda çalan bir şey yok.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body="Şu anda çalan bir şey yok.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         vc.pause()
-        await respond(interaction,
-            c_card("## ⏸️ Duraklatıldı", thumbnail=thumb, color=0xF0A030),
-        )
+        p = self.get_player(interaction.guild_id)
+        if p.current:
+            await respond(interaction, self._track_card(
+                "⏸️ Duraklatıldı",
+                p.current,
+                color=COLORS.WARNING,
+            ))
+        else:
+            await respond(interaction,
+                c_card("## ⏸️ Duraklatıldı", thumbnail=thumb, color=COLORS.WARNING),
+            )
 
     @music.command(name="devam", description="Duraklatılmış müziği devam ettirir.")
     async def devam(self, interaction: discord.Interaction):
@@ -310,13 +368,21 @@ class Music(commands.Cog):
         vc: discord.VoiceClient = interaction.guild.voice_client
         if not vc or not vc.is_paused():
             return await respond(interaction,
-                c_card("## ❌ Hata", body="Duraklatılmış bir şey yok.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body="Duraklatılmış bir şey yok.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         vc.resume()
-        await respond(interaction,
-            c_card("## ▶️ Devam", body="Müzik devam ediyor.", thumbnail=thumb, color=0x57F287),
-        )
+        p = self.get_player(interaction.guild_id)
+        if p.current:
+            await respond(interaction, self._track_card(
+                "▶️ Devam Ediyor",
+                p.current,
+                color=COLORS.SUCCESS,
+            ))
+        else:
+            await respond(interaction,
+                c_card("## ▶️ Devam", body="Müzik devam ediyor.", thumbnail=thumb, color=COLORS.SUCCESS),
+            )
 
     @music.command(name="dur", description="Müziği durdurur ve kanaldan ayrılır.")
     async def dur(self, interaction: discord.Interaction):
@@ -324,18 +390,26 @@ class Music(commands.Cog):
         vc: discord.VoiceClient = interaction.guild.voice_client
         if not vc:
             return await respond(interaction,
-                c_card("## ❌ Hata", body="Bot bir ses kanalında değil.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body="Bot bir ses kanalında değil.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         p = self.get_player(interaction.guild_id)
+        cleared = len(p.queue)
         p.queue.clear()
         p.current = None
         p.loop = False
         await self._clear_player_message(p)
         await vc.disconnect()
-        await respond(interaction,
-            c_card("## ⏹️ Durduruldu", body="Müzik durduruldu, kanaldan ayrıldım.", thumbnail=thumb, color=0xED4245),
-        )
+        await respond(interaction, c_action_card(
+            "⏹️ Müzik Durduruldu",
+            target_avatar=thumb,
+            fields=[
+                ("🚪 Durum", "Kanaldan ayrıldım"),
+                ("🧹 Temizlenen Sıra", f"`{cleared}` şarkı"),
+                ("👮 İsteyen", interaction.user.mention),
+            ],
+            color=COLORS.DANGER,
+        ))
 
     @music.command(name="ses", description="Ses seviyesini ayarlar (0-200).")
     @app_commands.describe(seviye="Ses seviyesi (0-200)")
@@ -346,9 +420,18 @@ class Music(commands.Cog):
         p.volume = seviye / 100
         if vc and vc.source:
             vc.source.volume = p.volume
-        await respond(interaction,
-            c_card("## 🔊 Ses Seviyesi", body=f"**{seviye}%** olarak ayarlandı.", thumbnail=thumb, color=0x57F287),
-        )
+
+        bar = c_progress(seviye, 200, length=20)
+        emoji = "🔇" if seviye == 0 else "🔈" if seviye < 50 else "🔉" if seviye < 120 else "🔊"
+
+        await respond(interaction, c_container(
+            c_section(c_text(f"## {emoji} Ses Seviyesi"), accessory=c_thumbnail(thumb)),
+            c_separator(),
+            c_text(f"`{bar}`\n-# `0` ─────── `{seviye}` ─────── `200`"),
+            c_separator(),
+            c_text(f"🔊 Seviye **`{seviye}%`** olarak ayarlandı."),
+            color=COLORS.MUSIC,
+        ))
 
     @music.command(name="sıra", description="Mevcut müzik sırasını gösterir.")
     async def sira(self, interaction: discord.Interaction):
@@ -356,20 +439,40 @@ class Music(commands.Cog):
         p = self.get_player(interaction.guild_id)
         if not p.current and not p.queue:
             return await respond(interaction,
-                c_card("## 📋 Sıra", body="Sıra boş.", thumbnail=thumb, color=0xF0A030),
+                c_card("## 📋 Sıra Boş", body="Sıra boş — `/müzik çal` ile şarkı ekleyin.", thumbnail=thumb, color=COLORS.WARNING),
                 ephemeral=True,
             )
-        lines = []
+
+        sections: list[dict] = [
+            c_section(
+                c_text(f"## 📋 Müzik Sırası"),
+                accessory=c_thumbnail(thumb),
+            ),
+        ]
+
         if p.current:
-            lines.append(f"▶️ **Şu An Çalıyor:** [{p.current.title}]({p.current.webpage_url}) | `{duration_fmt(p.current.duration)}`")
-            lines.append("")
-        for i, t in enumerate(list(p.queue)[:10], 1):
-            lines.append(f"`{i}.` {t.title} · `{duration_fmt(t.duration)}` · {t.requester.mention}")
-        if len(p.queue) > 10:
-            lines.append(f"\n-# ve {len(p.queue) - 10} şarkı daha...")
-        await respond(interaction,
-            c_card("## 📋 Müzik Sırası", body="\n".join(lines), thumbnail=thumb, color=0x5865F2),
-        )
+            sections.append(c_separator())
+            sections.append(c_text(
+                f"▶️ **Şu An Çalıyor**\n"
+                f"┗ [{p.current.title}]({p.current.webpage_url}) · `{duration_fmt(p.current.duration)}` · {p.current.requester.mention}"
+            ))
+
+        if p.queue:
+            queue_lines = []
+            for i, t in enumerate(list(p.queue)[:10], 1):
+                queue_lines.append(f"`#{i:02d}` [{t.title[:60]}]({t.webpage_url})\n┗ ⏱️ `{duration_fmt(t.duration)}` · {t.requester.mention}")
+            sections.append(c_separator())
+            sections.append(c_text("\n".join(queue_lines)))
+
+            if len(p.queue) > 10:
+                sections.append(c_separator())
+                sections.append(c_text(f"-# ve `{len(p.queue) - 10}` şarkı daha sıraya ekli..."))
+
+        total = (p.current.duration if p.current else 0) + sum(t.duration for t in p.queue)
+        sections.append(c_separator())
+        sections.append(c_text(f"-# 🎵 Toplam: `{1 + len(p.queue) if p.current else len(p.queue)}` şarkı · ⏱️ `{duration_fmt(total)}`"))
+
+        await respond(interaction, c_container(*sections, color=COLORS.MUSIC))
 
     @music.command(name="sıra-sil", description="Müzik sırasını temizler.")
     async def sira_sil(self, interaction: discord.Interaction):
@@ -377,9 +480,15 @@ class Music(commands.Cog):
         p = self.get_player(interaction.guild_id)
         count = len(p.queue)
         p.queue.clear()
-        await respond(interaction,
-            c_card("## 🗑️ Sıra Temizlendi", body=f"{count} şarkı kaldırıldı.", thumbnail=thumb, color=0x57F287),
-        )
+        await respond(interaction, c_action_card(
+            "🗑️ Sıra Temizlendi",
+            target_avatar=thumb,
+            fields=[
+                ("🧹 Silinen Şarkı", f"`{count}`"),
+                ("👤 İsteyen", interaction.user.mention),
+            ],
+            color=COLORS.SUCCESS,
+        ))
 
     @music.command(name="karıştır", description="Müzik sırasını rastgele karıştırır.")
     async def karistir(self, interaction: discord.Interaction):
@@ -387,25 +496,35 @@ class Music(commands.Cog):
         p = self.get_player(interaction.guild_id)
         if len(p.queue) < 2:
             return await respond(interaction,
-                c_card("## ❌ Hata", body="Karıştırmak için en az 2 şarkı gerekli.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body="Karıştırmak için en az **2 şarkı** gerekli.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         q = list(p.queue)
         random.shuffle(q)
         p.queue = deque(q)
-        await respond(interaction,
-            c_card("## 🔀 Karıştırıldı", body=f"{len(q)} şarkı rastgele sıralandı.", thumbnail=thumb, color=0x57F287),
-        )
+        await respond(interaction, c_action_card(
+            "🔀 Sıra Karıştırıldı",
+            target_avatar=thumb,
+            fields=[
+                ("🎲 Karıştırılan", f"`{len(q)}` şarkı"),
+                ("👤 İsteyen", interaction.user.mention),
+            ],
+            color=COLORS.SUCCESS,
+        ))
 
     @music.command(name="döngü", description="Döngü modunu açar/kapatır.")
     async def dongu(self, interaction: discord.Interaction):
         thumb = str(interaction.client.user.display_avatar.url)
         p = self.get_player(interaction.guild_id)
         p.loop = not p.loop
-        durum = "açıldı 🔂" if p.loop else "kapatıldı"
-        await respond(interaction,
-            c_card("## 🔁 Döngü", body=f"Döngü modu **{durum}**.", thumbnail=thumb, color=0x57F287),
-        )
+        durum = "Açık 🔂" if p.loop else "Kapalı"
+        body = "Şu an çalan şarkı sürekli tekrar edecek." if p.loop else "Döngü modu kapatıldı, sıradaki şarkıya geçilecek."
+        await respond(interaction, c_card(
+            f"## 🔁 Döngü {durum}",
+            body=body,
+            thumbnail=thumb,
+            color=COLORS.MUSIC if p.loop else COLORS.NEUTRAL,
+        ))
 
     @music.command(name="şimdi", description="Şu an çalan şarkıyı gösterir.")
     async def simdi(self, interaction: discord.Interaction):
@@ -413,7 +532,7 @@ class Music(commands.Cog):
         p = self.get_player(interaction.guild_id)
         if not p.current:
             return await respond(interaction,
-                c_card("## 🎵 Şimdi Çalıyor", body="Şu an çalan bir şey yok.", thumbnail=thumb, color=0xF0A030),
+                c_card("## 🎵 Şu An Çalmıyor", body="Şu an çalan bir şey yok.", thumbnail=thumb, color=COLORS.WARNING),
                 ephemeral=True,
             )
         await respond(interaction,

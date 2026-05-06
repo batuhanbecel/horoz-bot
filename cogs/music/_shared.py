@@ -1,7 +1,10 @@
 import discord
+import re
 from dataclasses import dataclass, field
 from collections import deque
-from .._v2 import c_text, c_section, c_container, c_thumbnail, c_card
+from .._v2 import (
+    COLORS, c_text, c_section, c_container, c_thumbnail, c_separator, c_card, c_progress,
+)
 
 YTDL_FLAT_OPTIONS = {
     "format": "bestaudio/best",
@@ -26,6 +29,8 @@ FFMPEG_OPTIONS = {
 }
 
 MAX_PLAYLIST = 100
+
+_YT_ID_RE = re.compile(r"(?:v=|youtu\.be/|/embed/|/shorts/)([\w-]{11})")
 
 
 @dataclass
@@ -65,31 +70,45 @@ def is_playlist_url(url: str) -> bool:
     return "list=" in url or "/playlist" in url
 
 
-def now_playing_card(track: Track, player: GuildPlayer) -> dict:
-    lines = [
-        "**▶️ Şimdi Çalıyor**",
-        "",
-        f"### [{track.title}]({track.webpage_url})",
-        "",
-        f"⏱️ **Süre:** `{duration_fmt(track.duration)}`",
-        f"👤 **İsteyen:** {track.requester.mention}",
-        f"🔊 **Ses:** `{int(player.volume * 100)}%`",
-        f"🔁 **Döngü:** {'Açık 🔂' if player.loop else 'Kapalı'}",
-        f"📋 **Sırada:** {len(player.queue)} şarkı",
-    ]
-    if player.queue:
-        lines.append(f"⏭️ **Sonraki:** {list(player.queue)[0].title[:60]}")
+def yt_thumbnail(url: str) -> str | None:
+    """YouTube URL'inden video thumbnail URL'i üretir."""
+    m = _YT_ID_RE.search(url)
+    if m:
+        return f"https://i.ytimg.com/vi/{m.group(1)}/hqdefault.jpg"
+    return None
 
-    return c_container(
+
+def now_playing_card(track: Track, player: GuildPlayer) -> dict:
+    """Müzik çalar kartı: thumbnail + başlık + ayraç + ayraçlı stat satırları."""
+    thumb = yt_thumbnail(track.webpage_url) or str(track.requester.display_avatar.url)
+
+    duration = duration_fmt(track.duration)
+    bar = c_progress(0, max(track.duration, 1), length=22)
+    loop_str = "🔂 Açık" if player.loop else "➡️ Kapalı"
+
+    items: list[dict] = [
         c_section(
-            c_text("\n".join(lines)),
-            accessory=c_thumbnail(str(track.requester.display_avatar.url)),
+            c_text(f"## ▶️ Şimdi Çalıyor\n### [{track.title}]({track.webpage_url})"),
+            accessory=c_thumbnail(thumb),
         ),
-        color=0x57F287,
-    )
+        c_separator(),
+        c_text(f"`{bar}`\n-# `00:00` ─────────── `{duration}`"),
+        c_separator(),
+        c_text(
+            f"👤 **İsteyen:** {track.requester.mention}\n"
+            f"🔊 **Ses:** `{int(player.volume * 100)}%` · "
+            f"🔁 **Döngü:** {loop_str} · "
+            f"📋 **Sırada:** `{len(player.queue)}` şarkı"
+        ),
+    ]
+
+    if player.queue:
+        next_track = list(player.queue)[0]
+        items.append(c_separator())
+        items.append(c_text(f"⏭️ **Sonraki:** {next_track.title[:60]}"))
+
+    return c_container(*items, color=COLORS.MUSIC)
 
 
 def stopped_card() -> dict:
-    return c_card("## ⏹️ Müzik Durduruldu", body="Kuyruk bitti veya durduruldu.", color=0xED4245)
-
-
+    return c_card("## ⏹️ Müzik Durduruldu", body="Kuyruk bitti veya bot kanaldan ayrıldı.", color=COLORS.DANGER)

@@ -3,7 +3,10 @@ from discord import app_commands
 from discord.ext import commands
 import io
 import aiohttp
-from .._v2 import c_text, c_section, c_container, c_thumbnail, c_card, followup as v2_followup, error_response
+from .._v2 import (
+    COLORS, c_card, c_action_card, c_text, c_section, c_thumbnail, c_separator, c_container,
+    followup as v2_followup,
+)
 
 
 async def fetch_bytes(url: str) -> bytes | None:
@@ -30,12 +33,12 @@ class StickerStealer(commands.Cog):
         try:
             if not interaction.user.guild_permissions.manage_emojis_and_stickers:
                 return await v2_followup(interaction,
-                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                     ephemeral=True,
                 )
             if not message.stickers:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Sticker Bulunamadı", body="Bu mesajda sticker yok.", thumbnail=thumb, color=0xE67E22),
+                    c_card("## ⚠️ Sticker Bulunamadı", body="Bu mesajda sticker yok.", thumbnail=thumb, color=COLORS.WARNING),
                     ephemeral=True,
                 )
 
@@ -43,7 +46,7 @@ class StickerStealer(commands.Cog):
 
             if sticker.format == discord.StickerFormatType.lottie:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Desteklenmiyor", body="Lottie animasyonlu sticker'lar eklenemez.", thumbnail=thumb, color=0xE67E22),
+                    c_card("## ⚠️ Desteklenmiyor", body="**Lottie** animasyonlu sticker'lar eklenemez.", thumbnail=thumb, color=COLORS.WARNING),
                     ephemeral=True,
                 )
 
@@ -51,7 +54,7 @@ class StickerStealer(commands.Cog):
             data = await fetch_bytes(str(sticker.url))
             if not data:
                 return await v2_followup(interaction,
-                    c_card("## ❌ İndirme Hatası", body="Sticker indirilemedi.", thumbnail=thumb, color=0xED4245),
+                    c_card("## ❌ İndirme Hatası", body="Sticker indirilemedi.", thumbnail=thumb, color=COLORS.DANGER),
                     ephemeral=True,
                 )
 
@@ -61,29 +64,29 @@ class StickerStealer(commands.Cog):
                 emoji="⭐",
                 file=discord.File(io.BytesIO(data), filename=f"sticker.{ext}"),
             )
-            await v2_followup(interaction,
-                c_container(
-                    c_section(
-                        c_text(
-                            f"## ✅ Sticker Eklendi\n\n"
-                            f"**{new_s.name}** sunucuya eklendi!\n"
-                            f"🆔 **ID:** `{new_s.id}`"
-                        ),
-                        accessory=c_thumbnail(str(sticker.url)),
-                    ),
-                    color=0x57F287,
-                ),
-                ephemeral=True,
-            )
+
+            slot = f"`{len(interaction.guild.stickers)}/{interaction.guild.sticker_limit}`"
+            await v2_followup(interaction, c_action_card(
+                "✅ Sticker Eklendi",
+                target_avatar=str(sticker.url),
+                fields=[
+                    ("🏷️ İsim", f"`{new_s.name}`"),
+                    ("🆔 ID", f"`{new_s.id}`"),
+                    ("📐 Format", f"`{ext.upper()}`"),
+                    ("📊 Slot Kullanımı", slot),
+                    ("👮 Ekleyen", interaction.user.mention),
+                ],
+                color=COLORS.SUCCESS,
+            ), ephemeral=True)
 
         except discord.HTTPException as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body=f"```{ex}```", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         except Exception as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 

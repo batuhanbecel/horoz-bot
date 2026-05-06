@@ -2,7 +2,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from database import db
-from .._v2 import c_text, c_container, c_card, respond, followup as v2_followup, error_response
+from .._v2 import (
+    COLORS, c_card, c_action_card, c_list_card, respond, error_response,
+)
 
 
 class CustomCommands(commands.Cog):
@@ -19,38 +21,38 @@ class CustomCommands(commands.Cog):
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_guild:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Sunucuyu Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Sunucuyu Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
         isim = isim.lower().strip().replace(" ", "-")
         if not (2 <= len(isim) <= 32):
             return await respond(interaction,
-                c_card("## ❌ Geçersiz İsim", body="Komut ismi **2–32** karakter arasında olmalıdır.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Geçersiz İsim", body="Komut ismi **2–32** karakter arasında olmalıdır.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
         if await db.get_custom_command(interaction.guild_id, isim):
             return await respond(interaction,
-                c_card("## ❌ Zaten Mevcut", body=f"`{isim}` adında bir komut zaten var.\n`/komut-sil` ile önce silebilirsiniz.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Zaten Mevcut", body=f"`{isim}` adında bir komut zaten var.\n`/komut-sil` ile önce silebilirsiniz.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
         await db.create_custom_command(interaction.guild_id, isim, yanıt, interaction.user.id)
-        preview = yanıt[:100] + ("..." if len(yanıt) > 100 else "")
-        await respond(interaction,
-            c_card(
-                "## ✅ Komut Oluşturuldu",
-                body=(
-                    f"**İsim:** `{isim}`\n"
-                    f"**Kullanım:** `/komut isim:{isim}`\n"
-                    f"**Yanıt Önizleme:**\n{preview}"
-                ),
-                thumbnail=thumb,
-                color=0x57F287,
-            ),
-            ephemeral=True,
-        )
+        preview = yanıt[:120] + ("..." if len(yanıt) > 120 else "")
+
+        await respond(interaction, c_action_card(
+            "✅ Özel Komut Oluşturuldu",
+            target_avatar=str(interaction.user.display_avatar.url),
+            fields=[
+                ("📛 İsim", f"`/{isim}`"),
+                ("🔑 Kullanım", f"`/komut isim:{isim}`"),
+                ("👤 Sahibi", interaction.user.mention),
+                ("📝 Önizleme", f"```\n{preview}\n```"),
+            ],
+            footer="Komutu /komut-liste ile görebilirsin.",
+            color=COLORS.SUCCESS,
+        ), ephemeral=True)
 
     # /komut-liste
     @app_commands.command(name="komut-liste", description="Sunucudaki özel komutları listeler.")
@@ -59,21 +61,32 @@ class CustomCommands(commands.Cog):
         rows = await db.list_custom_commands(interaction.guild_id)
         if not rows:
             return await respond(interaction,
-                c_card("## 📋 Özel Komutlar", body="Bu sunucuda henüz özel komut oluşturulmamış.\n`/komut-yarat` ile ekleyebilirsiniz.", thumbnail=thumb, color=0xF0A030),
+                c_card(
+                    "## 📋 Özel Komutlar",
+                    body="Bu sunucuda henüz özel komut yok.\n`/komut-yarat` ile oluşturabilirsin.",
+                    thumbnail=thumb,
+                    color=COLORS.WARNING,
+                ),
                 ephemeral=True,
             )
 
-        lines = []
+        rows_out: list[str] = []
         for row in rows[:25]:
-            preview = row["response"][:80] + "..." if len(row["response"]) > 80 else row["response"]
-            lines.append(f"🔸 `/{row['name']}` — {preview}")
-        if len(rows) > 25:
-            lines.append(f"\n-# İlk 25 komut gösteriliyor, toplam {len(rows)}")
+            preview = row["response"][:60] + ("..." if len(row["response"]) > 60 else "")
+            rows_out.append(f"🔸 **`/{row['name']}`**\n┗ `{preview}`")
 
-        await respond(interaction,
-            c_card(f"## 📋 Özel Komutlar — {len(rows)} adet", body="\n".join(lines), thumbnail=thumb, color=0x5865F2),
-            ephemeral=True,
+        footer = (
+            f"Toplam {len(rows)} komut · İlk 25 gösteriliyor"
+            if len(rows) > 25 else f"Toplam {len(rows)} komut"
         )
+
+        await respond(interaction, c_list_card(
+            f"📋 Özel Komutlar — {interaction.guild.name}",
+            rows=rows_out,
+            thumbnail=thumb,
+            footer=footer,
+            color=COLORS.PRIMARY,
+        ), ephemeral=True)
 
     # /komut-sil
     @app_commands.command(name="komut-sil", description="Bir özel komutu siler.")
@@ -82,18 +95,23 @@ class CustomCommands(commands.Cog):
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_guild:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Sunucuyu Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Sunucuyu Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         isim = isim.lower().strip()
         if await db.delete_custom_command(interaction.guild_id, isim):
-            await respond(interaction,
-                c_card("## 🗑️ Komut Silindi", body=f"`{isim}` komutu başarıyla silindi.", thumbnail=thumb, color=0x57F287),
-                ephemeral=True,
-            )
+            await respond(interaction, c_action_card(
+                "🗑️ Komut Silindi",
+                target_avatar=str(interaction.user.display_avatar.url),
+                fields=[
+                    ("📛 İsim", f"`/{isim}`"),
+                    ("👮 Silen", interaction.user.mention),
+                ],
+                color=COLORS.SUCCESS,
+            ), ephemeral=True)
         else:
             await respond(interaction,
-                c_card("## ❌ Bulunamadı", body=f"`{isim}` adında bir komut bulunamadı.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Bulunamadı", body=f"`{isim}` adında bir komut bulunamadı.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
@@ -106,7 +124,12 @@ class CustomCommands(commands.Cog):
         if not row:
             thumb = str(interaction.client.user.display_avatar.url)
             return await respond(interaction,
-                c_card("## ❌ Bulunamadı", body=f"`{isim}` adında bir komut yok.\n`/komut-liste` ile mevcut komutları görebilirsiniz.", thumbnail=thumb, color=0xED4245),
+                c_card(
+                    "## ❌ Bulunamadı",
+                    body=f"`{isim}` adında bir komut yok.\n`/komut-liste` ile mevcut komutları görebilirsin.",
+                    thumbnail=thumb,
+                    color=COLORS.DANGER,
+                ),
                 ephemeral=True,
             )
         await interaction.response.send_message(row["response"])

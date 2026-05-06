@@ -3,7 +3,10 @@ from discord import app_commands
 from discord.ext import commands
 import asyncio
 from ._shared import RENK_MAP, MesajModal, EmbedModal, DuyuruModal
-from .._v2 import c_card, respond, channel_send, error_response
+from .._v2 import (
+    COLORS, c_card, c_action_card, c_text, c_section, c_thumbnail, c_separator, c_container,
+    respond, channel_send, error_response,
+)
 
 
 class Messaging(commands.Cog):
@@ -17,7 +20,7 @@ class Messaging(commands.Cog):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
                 c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
-                       thumbnail=str(interaction.client.user.display_avatar.url), color=0xED4245),
+                       thumbnail=str(interaction.client.user.display_avatar.url), color=COLORS.DANGER),
                 ephemeral=True,
             )
         await interaction.response.send_modal(MesajModal(kanal))
@@ -38,7 +41,7 @@ class Messaging(commands.Cog):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
                 c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
-                       thumbnail=str(interaction.client.user.display_avatar.url), color=0xED4245),
+                       thumbnail=str(interaction.client.user.display_avatar.url), color=COLORS.DANGER),
                 ephemeral=True,
             )
         await interaction.response.send_modal(EmbedModal(kanal, RENK_MAP.get(renk, 0x3498DB)))
@@ -55,7 +58,7 @@ class Messaging(commands.Cog):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
                 c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
-                       thumbnail=str(interaction.client.user.display_avatar.url), color=0xED4245),
+                       thumbnail=str(interaction.client.user.display_avatar.url), color=COLORS.DANGER),
                 ephemeral=True,
             )
         await interaction.response.send_modal(DuyuruModal(kanal, ping))
@@ -70,28 +73,36 @@ class Messaging(commands.Cog):
         mesaj: str = "Hatırlatma!",
     ):
         thumb = str(interaction.client.user.display_avatar.url)
-        await respond(interaction,
-            c_card(
-                "## ⏰ Hatırlatma Kuruldu",
-                body=f"**{dakika} dakika** sonra DM olarak hatırlatılacaksın.\n> {mesaj}",
-                thumbnail=thumb,
-                color=0x57F287,
-            ),
-            ephemeral=True,
-        )
+        user_thumb = str(interaction.user.display_avatar.url)
+        from datetime import timedelta
+        when = discord.utils.utcnow() + timedelta(minutes=dakika)
+
+        await respond(interaction, c_action_card(
+            "⏰ Hatırlatma Kuruldu",
+            target_avatar=user_thumb,
+            fields=[
+                ("⏱️ Süre", f"`{dakika}` dakika sonra"),
+                ("🕐 Zaman", f"<t:{int(when.timestamp())}:F>\n┗ <t:{int(when.timestamp())}:R>"),
+                ("📝 Mesaj", f"> {mesaj}"),
+            ],
+            footer="DM kapalıysa hatırlatma ulaşmayacaktır.",
+            color=COLORS.GAME,
+        ), ephemeral=True)
+
+        guild_name = interaction.guild.name if interaction.guild else "DM"
 
         async def _remind():
             await asyncio.sleep(dakika * 60)
             try:
                 dm = await interaction.user.create_dm()
-                await channel_send(dm,
-                    c_card(
-                        "## ⏰ Hatırlatma!",
-                        body=f"{mesaj}\n\n-# {dakika} dk önce **{interaction.guild.name}** sunucusunda ayarlandı.",
-                        thumbnail=thumb,
-                        color=0xF1C40F,
-                    ),
-                )
+                await channel_send(dm, c_container(
+                    c_section(c_text("## ⏰ Hatırlatma!"), accessory=c_thumbnail(thumb)),
+                    c_separator(),
+                    c_text(f"📝 {mesaj}"),
+                    c_separator(),
+                    c_text(f"-# {dakika} dk önce **{guild_name}** sunucusunda ayarlandı."),
+                    color=COLORS.GAME,
+                ))
             except discord.Forbidden:
                 pass
 

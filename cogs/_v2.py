@@ -76,13 +76,29 @@ def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None
             pass
 
 
+# ── Color palette ─────────────────────────────────────────────────────────────
+
+class COLORS:
+    """Tutarlı renk paleti — komut türüne göre ayrılmış."""
+    PRIMARY = 0x5865F2  # Discord blurple — info/default
+    SUCCESS = 0x57F287  # green — onay, başarı
+    DANGER  = 0xED4245  # red — hata, ban
+    WARNING = 0xFEE75C  # yellow — uyarı, mute
+    INFO    = 0x3498DB  # mavi — bilgi kartları
+    MOD     = 0xE67E22  # turuncu — moderasyon (kick)
+    MUSIC   = 0x9B59B6  # mor — müzik
+    EVENT   = 0xE91E63  # pembe — etkinlik
+    GAME    = 0xF1C40F  # altın — oyunlar
+    NEUTRAL = 0x2B2D31  # discord card bg
+
+
 # ── Convenience card builders ─────────────────────────────────────────────────
 
 def c_card(
     title: str,
     body: str = "",
     thumbnail: str | None = None,
-    color: int = 0x5865F2,
+    color: int = COLORS.PRIMARY,
 ) -> dict:
     """8top-style card: ## title + optional thumbnail (right) + separator + body."""
     header = (
@@ -97,11 +113,104 @@ def c_card(
 
 
 def c_error(msg: str, thumbnail: str | None = None) -> dict:
-    return c_card(f"## ❌ Hata", body=msg, thumbnail=thumbnail, color=0xED4245)
+    return c_card("## ❌ Hata", body=msg, thumbnail=thumbnail, color=COLORS.DANGER)
 
 
 def c_success(msg: str, thumbnail: str | None = None) -> dict:
-    return c_card(f"## ✅ Başarılı", body=msg, thumbnail=thumbnail, color=0x57F287)
+    return c_card("## ✅ Başarılı", body=msg, thumbnail=thumbnail, color=COLORS.SUCCESS)
+
+
+# ── Inline formatters ─────────────────────────────────────────────────────────
+
+def c_field(label: str, value: str | int) -> str:
+    """Format an inline label-value pair: '**Label:** value'"""
+    return f"**{label}:** {value}"
+
+
+def c_progress(current, total, length: int = 18) -> str:
+    """Build a unicode progress bar (current/total, 0..length filled chars)."""
+    if not total or total <= 0:
+        return "▱" * length
+    pct = max(0.0, min(1.0, float(current) / float(total)))
+    filled = int(pct * length)
+    return "▰" * filled + "▱" * (length - filled)
+
+
+def c_kv_block(pairs: list[tuple[str, str | int]]) -> str:
+    """Multi-line label-value block."""
+    return "\n".join(c_field(l, v) for l, v in pairs)
+
+
+# ── Composite cards ───────────────────────────────────────────────────────────
+
+def c_action_card(
+    title: str,
+    target_avatar: str,
+    fields: list[tuple[str, str | int]],
+    *,
+    footer: str | None = None,
+    color: int = COLORS.MOD,
+) -> dict:
+    """Eylem kartı: başlık + hedef üye avatarı + label/değer çiftleri."""
+    items: list[dict] = [
+        c_section(c_text(f"## {title}"), accessory=c_thumbnail(target_avatar)),
+        c_separator(),
+        c_text(c_kv_block(fields)),
+    ]
+    if footer:
+        items.append(c_separator())
+        items.append(c_text(f"-# {footer}"))
+    return c_container(*items, color=color)
+
+
+def c_info_card(
+    title: str,
+    *,
+    thumbnail: str | None = None,
+    groups: list[list[tuple[str, str | int]] | str],
+    media: str | None = None,
+    footer: str | None = None,
+    color: int = COLORS.INFO,
+) -> dict:
+    """Bilgi kartı: başlık + thumbnail + ayraçlarla bölünmüş çoklu gruplar."""
+    items: list[dict] = [
+        c_section(c_text(f"## {title}"), accessory=c_thumbnail(thumbnail))
+        if thumbnail else c_text(f"## {title}"),
+    ]
+    for group in groups:
+        items.append(c_separator())
+        if isinstance(group, str):
+            items.append(c_text(group))
+        else:
+            items.append(c_text(c_kv_block(group)))
+    if media:
+        items.append(c_separator())
+        items.append(c_media(media))
+    if footer:
+        items.append(c_separator())
+        items.append(c_text(f"-# {footer}"))
+    return c_container(*items, color=color)
+
+
+def c_list_card(
+    title: str,
+    rows: list[str],
+    *,
+    thumbnail: str | None = None,
+    footer: str | None = None,
+    empty: str = "Henüz öğe yok.",
+    color: int = COLORS.PRIMARY,
+) -> dict:
+    """Liste kartı: başlık + thumbnail + satır listesi."""
+    header = (
+        c_section(c_text(f"## {title}"), accessory=c_thumbnail(thumbnail))
+        if thumbnail else c_text(f"## {title}")
+    )
+    items: list[dict] = [header, c_separator(), c_text("\n".join(rows) if rows else empty)]
+    if footer:
+        items.append(c_separator())
+        items.append(c_text(f"-# {footer}"))
+    return c_container(*items, color=color)
 
 
 async def error_response(interaction: discord.Interaction, msg: str) -> None:

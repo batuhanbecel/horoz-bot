@@ -4,7 +4,9 @@ from discord.ext import commands
 from datetime import timedelta
 from database import db
 from ._shared import hierarchy_ok, parse_duration
-from .._v2 import c_card, respond, channel_send, error_response
+from .._v2 import (
+    COLORS, c_card, c_action_card, respond, channel_send, error_response,
+)
 
 
 class MemberMod(commands.Cog):
@@ -23,34 +25,38 @@ class MemberMod(commands.Cog):
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         if err := hierarchy_ok(interaction, üye):
-            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=0xED4245), ephemeral=True)
+            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=COLORS.DANGER), ephemeral=True)
 
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "warn")
         rows = await db.get_infractions(interaction.guild_id, üye.id)
 
-        await respond(interaction, c_card(
-            "## ⚠️ Uyarı Verildi",
-            body=(
-                f"👤 **Üye:** {üye.mention}\n"
-                f"👮 **Moderatör:** {interaction.user.mention}\n"
-                f"📊 **Toplam İhlal:** {len(rows)}\n"
-                f"📝 **Sebep:** {sebep}"
-            ),
-            thumbnail=str(üye.display_avatar.url),
-            color=0xFEE75C,
+        await respond(interaction, c_action_card(
+            "⚠️ Uyarı Verildi",
+            target_avatar=str(üye.display_avatar.url),
+            fields=[
+                ("👤 Üye", üye.mention),
+                ("👮 Moderatör", interaction.user.mention),
+                ("📊 Toplam İhlal", f"`{len(rows)}`"),
+                ("📝 Sebep", sebep),
+            ],
+            footer=f"Sunucu: {interaction.guild.name}",
+            color=COLORS.WARNING,
         ))
 
         try:
             dm = await üye.create_dm()
-            await channel_send(dm, c_card(
-                f"## ⚠️ Uyarı — {interaction.guild.name}",
-                body=f"📝 **Sebep:** {sebep}\n📊 **Toplam İhlal:** {len(rows)}",
-                thumbnail=str(interaction.guild.icon.url) if interaction.guild.icon else None,
-                color=0xFEE75C,
+            await channel_send(dm, c_action_card(
+                f"⚠️ Uyarı — {interaction.guild.name}",
+                target_avatar=str(interaction.guild.icon.url) if interaction.guild.icon else str(üye.display_avatar.url),
+                fields=[
+                    ("📝 Sebep", sebep),
+                    ("📊 Toplam İhlal", f"`{len(rows)}`"),
+                ],
+                color=COLORS.WARNING,
             ))
         except discord.Forbidden:
             pass
@@ -62,24 +68,26 @@ class MemberMod(commands.Cog):
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.kick_members:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Üye At** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Üye At** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         if err := hierarchy_ok(interaction, üye):
-            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=0xED4245), ephemeral=True)
+            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=COLORS.DANGER), ephemeral=True)
 
         await üye.kick(reason=f"{interaction.user}: {sebep}")
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "kick")
 
-        await respond(interaction, c_card(
-            "## 👢 Üye Atıldı",
-            body=(
-                f"👤 **Üye:** {üye} (`{üye.id}`)\n"
-                f"👮 **Moderatör:** {interaction.user.mention}\n"
-                f"📝 **Sebep:** {sebep}"
-            ),
-            thumbnail=str(üye.display_avatar.url),
-            color=0xE67E22,
+        await respond(interaction, c_action_card(
+            "👢 Üye Atıldı",
+            target_avatar=str(üye.display_avatar.url),
+            fields=[
+                ("👤 Üye", f"{üye.mention} (`{üye}`)"),
+                ("🆔 ID", f"`{üye.id}`"),
+                ("👮 Moderatör", interaction.user.mention),
+                ("📝 Sebep", sebep),
+            ],
+            footer=f"Sunucu: {interaction.guild.name}",
+            color=COLORS.MOD,
         ))
 
     # /üye yasakla
@@ -95,25 +103,27 @@ class MemberMod(commands.Cog):
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.ban_members:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Üye Yasakla** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Üye Yasakla** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         if err := hierarchy_ok(interaction, üye):
-            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=0xED4245), ephemeral=True)
+            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=COLORS.DANGER), ephemeral=True)
 
         await üye.ban(reason=f"{interaction.user}: {sebep}", delete_message_days=mesaj_sil)
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "ban")
 
-        await respond(interaction, c_card(
-            "## 🔨 Üye Yasaklandı",
-            body=(
-                f"👤 **Üye:** {üye} (`{üye.id}`)\n"
-                f"👮 **Moderatör:** {interaction.user.mention}\n"
-                f"🗑️ **Silinen Mesajlar:** {mesaj_sil} gün\n"
-                f"📝 **Sebep:** {sebep}"
-            ),
-            thumbnail=str(üye.display_avatar.url),
-            color=0xED4245,
+        await respond(interaction, c_action_card(
+            "🔨 Üye Yasaklandı",
+            target_avatar=str(üye.display_avatar.url),
+            fields=[
+                ("👤 Üye", f"{üye.mention} (`{üye}`)"),
+                ("🆔 ID", f"`{üye.id}`"),
+                ("👮 Moderatör", interaction.user.mention),
+                ("🗑️ Silinen Mesajlar", f"{mesaj_sil} gün"),
+                ("📝 Sebep", sebep),
+            ],
+            footer=f"Sunucu: {interaction.guild.name}",
+            color=COLORS.DANGER,
         ))
 
     # /üye sustur
@@ -123,37 +133,38 @@ class MemberMod(commands.Cog):
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.moderate_members:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Üyeleri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Üyeleri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         if err := hierarchy_ok(interaction, üye):
-            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=0xED4245), ephemeral=True)
+            return await respond(interaction, c_card("## ❌ Hiyerarşi Hatası", body=err, thumbnail=thumb, color=COLORS.DANGER), ephemeral=True)
 
         delta = parse_duration(süre)
         if not delta:
             return await respond(interaction,
-                c_card("## ❌ Geçersiz Süre", body="Format: `10m` · `2h` · `1d` · `30s`", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Geçersiz Süre", body="Format: `10m` · `2h` · `1d` · `30s`", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         if delta > timedelta(days=28):
             return await respond(interaction,
-                c_card("## ❌ Hata", body="Maksimum susturma süresi **28 gün**dür.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body="Maksimum susturma süresi **28 gün**dür.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
         await üye.timeout(delta, reason=f"{interaction.user}: {sebep}")
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "mute")
 
-        await respond(interaction, c_card(
-            "## 🔇 Susturuldu",
-            body=(
-                f"👤 **Üye:** {üye.mention}\n"
-                f"⏱️ **Süre:** {süre}\n"
-                f"👮 **Moderatör:** {interaction.user.mention}\n"
-                f"📝 **Sebep:** {sebep}"
-            ),
-            thumbnail=str(üye.display_avatar.url),
-            color=0xFEE75C,
+        await respond(interaction, c_action_card(
+            "🔇 Üye Susturuldu",
+            target_avatar=str(üye.display_avatar.url),
+            fields=[
+                ("👤 Üye", üye.mention),
+                ("⏱️ Süre", f"`{süre}`"),
+                ("👮 Moderatör", interaction.user.mention),
+                ("📝 Sebep", sebep),
+            ],
+            footer=f"Sunucu: {interaction.guild.name}",
+            color=COLORS.WARNING,
         ))
 
     # /üye sus-kaldır
@@ -163,21 +174,24 @@ class MemberMod(commands.Cog):
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.moderate_members:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Üyeleri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Üyeleri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
         if not üye.is_timed_out():
             return await respond(interaction,
-                c_card("## ⚠️ Hata", body="Bu üye zaten susturulmuş değil.", thumbnail=thumb, color=0xFEE75C),
+                c_card("## ⚠️ Hata", body="Bu üye zaten susturulmuş değil.", thumbnail=thumb, color=COLORS.WARNING),
                 ephemeral=True,
             )
         await üye.timeout(None)
 
-        await respond(interaction, c_card(
-            "## 🔊 Susturma Kaldırıldı",
-            body=f"👤 **Üye:** {üye.mention}\n👮 **Moderatör:** {interaction.user.mention}",
-            thumbnail=str(üye.display_avatar.url),
-            color=0x57F287,
+        await respond(interaction, c_action_card(
+            "🔊 Susturma Kaldırıldı",
+            target_avatar=str(üye.display_avatar.url),
+            fields=[
+                ("👤 Üye", üye.mention),
+                ("👮 Moderatör", interaction.user.mention),
+            ],
+            color=COLORS.SUCCESS,
         ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

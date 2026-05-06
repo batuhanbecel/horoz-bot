@@ -5,18 +5,33 @@ import random
 import asyncio
 from ._shared import giphy, SEKIZ_TOP_YANIT
 from .._v2 import (
-    c_card, c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
+    COLORS, c_card, c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
     respond, followup, edit_followup, update, channel_send, msg_edit, error_response,
 )
 
 # ── Renkler ────────────────────────────────────────────────────────────────────
-_C_BLUE   = 0x5865F2
-_C_GREEN  = 0x57F287
-_C_RED    = 0xED4245
+_C_BLUE   = COLORS.PRIMARY
+_C_GREEN  = COLORS.SUCCESS
+_C_RED    = COLORS.DANGER
 _C_ORANGE = 0xF0A030
-_C_GOLD   = 0xFEE75C
+_C_GOLD   = COLORS.GAME
 _C_PINK   = 0xFF69B4
 _C_DARK   = 0x23272A
+
+
+# ── Inline V2 ephemeral helper ────────────────────────────────────────────────
+
+async def _v2_err(interaction: discord.Interaction, title: str, body: str = "", color: int = _C_RED) -> None:
+    """V2 ephemeral hata kartı — view button geri dönüşleri için."""
+    thumb = str(interaction.client.user.display_avatar.url)
+    if interaction.response.is_done():
+        from .._v2 import followup as _fu
+        await _fu(interaction, c_card(f"## {title}", body=body, thumbnail=thumb, color=color), ephemeral=True)
+    else:
+        await respond(interaction, c_card(f"## {title}", body=body, thumbnail=thumb, color=color), ephemeral=True)
+
+
+_DICE_FACE = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
 
 # ── Taş Kağıt Makas ────────────────────────────────────────────────────────────
 
@@ -54,7 +69,7 @@ class TKMTekrarView(discord.ui.View):
         if self.rakip:
             allowed.add(self.rakip.id)
         if interaction.user.id not in allowed:
-            return await interaction.response.send_message("Bu oyuna dahil değilsin!", ephemeral=True)
+            return await _v2_err(interaction, "⛔ Erişim", "Bu oyuna dahil değilsin!")
         btn.disabled = True
         self.stop()
         await update(interaction, self._son_kart, view=self)
@@ -104,9 +119,9 @@ class TKMView(discord.ui.View):
 
         if self.rakip:
             if uid not in (self.oyuncu.id, self.rakip.id):
-                return await interaction.response.send_message("Bu oyunda oynayamazsın!", ephemeral=True)
+                return await _v2_err(interaction, "⛔ Erişim", "Bu oyunda oynayamazsın!")
             if uid in self.seçimler:
-                return await interaction.response.send_message("Bu turda zaten seçim yaptın!", ephemeral=True)
+                return await _v2_err(interaction, "⛔ Erişim", "Bu turda zaten seçim yaptın!")
             self.seçimler[uid] = seçim
             await interaction.response.defer()
             if len(self.seçimler) < 2:
@@ -121,9 +136,9 @@ class TKMView(discord.ui.View):
             s2 = self.seçimler[self.rakip.id]
         else:
             if uid != self.oyuncu.id:
-                return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
+                return await _v2_err(interaction, "⛔ Erişim", "Bu oyun sana ait değil!")
             if uid in self.seçimler:
-                return await interaction.response.send_message("Bu turda zaten seçim yaptın!", ephemeral=True)
+                return await _v2_err(interaction, "⛔ Erişim", "Bu turda zaten seçim yaptın!")
             s1 = seçim
             s2 = random.choice(["taş", "kağıt", "makas"])
             self.seçimler[uid] = s1
@@ -263,7 +278,7 @@ class AdamAsmacaTekrarView(discord.ui.View):
     @discord.ui.button(label="Tekrar Oyna", emoji="🔄", style=discord.ButtonStyle.success)
     async def tekrar(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user.id != self.oyuncu.id:
-            return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
+            return await _v2_err(interaction, "⛔ Erişim", "Bu oyun sana ait değil!")
         btn.disabled = True
         self.stop()
         await update(interaction, self._son_kart, view=self)
@@ -328,11 +343,11 @@ class AdamAsmacaView(discord.ui.View):
 
     async def harf_tahmin(self, interaction: discord.Interaction, harf: str):
         if interaction.user.id != self.oyuncu.id:
-            return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
+            return await _v2_err(interaction, "⛔ Erişim", "Bu oyun sana ait değil!")
         if not harf.isalpha():
-            return await interaction.response.send_message("Geçersiz karakter!", ephemeral=True)
+            return await _v2_err(interaction, "⛔ Erişim", "Geçersiz karakter!")
         if harf in self.tahminler:
-            return await interaction.response.send_message(f"`{harf}` zaten tahmin edildi!", ephemeral=True)
+            return await _v2_err(interaction, "🔁 Tekrar", f"`{harf}` zaten tahmin edildi.", color=_C_ORANGE)
 
         harf = self._normalize_harf(harf)
         self.tahminler.add(harf)
@@ -346,22 +361,25 @@ class AdamAsmacaView(discord.ui.View):
         if self._bitti():
             await self._oyun_bitti("🎉 Adam Asmaca — Kazandın!", _C_GREEN,
                                    f"Kelime: **`{self.kelime}`**", "victory yes celebration")
-            await interaction.followup.send("🎉 **Kazandın!**", ephemeral=True)
+            await followup(interaction, c_card("## 🎉 Kazandın!", body=f"Kelime: **`{self.kelime}`**", thumbnail=str(interaction.user.display_avatar.url), color=_C_GREEN), ephemeral=True)
             return
         if self.yanlis >= self.maks:
             await self._oyun_bitti("💀 Adam Asmaca — Kaybettin!", _C_RED,
                                    f"Kelime: **`{self.kelime}`** idi.", "fail game over")
-            await interaction.followup.send("💀 **Kaybettin.**", ephemeral=True)
+            await followup(interaction, c_card("## 💀 Kaybettin", body=f"Kelime: **`{self.kelime}`** idi.", thumbnail=str(interaction.user.display_avatar.url), color=_C_RED), ephemeral=True)
             return
 
         await msg_edit(self.msg, self._card(), view=self)
-        await interaction.followup.send(
-            f"✅ `{harf}` kelimede {'var!' if hit else 'yok.'}", ephemeral=True
+        verdict = "var!" if hit else "yok."
+        emoji = "✅" if hit else "❌"
+        await followup(interaction,
+            c_card(f"## {emoji} Tahmin", body=f"`{harf}` kelimede **{verdict}**", thumbnail=str(interaction.user.display_avatar.url), color=_C_GREEN if hit else _C_ORANGE),
+            ephemeral=True,
         )
 
     async def kelime_tahmin(self, interaction: discord.Interaction, tahmin: str):
         if interaction.user.id != self.oyuncu.id:
-            return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
+            return await _v2_err(interaction, "⛔ Erişim", "Bu oyun sana ait değil!")
 
         await interaction.response.defer(ephemeral=True)
         assert self.msg
@@ -371,18 +389,21 @@ class AdamAsmacaView(discord.ui.View):
                 self.tahminler.add(h)
             await self._oyun_bitti("🎉 Adam Asmaca — Kazandın!", _C_GREEN,
                                    f"Kelime: **`{self.kelime}`**", "victory yes celebration")
-            await interaction.followup.send("🎉 **Kazandın!**", ephemeral=True)
+            await followup(interaction, c_card("## 🎉 Kazandın!", body=f"Kelime: **`{self.kelime}`**", thumbnail=str(interaction.user.display_avatar.url), color=_C_GREEN), ephemeral=True)
             return
 
         self.yanlis = min(self.yanlis + 2, self.maks)
         if self.yanlis >= self.maks:
             await self._oyun_bitti("💀 Adam Asmaca — Kaybettin!", _C_RED,
                                    f"Kelime: **`{self.kelime}`** idi.", "fail game over")
-            await interaction.followup.send("💀 **Kaybettin.**", ephemeral=True)
+            await followup(interaction, c_card("## 💀 Kaybettin", body=f"Kelime: **`{self.kelime}`** idi.", thumbnail=str(interaction.user.display_avatar.url), color=_C_RED), ephemeral=True)
             return
 
         await msg_edit(self.msg, self._card(son_not=f"❌ **`{tahmin}`** yanlış! 2 hak kaybettin."), view=self)
-        await interaction.followup.send(f"❌ **`{tahmin}`** yanlış kelime.", ephemeral=True)
+        await followup(interaction,
+            c_card("## ❌ Yanlış", body=f"`{tahmin}` doğru kelime değildi. **2 hak** kaybettin.", thumbnail=str(interaction.user.display_avatar.url), color=_C_RED),
+            ephemeral=True,
+        )
 
     async def on_timeout(self):
         self.stop()
@@ -409,7 +430,7 @@ class AdamAsmacaView(discord.ui.View):
     @discord.ui.button(label="Vazgeç", emoji="🏳️", style=discord.ButtonStyle.danger)
     async def vazgeç_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         if interaction.user.id != self.oyuncu.id:
-            return await interaction.response.send_message("Bu oyun sana ait değil!", ephemeral=True)
+            return await _v2_err(interaction, "⛔ Erişim", "Bu oyun sana ait değil!")
         self.stop()
         kart = self._card(
             "🏳️ Adam Asmaca — Teslim Oldun!", _C_RED,
@@ -456,15 +477,17 @@ class Games(commands.Cog):
 
         items: list[dict] = [
             c_section(
-                c_text(
-                    f"## {emoji_str} {sonuç}!\n"
-                    f"{interaction.user.mention} parayı attı ve...\n\n"
-                    f"**{sonuç}** çıktı!"
-                ),
+                c_text(f"## {emoji_str} {sonuç}!"),
                 accessory=c_thumbnail(interaction.user.display_avatar.url),
+            ),
+            c_separator(),
+            c_text(
+                f"🪙 {interaction.user.mention} parayı havaya fırlattı...\n"
+                f"🎯 **Sonuç:** {emoji_str} **{sonuç}**"
             ),
         ]
         if gif:
+            items.append(c_separator())
             items.append(c_media(gif))
 
         await edit_followup(interaction, msg_id, c_container(*items, color=color))
@@ -477,14 +500,41 @@ class Games(commands.Cog):
         yüz: app_commands.Range[int, 2, 100] = 6,
         adet: app_commands.Range[int, 1, 10] = 1,
     ):
-        sonuçlar  = [random.randint(1, yüz) for _ in range(adet)]
-        toplam    = sum(sonuçlar)
-        sonuç_str = " + ".join(f"**{s}**" for s in sonuçlar)
-        await respond(interaction, c_card(
-            "## 🎲 Zar Atıldı!",
-            body=f"{adet}d{yüz}: {sonuç_str}\n\n**Toplam: {toplam}**",
-            thumbnail=str(interaction.user.display_avatar.url),
-            color=_C_GREEN,
+        sonuçlar = [random.randint(1, yüz) for _ in range(adet)]
+        toplam   = sum(sonuçlar)
+        en_yuk   = max(sonuçlar)
+        en_dus   = min(sonuçlar)
+
+        # Tek tek zar gösterimi (6'lı zar için emoji yüzleri, diğerleri için sayı)
+        if yüz == 6:
+            satirlar = [f"{_DICE_FACE[s]} **`{s}`**" for s in sonuçlar]
+        else:
+            satirlar = [f"🎲 **`{s}`**" for s in sonuçlar]
+
+        # Renk: max sonuç olursa yeşil, min olursa kırmızı, ortalama altın
+        if toplam == adet * yüz:
+            color, durum = _C_GREEN, "🌟 **Maksimum!** Tüm zarlar tavan."
+        elif toplam == adet:
+            color, durum = _C_RED, "💀 **Minimum!** Tüm zarlar taban."
+        else:
+            color, durum = _C_GOLD, ""
+
+        body = "  ·  ".join(satirlar)
+        if adet > 1:
+            body += f"\n\n🎯 **Toplam:** `{toplam}`  ·  ⬆️ `{en_yuk}`  ·  ⬇️ `{en_dus}`"
+        if durum:
+            body += f"\n\n{durum}"
+
+        await respond(interaction, c_container(
+            c_section(
+                c_text(f"## 🎲 {adet}d{yüz} Zar Atıldı!"),
+                accessory=c_thumbnail(str(interaction.user.display_avatar.url)),
+            ),
+            c_separator(),
+            c_text(body),
+            c_separator(),
+            c_text(f"-# 🎰 Atan: {interaction.user.mention}"),
+            color=color,
         ))
 
     @app_commands.command(name="8top", description="Sihirli 8-top'a bir soru sor.")

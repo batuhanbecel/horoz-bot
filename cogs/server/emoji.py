@@ -4,7 +4,10 @@ from discord.ext import commands
 import re
 import aiohttp
 from database import db
-from .._v2 import c_text, c_container, c_card, respond, followup as v2_followup
+from .._v2 import (
+    COLORS, c_card, c_action_card, c_list_card, c_text, c_section, c_thumbnail, c_separator, c_container,
+    respond, followup as v2_followup,
+)
 
 EMOJI_RE = re.compile(r"<(a?):(\w+):(\d+)>")
 
@@ -27,7 +30,7 @@ class EmojiStealer(commands.Cog):
     async def cog_unload(self):
         self.bot.tree.remove_command(self._ctx_emoji.name, type=self._ctx_emoji.type)
 
-    # /emoji-ekle
+    # /emoji-ekle ─ tek emoji ekleme
     @app_commands.command(name="emoji-ekle", description="Başka bir sunucudaki özel emojiyi bu sunucuya ekler.")
     @app_commands.describe(emoji="Emoji metni  (<:isim:123456>  veya  <a:isim:123456>)")
     async def emoji_ekle(self, interaction: discord.Interaction, emoji: str):
@@ -36,58 +39,61 @@ class EmojiStealer(commands.Cog):
 
         if not interaction.user.guild_permissions.manage_emojis_and_stickers:
             return await v2_followup(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
         match = EMOJI_RE.search(emoji)
         if not match:
             return await v2_followup(interaction,
-                c_card("## ❌ Geçersiz Emoji", body="Özel emoji formatında girin.\nÖrn: `<:isim:123456>` veya `<a:isim:123456>`", thumbnail=thumb, color=0xED4245),
+                c_card(
+                    "## ❌ Geçersiz Emoji",
+                    body="Özel emoji formatında girin:\n`<:isim:123456>` veya `<a:isim:123456>`",
+                    thumbnail=thumb,
+                    color=COLORS.DANGER,
+                ),
                 ephemeral=True,
             )
 
         animated, name, emoji_id = match.groups()
         ext  = "gif" if animated else "png"
-        data = await fetch_bytes(f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}")
+        emoji_url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}"
+        data = await fetch_bytes(emoji_url)
 
         if not data:
             return await v2_followup(interaction,
-                c_card("## ❌ İndirme Hatası", body="Emoji CDN'den indirilemedi.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ İndirme Hatası", body="Emoji CDN'den indirilemedi.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
         try:
             new_e = await interaction.guild.create_custom_emoji(name=name, image=data)
-            await v2_followup(interaction,
-                c_card(
-                    "## ✅ Emoji Eklendi",
-                    body=(
-                        f"{new_e}  **:{new_e.name}:**  sunucuya eklendi!\n\n"
-                        f"**İsim:** `{new_e.name}`\n"
-                        f"**ID:** `{new_e.id}`\n"
-                        f"**Animasyon:** {'Evet' if animated else 'Hayır'}"
-                    ),
-                    thumbnail=f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}",
-                    color=0x57F287,
-                ),
-                ephemeral=True,
-            )
+            slot_kullanim = f"`{len(interaction.guild.emojis)}/{interaction.guild.emoji_limit}`"
+            await v2_followup(interaction, c_action_card(
+                "✅ Emoji Eklendi",
+                target_avatar=emoji_url,
+                fields=[
+                    ("✨ Emoji", f"{new_e}  `:{new_e.name}:`"),
+                    ("🆔 ID", f"`{new_e.id}`"),
+                    ("🎬 Animasyon", "Evet" if animated else "Hayır"),
+                    ("📊 Slot Kullanımı", slot_kullanim),
+                ],
+                color=COLORS.SUCCESS,
+            ), ephemeral=True)
         except discord.HTTPException as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=f"Emoji eklenemedi:\n```{ex}```", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body=f"Emoji eklenemedi:\n```{ex}```", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
-    # /oto-emoji
+    # /oto-emoji ─ otomatik ekleme aç/kapa
     @app_commands.command(name="oto-emoji", description="Sunucuda kullanılan yabancı emojileri otomatik ekler (aç/kapat).")
     async def oto_emoji(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-
         thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_emojis_and_stickers:
             return await v2_followup(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 
@@ -96,20 +102,27 @@ class EmojiStealer(commands.Cog):
         await db.set_setting(interaction.guild_id, "auto_emoji", new_val)
 
         if new_val == "1":
-            await v2_followup(interaction,
-                c_card(
-                    "## ✅ Otomatik Emoji Açıldı",
-                    body="Artık sunucuda kullanılan yabancı emojiler otomatik olarak eklenir.\n⚠️ Emoji limiti dolduğunda yeni eklemeler atlanır.",
-                    thumbnail=thumb,
-                    color=0x57F287,
-                ),
-                ephemeral=True,
-            )
+            await v2_followup(interaction, c_action_card(
+                "✅ Otomatik Emoji Açıldı",
+                target_avatar=thumb,
+                fields=[
+                    ("⚙️ Durum", "🟢 Açık"),
+                    ("📊 Slot", f"`{len(interaction.guild.emojis)}/{interaction.guild.emoji_limit}`"),
+                    ("👮 Yetkili", interaction.user.mention),
+                ],
+                footer="⚠️ Emoji limiti dolduğunda yeni eklemeler atlanır.",
+                color=COLORS.SUCCESS,
+            ), ephemeral=True)
         else:
-            await v2_followup(interaction,
-                c_card("## ⏹️ Otomatik Emoji Kapatıldı", body="Artık otomatik emoji ekleme yapılmayacak.", thumbnail=thumb, color=0xF0A030),
-                ephemeral=True,
-            )
+            await v2_followup(interaction, c_action_card(
+                "⏹️ Otomatik Emoji Kapatıldı",
+                target_avatar=thumb,
+                fields=[
+                    ("⚙️ Durum", "🔴 Kapalı"),
+                    ("👮 Yetkili", interaction.user.mention),
+                ],
+                color=COLORS.WARNING,
+            ), ephemeral=True)
 
     # Sağ tık → Emojileri Ekle
     async def _ctx_emoji_ekle(self, interaction: discord.Interaction, message: discord.Message):
@@ -118,7 +131,7 @@ class EmojiStealer(commands.Cog):
         try:
             if not interaction.user.guild_permissions.manage_emojis_and_stickers:
                 return await v2_followup(interaction,
-                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
+                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
                     ephemeral=True,
                 )
 
@@ -130,11 +143,12 @@ class EmojiStealer(commands.Cog):
 
             if not matches:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Emoji Bulunamadı", body="Bu mesajda bu sunucuya ait olmayan özel emoji yok.", thumbnail=thumb, color=0xF0A030),
+                    c_card("## ⚠️ Emoji Bulunamadı", body="Bu mesajda bu sunucuya ait olmayan özel emoji yok.", thumbnail=thumb, color=COLORS.WARNING),
                     ephemeral=True,
                 )
 
-            added, failed = [], []
+            added: list[str] = []
+            failed: list[str] = []
             for animated, name, emoji_id in matches[:10]:
                 ext  = "gif" if animated else "png"
                 data = await fetch_bytes(f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}")
@@ -147,17 +161,23 @@ class EmojiStealer(commands.Cog):
                 except discord.HTTPException:
                     failed.append(name)
 
-            body_lines = []
-            if added:  body_lines.append(f"✅ **Eklendi ({len(added)}):** {' '.join(added)}")
-            if failed: body_lines.append(f"❌ **Başarısız ({len(failed)}):** {', '.join(f'`{n}`' for n in failed)}")
-            color = 0x57F287 if added else 0xED4245
-            await v2_followup(interaction,
-                c_card("## Emoji Ekleme Sonucu", body="\n".join(body_lines) or "Hiçbir emoji eklenemedi.", thumbnail=thumb, color=color),
-                ephemeral=True,
-            )
+            rows: list[str] = []
+            if added:
+                rows.append(f"**✅ Eklenen ({len(added)})**\n{' '.join(added)}")
+            if failed:
+                rows.append(f"**❌ Başarısız ({len(failed)})**\n{', '.join(f'`{n}`' for n in failed)}")
+            color = COLORS.SUCCESS if added else COLORS.DANGER
+
+            await v2_followup(interaction, c_list_card(
+                "✨ Emoji Ekleme Sonucu",
+                rows=rows or ["Hiçbir emoji eklenemedi."],
+                thumbnail=thumb,
+                footer=f"Slot: {len(interaction.guild.emojis)}/{interaction.guild.emoji_limit}",
+                color=color,
+            ), ephemeral=True)
         except Exception as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=COLORS.DANGER),
                 ephemeral=True,
             )
 

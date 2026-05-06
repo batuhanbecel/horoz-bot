@@ -5,8 +5,8 @@ import random
 import asyncio
 from ._shared import giphy
 from .._v2 import (
-    c_text, c_thumbnail, c_section, c_container, c_separator, c_media,
-    respond, update, channel_send, msg_edit, error_response,
+    COLORS, c_text, c_thumbnail, c_section, c_container, c_separator, c_media,
+    c_card, c_progress, respond, update, channel_send, msg_edit, error_response, followup as v2_followup,
 )
 
 MAX_OYUNCU = 6
@@ -15,9 +15,18 @@ TETIK_SURE = 45
 
 
 def _ihtimal_bar(kalan_oda: int) -> str:
+    """6 odadan kaçının dolu/boş olduğunu görsel olarak gösterir."""
     toplam = 6
     ateşlendi = toplam - kalan_oda
-    return "🟡" * kalan_oda + "⬛" * ateşlendi
+    return "🔴" * kalan_oda + "⚫" * ateşlendi
+
+
+async def _ephemeral_err(interaction: discord.Interaction, title: str, body: str = "", color: int = COLORS.DANGER):
+    thumb = str(interaction.client.user.display_avatar.url)
+    if interaction.response.is_done():
+        await v2_followup(interaction, c_card(f"## {title}", body=body, thumbnail=thumb, color=color), ephemeral=True)
+    else:
+        await respond(interaction, c_card(f"## {title}", body=body, thumbnail=thumb, color=color), ephemeral=True)
 
 
 class RusRuletiOyun:
@@ -50,19 +59,29 @@ class LobiView(discord.ui.View):
         self.started   = False
 
     def _card(self) -> tuple[dict, ...]:
-        lines = (
-            ["**🔫 Rus Ruleti — Lobi**", "", f"**{len(self.oyuncular)}/{MAX_OYUNCU}** oyuncu", ""]
-            + [f"• {o.mention}" for o in self.oyuncular]
-            + ["", "-# Katılmak için **Katıl** butonuna bas."]
-        )
-        return (c_container(c_text("\n".join(lines)), color=0xED4245),)
+        bar = c_progress(len(self.oyuncular), MAX_OYUNCU, length=12)
+        oyuncu_listesi = "\n".join(f"🪑 {o.mention}" for o in self.oyuncular)
+        return (c_container(
+            c_section(
+                c_text(f"## 🔫 Rus Ruleti — Lobi"),
+                accessory=c_thumbnail(str(self.başlatan.display_avatar.url)),
+            ),
+            c_separator(),
+            c_text(
+                f"`{bar}` `{len(self.oyuncular)}/{MAX_OYUNCU}` oyuncu\n\n"
+                f"{oyuncu_listesi}"
+            ),
+            c_separator(),
+            c_text(f"-# 👑 Kurucu: {self.başlatan.mention} · ⏱️ Lobi süresi: {LOBI_SURE}sn"),
+            color=COLORS.DANGER,
+        ),)
 
     @discord.ui.button(label="Katıl", emoji="✋", style=discord.ButtonStyle.success)
     async def katıl(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user in self.oyuncular:
-            return await interaction.response.send_message("Zaten lobidesin!", ephemeral=True)
+            return await _ephemeral_err(interaction, "⚠️ Zaten Lobide", "Lobiye zaten katıldın.", COLORS.WARNING)
         if len(self.oyuncular) >= MAX_OYUNCU:
-            return await interaction.response.send_message("Lobi dolu!", ephemeral=True)
+            return await _ephemeral_err(interaction, "🚫 Lobi Dolu", f"Lobi `{MAX_OYUNCU}/{MAX_OYUNCU}` dolu.")
         self.oyuncular.append(interaction.user)
         if len(self.oyuncular) >= MAX_OYUNCU:
             btn.disabled = True
@@ -71,11 +90,9 @@ class LobiView(discord.ui.View):
     @discord.ui.button(label="Ayrıl", emoji="🚪", style=discord.ButtonStyle.secondary)
     async def ayrıl(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user not in self.oyuncular:
-            return await interaction.response.send_message("Lobide değilsin!", ephemeral=True)
+            return await _ephemeral_err(interaction, "❌ Lobide Değilsin", "Lobiye dahil değilsin.")
         if interaction.user == self.başlatan:
-            return await interaction.response.send_message(
-                "Kurucu ayrılamaz. Lobi kapatmak için **İptal** butonunu kullan.", ephemeral=True
-            )
+            return await _ephemeral_err(interaction, "👑 Kurucu Ayrılamaz", "Lobi kapatmak için **İptal** butonunu kullan.", COLORS.WARNING)
         self.oyuncular.remove(interaction.user)
         for c in self.children:
             if hasattr(c, "label") and c.label == "Katıl":
@@ -85,14 +102,14 @@ class LobiView(discord.ui.View):
     @discord.ui.button(label="Başlat", emoji="▶️", style=discord.ButtonStyle.primary)
     async def başlat(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user.id != self.başlatan.id:
-            return await interaction.response.send_message("Sadece başlatan başlatabilir.", ephemeral=True)
+            return await _ephemeral_err(interaction, "🚫 Yetki Yok", "Sadece **kurucu** oyunu başlatabilir.")
         if len(self.oyuncular) < 2:
-            return await interaction.response.send_message("En az 2 oyuncu gerekli!", ephemeral=True)
+            return await _ephemeral_err(interaction, "⚠️ Yetersiz Oyuncu", "En az **2 oyuncu** gerekli.", COLORS.WARNING)
         self.started = True
         for c in self.children:
             c.disabled = True
         await update(interaction,
-            c_container(c_text("**🔫 Rus Ruleti**\n\nOyun başlıyor..."), color=0xED4245),
+            c_card("## 🔫 Rus Ruleti", body="Oyun başlıyor... silah dolduruluyor 🎯", color=COLORS.DANGER),
             view=self,
         )
         self.stop()
@@ -101,16 +118,13 @@ class LobiView(discord.ui.View):
     @discord.ui.button(label="İptal", emoji="✖️", style=discord.ButtonStyle.danger)
     async def iptal(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user.id != self.başlatan.id:
-            return await interaction.response.send_message("Sadece başlatan iptal edebilir.", ephemeral=True)
+            return await _ephemeral_err(interaction, "🚫 Yetki Yok", "Sadece **kurucu** iptal edebilir.")
         self.started = True
         self.stop()
         for c in self.children:
             c.disabled = True
         await update(interaction,
-            c_container(
-                c_text(f"**🚫 Lobi İptal Edildi**\n\n{interaction.user.mention} lobi iptal etti."),
-                color=0x95A5A6,
-            ),
+            c_card("## 🚫 Lobi İptal Edildi", body=f"{interaction.user.mention} lobi iptal etti.", color=0x95A5A6),
             view=self,
         )
 
@@ -122,7 +136,7 @@ class LobiView(discord.ui.View):
         if self.msg:
             try:
                 await msg_edit(self.msg,
-                    c_container(c_text("**🔫 Rus Ruleti**\n\n⏰ Lobi süresi doldu."), color=0x95A5A6),
+                    c_card("## ⏰ Lobi Süresi Doldu", body="Yeterli sayıda oyuncu toplanmadı.", color=0x95A5A6),
                     view=self,
                 )
             except discord.HTTPException:
@@ -130,6 +144,34 @@ class LobiView(discord.ui.View):
 
 
 # ── Oyun Görünümü ─────────────────────────────────────────────────────────────
+
+def _tetik_card(oyun: RusRuletiOyun, *, sonuç_metni: str = "", color: int = COLORS.DANGER) -> dict:
+    """Tetiği çekme kartı: oyuncu avatarı + ihtimal görseli + sıra."""
+    oyuncu  = oyun.mevcut_oyuncu
+    ihtimal = round(100 / oyun.kalan_oda) if oyun.kalan_oda > 0 else 100
+    bar = c_progress(ihtimal, 100, length=14)
+
+    items: list[dict] = [
+        c_section(
+            c_text(f"## 🔫 Rus Ruleti\n### 🎯 Sıra: {oyuncu.mention}"),
+            accessory=c_thumbnail(str(oyuncu.display_avatar.url)),
+        ),
+        c_separator(),
+        c_text(
+            f"**🎲 Tehlike**\n"
+            f"`{bar}` `%{ihtimal}` ölüm ihtimali\n\n"
+            f"**🔫 Silah**\n"
+            f"{_ihtimal_bar(oyun.kalan_oda)}\n"
+            f"`{oyun.kalan_oda}/6` oda dolu"
+        ),
+        c_separator(),
+        c_text("**🪑 Oyuncular:** " + " · ".join(o.mention for o in oyun.oyuncular)),
+    ]
+    if sonuç_metni:
+        items.append(c_separator())
+        items.append(c_text(sonuç_metni))
+    return c_container(*items, color=color)
+
 
 class TetikView(discord.ui.View):
     def __init__(self, oyun: RusRuletiOyun, kanal: discord.abc.Messageable):
@@ -139,35 +181,13 @@ class TetikView(discord.ui.View):
         self.msg: discord.Message | None = None
         self._tamamlandı = False
 
-    def _card(self, sonuç_metni: str = "") -> dict:
-        oyun    = self.oyun
-        oyuncu  = oyun.mevcut_oyuncu
-        ihtimal = round(100 / oyun.kalan_oda) if oyun.kalan_oda > 0 else 100
-        lines = [
-            "**🔫 Rus Ruleti**",
-            "",
-            f"**Sıra:** {oyuncu.mention}",
-            "",
-            _ihtimal_bar(oyun.kalan_oda),
-            f"**Kalan oda:** {oyun.kalan_oda} / 6  •  **Ölüm ihtimali:** %{ihtimal}",
-            "",
-            "**Oyuncular:**",
-        ] + [o.mention for o in oyun.oyuncular]
-        if sonuç_metni:
-            lines += ["", sonuç_metni]
-        return c_container(
-            c_section(
-                c_text("\n".join(lines)),
-                accessory=c_thumbnail(str(oyuncu.display_avatar.url)),
-            ),
-            color=0xED4245,
-        )
-
     @discord.ui.button(label="Tetiği Çek", emoji="🔫", style=discord.ButtonStyle.danger)
     async def tetik(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user.id != self.oyun.mevcut_oyuncu.id:
-            return await interaction.response.send_message(
-                f"Sıra sende değil! Sıra: {self.oyun.mevcut_oyuncu.mention}", ephemeral=True
+            return await _ephemeral_err(
+                interaction, "⛔ Sıra Sende Değil",
+                f"Sıra: {self.oyun.mevcut_oyuncu.mention}",
+                COLORS.WARNING,
             )
         self._tamamlandı = True
         self.stop()
@@ -178,35 +198,38 @@ class TetikView(discord.ui.View):
             kurban = interaction.user
             for c in self.children:
                 c.disabled = True
-            await update(interaction,
-                c_container(
-                    c_section(
-                        c_text(
-                            f"**💀 Bang!**\n\n"
-                            f"{kurban.mention} tetiği çekti ve **hayatını kaybetti!** 💥\n\n"
-                            f"%{round(ihtimal * 100)} ihtimale rağmen..."
-                        ),
-                        accessory=c_thumbnail(str(kurban.display_avatar.url)),
-                    ),
-                    color=0xED4245,
+            gif = await giphy("bang gunshot")
+            items: list[dict] = [
+                c_section(
+                    c_text(f"## 💀 BANG!\n### {kurban.mention} öldü."),
+                    accessory=c_thumbnail(str(kurban.display_avatar.url)),
                 ),
-                view=self,
-            )
+                c_separator(),
+                c_text(
+                    f"🎯 `%{round(ihtimal * 100)}` ihtimale rağmen kurşun {kurban.display_name}'in payına düştü."
+                ),
+            ]
+            if gif:
+                items.append(c_separator())
+                items.append(c_media(gif))
+            await update(interaction, c_container(*items, color=COLORS.DANGER), view=self)
             await asyncio.sleep(2)
             await _oyun_bitti(interaction, self.oyun, kurban)
         else:
-            await update(interaction,
-                c_container(
-                    c_text(
-                        f"**😮‍💨 Click...**\n\n"
-                        f"{interaction.user.mention} tetiği çekti — **boş!** Nefes aldın.\n\n"
-                        f"{_ihtimal_bar(self.oyun.kalan_oda)}\n"
-                        f"**Kalan oda:** {self.oyun.kalan_oda} / 6"
-                    ),
-                    color=0xF0A030,
+            for c in self.children:
+                c.disabled = True
+            await update(interaction, c_container(
+                c_section(
+                    c_text(f"## 😮‍💨 Click...\n### {interaction.user.mention} hayatta!"),
+                    accessory=c_thumbnail(str(interaction.user.display_avatar.url)),
                 ),
-                view=self,
-            )
+                c_separator(),
+                c_text(
+                    f"Tetik çekildi — **boş**.\n\n"
+                    f"**🔫 Silah:** {_ihtimal_bar(self.oyun.kalan_oda)}  `{self.oyun.kalan_oda}/6`"
+                ),
+                color=COLORS.WARNING,
+            ), view=self)
             await asyncio.sleep(1.5)
             await _sonraki_tur(interaction, self.oyun)
 
@@ -218,17 +241,15 @@ class TetikView(discord.ui.View):
             c.disabled = True
         if self.msg:
             try:
-                await msg_edit(self.msg,
-                    c_container(
-                        c_text(
-                            f"**⏰ Süre Doldu**\n\n"
-                            f"{oyuncu.mention} süresi içinde tetiği çekmedi — korktu mu? 🐔\n"
-                            f"Oyun sona erdi."
-                        ),
-                        color=0x95A5A6,
+                await msg_edit(self.msg, c_container(
+                    c_section(
+                        c_text(f"## ⏰ Süre Doldu\n### {oyuncu.mention} korktu! 🐔"),
+                        accessory=c_thumbnail(str(oyuncu.display_avatar.url)),
                     ),
-                    view=self,
-                )
+                    c_separator(),
+                    c_text(f"**Süre içinde tetik çekilmedi — oyun sona erdi.**"),
+                    color=0x95A5A6,
+                ), view=self)
             except discord.HTTPException:
                 pass
 
@@ -244,7 +265,7 @@ class TekrarOynaView(discord.ui.View):
     @discord.ui.button(label="Tekrar Oyna", emoji="🔄", style=discord.ButtonStyle.success)
     async def tekrar(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if interaction.user not in self.oyuncular:
-            return await interaction.response.send_message("Oyuna dahil değildin!", ephemeral=True)
+            return await _ephemeral_err(interaction, "🚫 Erişim", "Bu oyuna dahil değildin.")
         btn.disabled = True
         self.stop()
         await update(interaction, *self.son_kart, view=self)
@@ -266,48 +287,35 @@ class TekrarOynaView(discord.ui.View):
 
 async def _oyunu_başlat(interaction: discord.Interaction, oyuncular: list[discord.Member]):
     random.shuffle(oyuncular)
-    oyun    = RusRuletiOyun(oyuncular)
-    view    = TetikView(oyun, interaction.channel)
-    sıra    = oyun.mevcut_oyuncu
+    oyun = RusRuletiOyun(oyuncular)
+    view = TetikView(oyun, interaction.channel)
+    sıra = oyun.mevcut_oyuncu
     ihtimal = round(100 / oyun.kalan_oda)
+    bar = c_progress(ihtimal, 100, length=14)
 
     card = c_container(
         c_section(
-            c_text(
-                f"**🔫 Rus Ruleti — Başladı!**\n\n"
-                f"**{len(oyuncular)}** oyuncu tabancayı paylaşıyor.\n"
-                f"Silahda **1 mermi**, **6 oda**.\n\n"
-                f"**İlk sıra:** {sıra.mention}\n\n"
-                f"{_ihtimal_bar(oyun.kalan_oda)}\n"
-                f"**Ölüm ihtimali:** %{ihtimal}"
-            ),
+            c_text(f"## 🔫 Rus Ruleti — Başladı!\n### 🎯 İlk sıra: {sıra.mention}"),
             accessory=c_thumbnail(str(sıra.display_avatar.url)),
         ),
-        color=0xED4245,
+        c_separator(),
+        c_text(
+            f"**👥 Oyuncular:** `{len(oyuncular)}` kişi\n"
+            f"**🎲 Silah:** 1 mermi · 6 oda\n\n"
+            f"**🎯 Tehlike:** `{bar}` `%{ihtimal}`\n"
+            f"**🔫 Silah:** {_ihtimal_bar(oyun.kalan_oda)}"
+        ),
+        c_separator(),
+        c_text("**🪑 Sıralama:** " + " → ".join(o.mention for o in oyuncular)),
+        color=COLORS.DANGER,
     )
     msg = await channel_send(interaction.channel, card, view=view)
     view.msg = msg
 
 
 async def _sonraki_tur(interaction: discord.Interaction, oyun: RusRuletiOyun):
-    sıra    = oyun.mevcut_oyuncu
-    ihtimal = round(100 / oyun.kalan_oda) if oyun.kalan_oda > 0 else 100
-
-    card = c_container(
-        c_section(
-            c_text(
-                f"**🔫 Rus Ruleti**\n\n"
-                f"**Sıra:** {sıra.mention}\n\n"
-                f"{_ihtimal_bar(oyun.kalan_oda)}\n"
-                f"**Kalan oda:** {oyun.kalan_oda} / 6  •  **Ölüm ihtimali:** %{ihtimal}\n\n"
-                f"**Oyuncular:**\n" + "\n".join(o.mention for o in oyun.oyuncular)
-            ),
-            accessory=c_thumbnail(str(sıra.display_avatar.url)),
-        ),
-        color=0xED4245,
-    )
     view = TetikView(oyun, interaction.channel)
-    msg  = await channel_send(interaction.channel, card, view=view)
+    msg  = await channel_send(interaction.channel, _tetik_card(oyun), view=view)
     view.msg = msg
 
 
@@ -318,21 +326,19 @@ async def _oyun_bitti(interaction: discord.Interaction, oyun: RusRuletiOyun, kur
     hayatta_str = (
         "\n".join(f"🎉 {o.mention}" for o in hayatta) if hayatta else "_Kimse kalmadı._"
     )
-    items = [
+    items: list[dict] = [
         c_section(
-            c_text(
-                f"**💀 Oyun Bitti**\n\n"
-                f"**{kurban.mention}** hayatını kaybetti!\n\n"
-                f"**Hayatta kalanlar:**\n{hayatta_str}"
-            ),
+            c_text(f"## 💀 Oyun Bitti\n### Kurban: {kurban.mention}"),
             accessory=c_thumbnail(str(kurban.display_avatar.url)),
         ),
+        c_separator(),
+        c_text(f"**🏆 Hayatta Kalanlar**\n{hayatta_str}"),
     ]
     if gif:
         items.append(c_separator())
         items.append(c_media(gif))
 
-    son_kart = (c_container(*items, color=0xED4245),)
+    son_kart = (c_container(*items, color=COLORS.DANGER),)
     view = TekrarOynaView(oyun.oyuncular, kurban, son_kart)
     msg  = await channel_send(interaction.channel, *son_kart, view=view)
     view.msg = msg

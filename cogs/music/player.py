@@ -13,7 +13,7 @@ from ._shared import (
 from .views import PlayerView, SearchView
 from .._v2 import (
     COLORS, c_text, c_section, c_thumbnail, c_separator, c_container,
-    c_card, c_action_card, c_list_card, c_progress,
+    c_card, c_action_card, c_list_card,
     channel_send as v2_channel_send, followup as v2_followup, respond,
 )
 
@@ -454,21 +454,17 @@ class Music(commands.Cog):
     @music.command(name="ses", description="Ses seviyesini ayarlar (0-200).")
     @app_commands.describe(seviye="Ses seviyesi (0-200)")
     async def ses(self, interaction: discord.Interaction, seviye: app_commands.Range[int, 0, 200]):
-        vc: discord.VoiceClient = interaction.guild.voice_client
+        vc: discord.VoiceClient = interaction.guild.voice_client  # type: ignore[assignment]
         p = self.get_player(interaction.guild_id)
         p.volume = seviye / 100
         if vc and vc.source:
             vc.source.volume = p.volume
 
-        bar = c_progress(seviye, 200, length=20)
         emoji = "🔇" if seviye == 0 else "🔈" if seviye < 50 else "🔉" if seviye < 120 else "🔊"
 
-        await respond(interaction, c_container(
-            c_text(f"## {emoji} Ses Seviyesi"),
-            c_separator(),
-            c_text(f"`{bar}`\n-# `0` ─────── `{seviye}` ─────── `200`"),
-            c_separator(),
-            c_text(f"🔊 Seviye **`{seviye}%`** olarak ayarlandı."),
+        await respond(interaction, c_card(
+            f"## {emoji} Ses Seviyesi",
+            body=f"Seviye **`{seviye}%`** olarak ayarlandı.",
             color=COLORS.MUSIC,
         ))
 

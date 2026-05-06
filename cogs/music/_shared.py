@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass, field
 from collections import deque
 from .._v2 import (
-    COLORS, c_text, c_section, c_container, c_thumbnail, c_separator, c_card, c_progress,
+    COLORS, c_text, c_section, c_container, c_thumbnail, c_separator, c_card,
 )
 
 YTDL_FLAT_OPTIONS = {
@@ -79,11 +79,9 @@ def yt_thumbnail(url: str) -> str | None:
 
 
 def now_playing_card(track: Track, player: GuildPlayer) -> dict:
-    """Müzik çalar kartı: thumbnail + başlık + ayraç + ayraçlı stat satırları."""
+    """Müzik çalar kartı: thumbnail + başlık + meta."""
     thumb = yt_thumbnail(track.webpage_url) or str(track.requester.display_avatar.url)
-
     duration = duration_fmt(track.duration)
-    bar = c_progress(0, max(track.duration, 1), length=22)
     loop_str = "🔂 Açık" if player.loop else "➡️ Kapalı"
 
     items: list[dict] = [
@@ -92,9 +90,8 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
             accessory=c_thumbnail(thumb),
         ),
         c_separator(),
-        c_text(f"`{bar}`\n-# `00:00` ─────────── `{duration}`"),
-        c_separator(),
         c_text(
+            f"⏱️ **Süre:** `{duration}`\n"
             f"👤 **İsteyen:** {track.requester.mention}\n"
             f"🔊 **Ses:** `{int(player.volume * 100)}%` · "
             f"🔁 **Döngü:** {loop_str} · "

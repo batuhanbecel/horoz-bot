@@ -190,7 +190,7 @@ class IsimSehirLobiView(discord.ui.View):
         for c in self.children:
             c.disabled = True
         await update(interaction,
-            c_card("## 🚫 Lobi İptal Edildi", body=f"{interaction.user.mention} lobi iptal etti.", color=0x95A5A6),
+            c_card("## 🚫 Lobi İptal Edildi", body=f"{interaction.user.mention} lobiyi iptal etti.", color=0x95A5A6),
             view=self,
         )
 

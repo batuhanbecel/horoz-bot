@@ -461,17 +461,13 @@ class VampirKoyluLobiView(discord.ui.View):
             for r in _ROL_SIRA if r in sayım
         )
 
-        bar = c_progress(len(self.oyuncular), MAX_OYUNCU, length=12)
         oyuncu_listesi = "\n".join(f"🪑 {o.mention}" for o in self.oyuncular)
 
         items: list[dict] = [
-            c_section(
-                c_text("## 🧛 Vampir Köylü — Lobi"),
-                accessory=c_thumbnail(str(self.kurucu.display_avatar.url)),
-            ),
+            c_text("## 🧛 Vampir Köylü — Lobi"),
             c_separator(),
             c_text(
-                f"`{bar}` `{len(self.oyuncular)}/{MAX_OYUNCU}`\n\n"
+                f"**👥 Oyuncular** · `{len(self.oyuncular)}/{MAX_OYUNCU}`\n"
                 f"{oyuncu_listesi}"
             ),
             c_separator(),
@@ -552,7 +548,7 @@ class VampirKoyluLobiView(discord.ui.View):
         for c in self.children:
             c.disabled = True
         await update(interaction,
-            c_card("## 🚫 Lobi İptal Edildi", body=f"{interaction.user.mention} lobi iptal etti.", color=0x95A5A6),
+            c_card("## 🚫 Lobi İptal Edildi", body=f"{interaction.user.mention} lobiyi iptal etti.", color=0x95A5A6),
             view=self,
         )
 

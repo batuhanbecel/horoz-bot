@@ -127,13 +127,17 @@ def c_field(label: str, value: str | int) -> str:
     return f"**{label}:** {value}"
 
 
-def c_progress(current, total, length: int = 18) -> str:
-    """Build a unicode progress bar (current/total, 0..length filled chars)."""
+def c_progress(current, total, length: int = 14) -> str:
+    """Build a slim line-based progress bar (heavy + light box-drawing).
+
+    Discord'da `━` ve `─` karakterleri tek satırlı, ince ve temiz görünür —
+    blok karakterlerinden daha 'native' bir progress bar verir.
+    """
     if not total or total <= 0:
-        return "▱" * length
+        return "─" * length
     pct = max(0.0, min(1.0, float(current) / float(total)))
     filled = int(pct * length)
-    return "▰" * filled + "▱" * (length - filled)
+    return "━" * filled + "─" * (length - filled)
 
 
 def c_kv_block(pairs: list[tuple[str, str | int]]) -> str:

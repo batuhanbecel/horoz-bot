@@ -32,7 +32,7 @@ class PlayerView(discord.ui.View):
     def _bot_thumb(self, interaction: discord.Interaction) -> str:
         return str(interaction.client.user.display_avatar.url)
 
-    # Satır 0 ──────────────────────────────────────────────────────────────────
+    # ─ Satır 0: Transport (önceki / pause / atla / dur / döngü) ───────────────
 
     @discord.ui.button(emoji="⏮️", style=discord.ButtonStyle.secondary, row=0)
     async def yeniden(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -51,7 +51,7 @@ class PlayerView(discord.ui.View):
         vc.stop()
         await interaction.response.defer()
 
-    @discord.ui.button(emoji="⏸️", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(emoji="⏯️", style=discord.ButtonStyle.primary, row=0)
     async def duraklat(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = self.vc(interaction)
         if not vc:
@@ -108,10 +108,24 @@ class PlayerView(discord.ui.View):
         except Exception:
             pass
         p.player_message = None
-        await vc.disconnect()
+        try:
+            await vc.disconnect()
+        except (discord.HTTPException, AttributeError):
+            pass
         await interaction.response.defer()
 
-    # Satır 1 ──────────────────────────────────────────────────────────────────
+    @discord.ui.button(emoji="🔁", style=discord.ButtonStyle.secondary, row=0)
+    async def dongu(self, interaction: discord.Interaction, button: discord.ui.Button):
+        p = self.player()
+        p.loop = not p.loop
+        durum = "Açık 🔂" if p.loop else "Kapalı"
+        body = "Şu an çalan şarkı sürekli tekrar edecek." if p.loop else "Döngü kapatıldı."
+        await v2_respond(interaction,
+            _ephemeral_status("🔁", f"Döngü {durum}", body, COLORS.MUSIC),
+            ephemeral=True,
+        )
+
+    # ─ Satır 1: Yardımcılar (ses- / ses+ / karıştır / sıra) ───────────────────
 
     @discord.ui.button(emoji="🔉", style=discord.ButtonStyle.secondary, row=1)
     async def ses_azalt(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -137,18 +151,7 @@ class PlayerView(discord.ui.View):
             ephemeral=True,
         )
 
-    @discord.ui.button(emoji="🔁", label="Döngü", style=discord.ButtonStyle.secondary, row=1)
-    async def dongu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        p = self.player()
-        p.loop = not p.loop
-        durum = "Açık 🔂" if p.loop else "Kapalı"
-        body = "Şu an çalan şarkı sürekli tekrar edecek." if p.loop else "Döngü kapatıldı."
-        await v2_respond(interaction,
-            _ephemeral_status("🔁", f"Döngü {durum}", body, COLORS.MUSIC),
-            ephemeral=True,
-        )
-
-    @discord.ui.button(emoji="🔀", label="Karıştır", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=1)
     async def karistir(self, interaction: discord.Interaction, button: discord.ui.Button):
         p = self.player()
         if len(p.queue) < 2:
@@ -164,7 +167,7 @@ class PlayerView(discord.ui.View):
             ephemeral=True,
         )
 
-    @discord.ui.button(emoji="📋", label="Sıra", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(emoji="📋", style=discord.ButtonStyle.secondary, row=1)
     async def sira(self, interaction: discord.Interaction, button: discord.ui.Button):
         p = self.player()
         if not p.current and not p.queue:

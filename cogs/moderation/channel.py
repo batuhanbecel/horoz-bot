@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from .._v2 import c_text, c_container, respond, followup as v2_followup, error_response
+from .._v2 import c_card, respond, followup as v2_followup, error_response
 
 
 class ChannelMod(commands.Cog):
@@ -17,15 +17,16 @@ class ChannelMod(commands.Cog):
     @kanal.command(name="temizle", description="Belirtilen sayıda mesajı siler.")
     @app_commands.describe(miktar="Silinecek mesaj sayısı (1-100)")
     async def temizle(self, interaction: discord.Interaction, miktar: app_commands.Range[int, 1, 100]):
+        thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
         await interaction.response.defer(ephemeral=True)
         deleted = await interaction.channel.purge(limit=miktar)
         await v2_followup(interaction,
-            c_container(c_text(f"**🧹 Temizlendi**\n\n**{len(deleted)}** mesaj silindi."), color=0x57F287),
+            c_card("## 🧹 Temizlendi", body=f"**{len(deleted)}** mesaj silindi.", thumbnail=thumb, color=0x57F287),
             ephemeral=True,
         )
 
@@ -38,28 +39,33 @@ class ChannelMod(commands.Cog):
         saniye: app_commands.Range[int, 0, 21600],  # type: ignore[type-arg]
         kanal: discord.TextChannel = None,
     ):
+        thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_channels:
             return await respond(interaction,
-                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Kanalları Yönet** yetkisi gereklidir."), color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
         target = kanal or interaction.channel
         await target.edit(slowmode_delay=saniye)
         if saniye == 0:
-            msg = f"**🕐 Yavaş Mod Kapatıldı**\n\n{target.mention} kanalında yavaş mod kaldırıldı."
-            color = 0x57F287
+            await respond(interaction,
+                c_card("## 🕐 Yavaş Mod Kapatıldı", body=f"{target.mention} kanalında yavaş mod kaldırıldı.", thumbnail=thumb, color=0x57F287),
+                ephemeral=True,
+            )
         else:
-            msg = f"**🕐 Yavaş Mod Açıldı**\n\n{target.mention} kanalında **{saniye} saniye** yavaş mod uygulandı."
-            color = 0xE67E22
-        await respond(interaction, c_container(c_text(msg), color=color), ephemeral=True)
+            await respond(interaction,
+                c_card("## 🕐 Yavaş Mod Açıldı", body=f"{target.mention} kanalında **{saniye} saniye** yavaş mod uygulandı.", thumbnail=thumb, color=0xE67E22),
+                ephemeral=True,
+            )
 
     # /kanal kilitle
     @kanal.command(name="kilitle", description="Kanalı kilitler, üyeler mesaj gönderemez.")
     @app_commands.describe(kanal="Kilitlenecek kanal (boş = mevcut)", sebep="Kilitleme sebebi")
     async def kilitle(self, interaction: discord.Interaction, kanal: discord.TextChannel = None, sebep: str = "Belirtilmedi"):
+        thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_channels:
             return await respond(interaction,
-                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Kanalları Yönet** yetkisi gereklidir."), color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
         target = kanal or interaction.channel
@@ -67,25 +73,21 @@ class ChannelMod(commands.Cog):
         ow.send_messages = False
         await target.set_permissions(interaction.guild.default_role, overwrite=ow, reason=f"{interaction.user}: {sebep}")
 
-        await respond(interaction,
-            c_container(
-                c_text(
-                    f"**🔒 Kanal Kilitlendi**\n\n"
-                    f"📌 **Kanal:** {target.mention}\n"
-                    f"👮 **Moderatör:** {interaction.user.mention}\n"
-                    f"📝 **Sebep:** {sebep}"
-                ),
-                color=0xED4245,
-            ),
-        )
+        await respond(interaction, c_card(
+            "## 🔒 Kanal Kilitlendi",
+            body=f"📌 **Kanal:** {target.mention}\n👮 **Moderatör:** {interaction.user.mention}\n📝 **Sebep:** {sebep}",
+            thumbnail=thumb,
+            color=0xED4245,
+        ))
 
     # /kanal kilit-aç
     @kanal.command(name="kilit-aç", description="Kilitli kanalın kilidini açar.")
     @app_commands.describe(kanal="Kilidi açılacak kanal (boş = mevcut)")
     async def kilit_ac(self, interaction: discord.Interaction, kanal: discord.TextChannel = None):
+        thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_channels:
             return await respond(interaction,
-                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Kanalları Yönet** yetkisi gereklidir."), color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
         target = kanal or interaction.channel
@@ -93,16 +95,12 @@ class ChannelMod(commands.Cog):
         ow.send_messages = None
         await target.set_permissions(interaction.guild.default_role, overwrite=ow)
 
-        await respond(interaction,
-            c_container(
-                c_text(
-                    f"**🔓 Kilit Açıldı**\n\n"
-                    f"📌 **Kanal:** {target.mention}\n"
-                    f"👮 **Moderatör:** {interaction.user.mention}"
-                ),
-                color=0x57F287,
-            ),
-        )
+        await respond(interaction, c_card(
+            "## 🔓 Kilit Açıldı",
+            body=f"📌 **Kanal:** {target.mention}\n👮 **Moderatör:** {interaction.user.mention}",
+            thumbnail=thumb,
+            color=0x57F287,
+        ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         msg = "Botun bu işlem için yeterli yetkisi yok." \

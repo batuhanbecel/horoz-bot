@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import asyncio
 from ._shared import RENK_MAP, MesajModal, EmbedModal, DuyuruModal
-from .._v2 import c_text, c_container, respond, channel_send, error_response
+from .._v2 import c_card, respond, channel_send, error_response
 
 
 class Messaging(commands.Cog):
@@ -16,7 +16,8 @@ class Messaging(commands.Cog):
     async def yaz(self, interaction: discord.Interaction, kanal: discord.TextChannel):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
+                       thumbnail=str(interaction.client.user.display_avatar.url), color=0xED4245),
                 ephemeral=True,
             )
         await interaction.response.send_modal(MesajModal(kanal))
@@ -36,7 +37,8 @@ class Messaging(commands.Cog):
     async def embed_gonder(self, interaction: discord.Interaction, kanal: discord.TextChannel, renk: str = "mavi"):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
+                       thumbnail=str(interaction.client.user.display_avatar.url), color=0xED4245),
                 ephemeral=True,
             )
         await interaction.response.send_modal(EmbedModal(kanal, RENK_MAP.get(renk, 0x3498DB)))
@@ -52,7 +54,8 @@ class Messaging(commands.Cog):
     async def duyuru(self, interaction: discord.Interaction, kanal: discord.TextChannel, ping: str = ""):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_container(c_text("**❌ Yetersiz Yetki**\n\n**Mesajları Yönet** yetkisi gereklidir."), color=0xED4245),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.",
+                       thumbnail=str(interaction.client.user.display_avatar.url), color=0xED4245),
                 ephemeral=True,
             )
         await interaction.response.send_modal(DuyuruModal(kanal, ping))
@@ -66,12 +69,12 @@ class Messaging(commands.Cog):
         dakika: app_commands.Range[int, 1, 1440],
         mesaj: str = "Hatırlatma!",
     ):
+        thumb = str(interaction.client.user.display_avatar.url)
         await respond(interaction,
-            c_container(
-                c_text(
-                    f"**⏰ Hatırlatma Kuruldu**\n\n"
-                    f"**{dakika} dakika** sonra DM olarak hatırlatılacaksın.\n> {mesaj}"
-                ),
+            c_card(
+                "## ⏰ Hatırlatma Kuruldu",
+                body=f"**{dakika} dakika** sonra DM olarak hatırlatılacaksın.\n> {mesaj}",
+                thumbnail=thumb,
                 color=0x57F287,
             ),
             ephemeral=True,
@@ -82,12 +85,10 @@ class Messaging(commands.Cog):
             try:
                 dm = await interaction.user.create_dm()
                 await channel_send(dm,
-                    c_container(
-                        c_text(
-                            f"**⏰ Hatırlatma!**\n\n"
-                            f"{mesaj}\n\n"
-                            f"-# {dakika} dk önce **{interaction.guild.name}** sunucusunda ayarlandı."
-                        ),
+                    c_card(
+                        "## ⏰ Hatırlatma!",
+                        body=f"{mesaj}\n\n-# {dakika} dk önce **{interaction.guild.name}** sunucusunda ayarlandı.",
+                        thumbnail=thumb,
                         color=0xF1C40F,
                     ),
                 )

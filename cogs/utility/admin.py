@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import os
 import sys
-from .._v2 import c_text, c_container, respond, followup as v2_followup, error_response
+from .._v2 import c_card, c_text, c_container, respond, followup as v2_followup, error_response
 
 
 class Admin(commands.Cog):
@@ -13,9 +13,7 @@ class Admin(commands.Cog):
     # /yardım
     @app_commands.command(name="yardım", description="Tüm komutları listeler.")
     async def yardım(self, interaction: discord.Interaction):
-        lines = [
-            "**🐓 Horoz Bot — Komut Listesi**",
-            "",
+        body = "\n".join([
             "**👤 /üye** • `uyar` `at` `yasakla` `sustur` `sus-kaldır`",
             "**🔒 /kanal** • `temizle` `yavaşmod` `kilitle` `kilit-aç`",
             "**⚠️ /ihlal** • `listele` `sil`",
@@ -35,9 +33,14 @@ class Admin(commands.Cog):
             "**ℹ️ Araçlar** • `/yardım` `/ping` `/hatırlat` `/profil` `/sunucu` `/avatar` `/bot`",
             "",
             "-# Tüm komutlar slash (/) ile kullanılır.",
-        ]
+        ])
         await respond(interaction,
-            c_container(c_text("\n".join(lines)), color=0x5865F2),
+            c_card(
+                "## 🐓 Horoz Bot — Komut Listesi",
+                body=body,
+                thumbnail=str(interaction.client.user.display_avatar.url),
+                color=0x5865F2,
+            ),
             ephemeral=True,
         )
 
@@ -50,12 +53,10 @@ class Admin(commands.Cog):
         await self.bot.tree.sync(guild=interaction.guild)
         synced = await self.bot.tree.sync()
         await v2_followup(interaction,
-            c_container(
-                c_text(
-                    f"**✅ Komutlar Tazelendi**\n\n"
-                    f"**{len(synced)}** global slash komutu senkronize edildi.\n"
-                    f"Sunucuya özel eski komutlar temizlendi."
-                ),
+            c_card(
+                "## ✅ Komutlar Tazelendi",
+                body=f"**{len(synced)}** global slash komutu senkronize edildi.\nSunucuya özel eski komutlar temizlendi.",
+                thumbnail=str(interaction.client.user.display_avatar.url),
                 color=0x57F287,
             ),
             ephemeral=True,
@@ -66,8 +67,10 @@ class Admin(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def restart(self, interaction: discord.Interaction):
         await respond(interaction,
-            c_container(
-                c_text("**🔄 Yeniden Başlatılıyor...**\n\nBot kapatılıyor, birkaç saniye sonra geri dönecek."),
+            c_card(
+                "## 🔄 Yeniden Başlatılıyor...",
+                body="Bot kapatılıyor, birkaç saniye sonra geri dönecek.",
+                thumbnail=str(interaction.client.user.display_avatar.url),
                 color=0xF0A030,
             ),
             ephemeral=True,

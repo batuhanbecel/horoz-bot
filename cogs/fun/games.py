@@ -5,8 +5,8 @@ import random
 import asyncio
 from ._shared import giphy, SEKIZ_TOP_YANIT
 from .._v2 import (
-    c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
-    respond, followup, edit_followup, update, channel_send, msg_edit,
+    c_card, c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
+    respond, followup, edit_followup, update, channel_send, msg_edit, error_response,
 )
 
 # ── Renkler ────────────────────────────────────────────────────────────────────
@@ -480,11 +480,12 @@ class Games(commands.Cog):
         sonuçlar  = [random.randint(1, yüz) for _ in range(adet)]
         toplam    = sum(sonuçlar)
         sonuç_str = " + ".join(f"**{s}**" for s in sonuçlar)
-        card = c_container(
-            c_text(f"## 🎲 Zar Atıldı!\n{adet}d{yüz}: {sonuç_str}\n\n**Toplam: {toplam}**"),
+        await respond(interaction, c_card(
+            "## 🎲 Zar Atıldı!",
+            body=f"{adet}d{yüz}: {sonuç_str}\n\n**Toplam: {toplam}**",
+            thumbnail=str(interaction.user.display_avatar.url),
             color=_C_GREEN,
-        )
-        await respond(interaction, card)
+        ))
 
     @app_commands.command(name="8top", description="Sihirli 8-top'a bir soru sor.")
     @app_commands.describe(soru="Sormak istediğin soru")
@@ -504,10 +505,11 @@ class Games(commands.Cog):
     @app_commands.command(name="tkm", description="Taş Kağıt Makas — ilk 2 galibiyeti alan kazanır.")
     @app_commands.describe(rakip="Rakip (boş bırakırsan bota karşı oynarsın)")
     async def tkm(self, interaction: discord.Interaction, rakip: discord.Member | None = None):
+        thumb = str(interaction.client.user.display_avatar.url)
         if rakip and rakip.id == interaction.user.id:
-            return await interaction.response.send_message("Kendinle oynayamazsın!", ephemeral=True)
+            return await respond(interaction, c_card("## ❌ Hata", body="Kendinle oynayamazsın!", thumbnail=thumb, color=_C_RED), ephemeral=True)
         if rakip and rakip.bot:
-            return await interaction.response.send_message("Botlarla oynayamazsın!", ephemeral=True)
+            return await respond(interaction, c_card("## ❌ Hata", body="Botlarla oynayamazsın!", thumbnail=thumb, color=_C_RED), ephemeral=True)
         view  = TKMView(interaction.user, rakip)
         r_str = rakip.mention if rakip else "Bot"
         view.msg = await respond(

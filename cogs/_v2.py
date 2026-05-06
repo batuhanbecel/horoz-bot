@@ -78,17 +78,36 @@ def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None
 
 # ── Convenience card builders ─────────────────────────────────────────────────
 
-def c_error(msg: str) -> dict:
-    return c_container(c_text(f"**❌ Hata**\n\n{msg}"), color=0xED4245)
+def c_card(
+    title: str,
+    body: str = "",
+    thumbnail: str | None = None,
+    color: int = 0x5865F2,
+) -> dict:
+    """8top-style card: ## title + optional thumbnail (right) + separator + body."""
+    header = (
+        c_section(c_text(title), accessory=c_thumbnail(thumbnail))
+        if thumbnail else c_text(title)
+    )
+    items: list[dict] = [header]
+    if body:
+        items.append(c_separator())
+        items.append(c_text(body))
+    return c_container(*items, color=color)
 
 
-def c_success(msg: str) -> dict:
-    return c_container(c_text(f"**✅ Başarılı**\n\n{msg}"), color=0x57F287)
+def c_error(msg: str, thumbnail: str | None = None) -> dict:
+    return c_card(f"## ❌ Hata", body=msg, thumbnail=thumbnail, color=0xED4245)
+
+
+def c_success(msg: str, thumbnail: str | None = None) -> dict:
+    return c_card(f"## ✅ Başarılı", body=msg, thumbnail=thumbnail, color=0x57F287)
 
 
 async def error_response(interaction: discord.Interaction, msg: str) -> None:
     """Hata mesajı gönderir — interaction daha önce yanıtlanmış olsa da çalışır."""
-    card = c_error(msg)
+    thumb = str(interaction.client.user.display_avatar.url)  # type: ignore[union-attr]
+    card = c_error(msg, thumbnail=thumb)
     if interaction.response.is_done():
         await followup(interaction, card, ephemeral=True)
     else:

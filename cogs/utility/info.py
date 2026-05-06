@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import timezone, datetime
 from .._v2 import (
-    c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
+    c_card, c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
     respond, edit_original, error_response,
 )
 
@@ -18,20 +18,18 @@ class Info(commands.Cog):
     async def ping(self, interaction: discord.Interaction):
         ws = round(self.bot.latency * 1000)
         color = 0x57F287 if ws < 100 else 0xFEE75C if ws < 200 else 0xED4245
+        thumb = str(self.bot.user.display_avatar.url)
 
         before = discord.utils.utcnow()
-        await respond(interaction, c_container(c_text("**🏓 Pong!**\n\nÖlçülüyor..."), color=color))
+        await respond(interaction, c_card("## 🏓 Pong!", body="Ölçülüyor...", thumbnail=thumb, color=color))
         rt = round((discord.utils.utcnow() - before).total_seconds() * 1000)
 
         bar_len = min(int(ws / 20), 10)
         bar = "█" * bar_len + "░" * (10 - bar_len)
-        await edit_original(interaction, c_container(
-            c_text(
-                f"**🏓 Pong!**\n\n"
-                f"`{bar}`\n\n"
-                f"📡 **WebSocket:** {ws} ms\n"
-                f"🔄 **Roundtrip:** {rt} ms"
-            ),
+        await edit_original(interaction, c_card(
+            "## 🏓 Pong!",
+            body=f"`{bar}`\n\n📡 **WebSocket:** {ws} ms\n🔄 **Roundtrip:** {rt} ms",
+            thumbnail=thumb,
             color=color,
         ))
 
@@ -48,7 +46,7 @@ class Info(commands.Cog):
         )
         await respond(interaction, c_container(
             c_section(
-                c_text(f"**🖼️ {target.display_name}**\n\n{links}"),
+                c_text(f"## 🖼️ {target.display_name}\n{links}"),
                 accessory=c_thumbnail(av_url),
             ),
             c_separator(),
@@ -62,9 +60,7 @@ class Info(commands.Cog):
         delta = datetime.now(timezone.utc) - self._start_time
         h, rem = divmod(int(delta.total_seconds()), 3600)
         m, s = divmod(rem, 60)
-
-        text = (
-            "**🐓 Horoz Bot**\n\n"
+        body = (
             f"🌐 **Sunucu:** {len(self.bot.guilds)}\n"
             f"👥 **Üye:** {sum(g.member_count for g in self.bot.guilds)}\n"
             f"📡 **Gecikme:** {round(self.bot.latency * 1000)} ms\n"
@@ -72,11 +68,10 @@ class Info(commands.Cog):
             f"🐍 **discord.py:** {discord.__version__}\n"
             f"📦 **GitHub:** [batuhanbecel/horoz-bot](https://github.com/batuhanbecel/horoz-bot)"
         )
-        await respond(interaction, c_container(
-            c_section(
-                c_text(text),
-                accessory=c_thumbnail(str(self.bot.user.display_avatar.url)),
-            ),
+        await respond(interaction, c_card(
+            "## 🐓 Horoz Bot",
+            body=body,
+            thumbnail=str(self.bot.user.display_avatar.url),
             color=0x5865F2,
         ))
 
@@ -89,25 +84,21 @@ class Info(commands.Cog):
 
         created = target.created_at.replace(tzinfo=timezone.utc)
         lines = [
-            f"**👤 {target.display_name}**",
-            "",
             f"👤 **Kullanıcı:** {target}",
             f"🆔 **ID:** `{target.id}`",
             f"🤖 **Bot:** {'✅ Evet' if target.bot else '❌ Hayır'}",
             f"📅 **Hesap Açıldı:** <t:{int(created.timestamp())}:F>",
         ]
-
         if isinstance(target, discord.Member) and target.joined_at:
             joined = target.joined_at.replace(tzinfo=timezone.utc)
             lines.append(f"📥 **Sunucuya Katılım:** <t:{int(joined.timestamp())}:F>")
             roles = [r.mention for r in reversed(target.roles) if r.name != "@everyone"]
             lines.append(f"🏷️ **Roller ({len(roles)}):** {', '.join(roles[:10]) or 'Yok'}")
 
-        await respond(interaction, c_container(
-            c_section(
-                c_text("\n".join(lines)),
-                accessory=c_thumbnail(str(target.display_avatar.url)),
-            ),
+        await respond(interaction, c_card(
+            f"## 👤 {target.display_name}",
+            body="\n".join(lines),
+            thumbnail=str(target.display_avatar.url),
             color=color,
         ))
 
@@ -116,34 +107,27 @@ class Info(commands.Cog):
     async def sunucu(self, interaction: discord.Interaction):
         guild = interaction.guild
         created = guild.created_at.replace(tzinfo=timezone.utc)
-
-        lines = [
-            f"**🏠 {guild.name}**",
-            "",
-            f"👑 **Sahip:** {guild.owner.mention if guild.owner else 'Bilinmiyor'}",
-            f"🆔 **ID:** `{guild.id}`",
-            f"📅 **Oluşturuldu:** <t:{int(created.timestamp())}:R>",
-            f"👥 **Üye:** {guild.member_count}",
-            f"💬 **Kanal:** {len(guild.text_channels)} metin · {len(guild.voice_channels)} ses",
-            f"🏷️ **Rol:** {len(guild.roles)}",
-            f"✨ **Boost:** Seviye **{guild.premium_tier}** — {guild.premium_subscription_count} boost",
-            f"🔒 **Doğrulama:** {str(guild.verification_level).title()}",
-            f"😀 **Emoji:** {len(guild.emojis)}/{guild.emoji_limit}",
-        ]
-
-        icon_url = str(guild.icon.url) if guild.icon else None
-        main = (
-            c_section(c_text("\n".join(lines)), accessory=c_thumbnail(icon_url))
-            if icon_url
-            else c_text("\n".join(lines))
+        body = (
+            f"👑 **Sahip:** {guild.owner.mention if guild.owner else 'Bilinmiyor'}\n"
+            f"🆔 **ID:** `{guild.id}`\n"
+            f"📅 **Oluşturuldu:** <t:{int(created.timestamp())}:R>\n"
+            f"👥 **Üye:** {guild.member_count}\n"
+            f"💬 **Kanal:** {len(guild.text_channels)} metin · {len(guild.voice_channels)} ses\n"
+            f"🏷️ **Rol:** {len(guild.roles)}\n"
+            f"✨ **Boost:** Seviye **{guild.premium_tier}** — {guild.premium_subscription_count} boost\n"
+            f"🔒 **Doğrulama:** {str(guild.verification_level).title()}\n"
+            f"😀 **Emoji:** {len(guild.emojis)}/{guild.emoji_limit}"
         )
+        icon_url = str(guild.icon.url) if guild.icon else None
+        base = c_card(f"## 🏠 {guild.name}", body=body, thumbnail=icon_url, color=0x5865F2)
 
-        card_items = [main]
         if guild.banner:
-            card_items.append(c_separator())
-            card_items.append(c_media(str(guild.banner.with_size(1024).url)))
+            items = list(base["components"])
+            items.append(c_separator())
+            items.append(c_media(str(guild.banner.with_size(1024).url)))
+            base = dict(base) | {"components": items}
 
-        await respond(interaction, c_container(*card_items, color=0x5865F2))
+        await respond(interaction, base)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         await error_response(interaction, str(error))

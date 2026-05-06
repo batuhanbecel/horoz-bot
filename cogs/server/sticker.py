@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import io
 import aiohttp
-from .._v2 import c_text, c_section, c_container, c_thumbnail, followup as v2_followup
+from .._v2 import c_text, c_section, c_container, c_thumbnail, c_card, followup as v2_followup, error_response
 
 
 async def fetch_bytes(url: str) -> bytes | None:
@@ -26,15 +26,16 @@ class StickerStealer(commands.Cog):
 
     async def _ctx_sticker_ekle(self, interaction: discord.Interaction, message: discord.Message):
         await interaction.response.defer(ephemeral=True)
+        thumb = str(interaction.client.user.display_avatar.url)
         try:
             if not interaction.user.guild_permissions.manage_emojis_and_stickers:
                 return await v2_followup(interaction,
-                    c_container(c_text("**❌ Yetersiz Yetki**\n\nBu işlem için **Emojileri Yönet** yetkisi gereklidir."), color=0xED4245),
+                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", thumbnail=thumb, color=0xED4245),
                     ephemeral=True,
                 )
             if not message.stickers:
                 return await v2_followup(interaction,
-                    c_container(c_text("**⚠️ Sticker Bulunamadı**\n\nBu mesajda sticker yok."), color=0xE67E22),
+                    c_card("## ⚠️ Sticker Bulunamadı", body="Bu mesajda sticker yok.", thumbnail=thumb, color=0xE67E22),
                     ephemeral=True,
                 )
 
@@ -42,7 +43,7 @@ class StickerStealer(commands.Cog):
 
             if sticker.format == discord.StickerFormatType.lottie:
                 return await v2_followup(interaction,
-                    c_container(c_text("**⚠️ Desteklenmiyor**\n\nLottie animasyonlu sticker'lar eklenemez."), color=0xE67E22),
+                    c_card("## ⚠️ Desteklenmiyor", body="Lottie animasyonlu sticker'lar eklenemez.", thumbnail=thumb, color=0xE67E22),
                     ephemeral=True,
                 )
 
@@ -50,7 +51,7 @@ class StickerStealer(commands.Cog):
             data = await fetch_bytes(str(sticker.url))
             if not data:
                 return await v2_followup(interaction,
-                    c_container(c_text("**❌ İndirme Hatası**\n\nSticker indirilemedi."), color=0xED4245),
+                    c_card("## ❌ İndirme Hatası", body="Sticker indirilemedi.", thumbnail=thumb, color=0xED4245),
                     ephemeral=True,
                 )
 
@@ -64,7 +65,7 @@ class StickerStealer(commands.Cog):
                 c_container(
                     c_section(
                         c_text(
-                            f"**✅ Sticker Eklendi**\n\n"
+                            f"## ✅ Sticker Eklendi\n\n"
                             f"**{new_s.name}** sunucuya eklendi!\n"
                             f"🆔 **ID:** `{new_s.id}`"
                         ),
@@ -77,12 +78,12 @@ class StickerStealer(commands.Cog):
 
         except discord.HTTPException as ex:
             await v2_followup(interaction,
-                c_container(c_text(f"**❌ Hata**\n\n{ex}"), color=0xED4245),
+                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
         except Exception as ex:
             await v2_followup(interaction,
-                c_container(c_text(f"**❌ Hata**\n\n{ex}"), color=0xED4245),
+                c_card("## ❌ Hata", body=str(ex), thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
 

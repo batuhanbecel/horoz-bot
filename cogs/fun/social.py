@@ -4,8 +4,8 @@ from discord.ext import commands
 from datetime import timedelta
 from ._shared import parse_datetime
 from .._v2 import (
-    c_text, c_separator, c_media, c_container, respond, update,
-    followup as v2_followup, channel_send, error_response,
+    c_text, c_section, c_thumbnail, c_separator, c_media, c_container,
+    c_card, respond, update, followup as v2_followup, channel_send, error_response,
 )
 
 
@@ -97,17 +97,15 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        thumb = str(interaction.client.user.display_avatar.url)
 
         start_time = parse_datetime(self.tarih.value, self.baslangic.value)
         if start_time is None:
             return await v2_followup(interaction,
-                c_container(
-                    c_text(
-                        "**❌ Geçersiz Tarih/Saat**\n\n"
-                        "Desteklenen formatlar:\n"
-                        "• `25.05.2026`  `20:00` veya `20.00`\n"
-                        "• `25 Mayıs 2026`  `20:00`"
-                    ),
+                c_card(
+                    "## ❌ Geçersiz Tarih/Saat",
+                    body="Desteklenen formatlar:\n• `25.05.2026`  `20:00` veya `20.00`\n• `25 Mayıs 2026`  `20:00`",
+                    thumbnail=thumb,
                     color=0xED4245,
                 ),
                 ephemeral=True,
@@ -115,7 +113,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
 
         if start_time <= discord.utils.utcnow():
             return await v2_followup(interaction,
-                c_container(c_text("**❌ Hata**\n\nBaşlangıç zamanı geçmişte olamaz."), color=0xED4245),
+                c_card("## ❌ Hata", body="Başlangıç zamanı geçmişte olamaz.", thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
 
@@ -124,7 +122,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
             end_time = parse_datetime(self.tarih.value, self.bitis.value)
             if end_time is None:
                 return await v2_followup(interaction,
-                    c_container(c_text("**❌ Hata**\n\nBitiş saati formatı tanınamadı."), color=0xED4245),
+                    c_card("## ❌ Hata", body="Bitiş saati formatı tanınamadı.", thumbnail=thumb, color=0xED4245),
                     ephemeral=True,
                 )
 
@@ -135,7 +133,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
         if self.e_resim:
             if not (self.e_resim.content_type and self.e_resim.content_type.startswith("image/")):
                 return await v2_followup(interaction,
-                    c_container(c_text("**❌ Hata**\n\nYüklenen dosya bir resim olmalıdır."), color=0xED4245),
+                    c_card("## ❌ Hata", body="Yüklenen dosya bir resim olmalıdır.", thumbnail=thumb, color=0xED4245),
                     ephemeral=True,
                 )
             image_bytes = await self.e_resim.read()
@@ -164,42 +162,39 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
             ev = await interaction.guild.create_scheduled_event(**event_kwargs)
         except discord.HTTPException as exc:
             return await v2_followup(interaction,
-                c_container(c_text(f"**❌ Hata**\n\nEtkinlik oluşturulamadı: {exc}"), color=0xED4245),
+                c_card("## ❌ Hata", body=f"Etkinlik oluşturulamadı: {exc}", thumbnail=thumb, color=0xED4245),
                 ephemeral=True,
             )
 
         event_url = f"https://discord.com/events/{interaction.guild.id}/{ev.id}"
 
-        lines = [
-            f"**📅 {self.e_başlık}**",
-            "",
+        body_lines = [
             self.açıklama.value,
             "",
             f"📆 **Başlangıç:** <t:{int(start_time.timestamp())}:F>",
         ]
         if end_time:
-            lines.append(f"🏁 **Bitiş:** <t:{int(end_time.timestamp())}:t>")
+            body_lines.append(f"🏁 **Bitiş:** <t:{int(end_time.timestamp())}:t>")
         if self.e_kanal:
-            lines.append(f"🔊 **Kanal:** {self.e_kanal.mention}")
+            body_lines.append(f"🔊 **Kanal:** {self.e_kanal.mention}")
         elif self.konum.value:
-            lines.append(f"📍 **Konum:** {self.konum.value}")
-        lines.append(f"🔗 **Bağlantı:** [Discord'da Aç]({event_url})")
-        lines.append(f"\n-# Oluşturan: {interaction.user.display_name}")
+            body_lines.append(f"📍 **Konum:** {self.konum.value}")
+        body_lines.append(f"🔗 **Bağlantı:** [Discord'da Aç]({event_url})")
+        body_lines.append(f"\n-# Oluşturan: {interaction.user.display_name}")
 
-        items: list[dict] = [c_text("\n".join(lines))]
+        items: list[dict] = [
+            c_section(c_text(f"## ✅ Etkinlik Oluşturuldu"), accessory=c_thumbnail(thumb)),
+            c_separator(),
+            c_text("\n".join(body_lines)),
+        ]
         if self.e_resim:
             items.append(c_separator())
             items.append(c_media(self.e_resim.url))
 
-        await v2_followup(interaction,
-            c_container(*items, color=0x9B59B6),
-            ephemeral=True,
-        )
+        await v2_followup(interaction, c_container(*items, color=0x57F287), ephemeral=True)
 
         if self.e_duyuru:
             duyuru_lines = [
-                f"**📣 Yeni Etkinlik: {self.e_başlık}**",
-                "",
                 self.açıklama.value,
                 "",
                 f"📆 **Başlangıç:** <t:{int(start_time.timestamp())}:F>",
@@ -211,7 +206,11 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
             duyuru_lines.append(f"\n[**→ Etkinliğe Git**]({event_url})")
             duyuru_lines.append(f"\n-# Oluşturan: {interaction.user.display_name}")
 
-            duyuru_items: list[dict] = [c_text("\n".join(duyuru_lines))]
+            duyuru_items: list[dict] = [
+                c_section(c_text(f"## 📣 Yeni Etkinlik: {self.e_başlık}"), accessory=c_thumbnail(thumb)),
+                c_separator(),
+                c_text("\n".join(duyuru_lines)),
+            ]
             if self.e_resim:
                 duyuru_items.append(c_separator())
                 duyuru_items.append(c_media(self.e_resim.url))

@@ -1,7 +1,7 @@
 import discord
 from dataclasses import dataclass, field
 from collections import deque
-from .._v2 import c_text, c_section, c_container, c_thumbnail
+from .._v2 import c_text, c_section, c_container, c_thumbnail, c_card
 
 YTDL_FLAT_OPTIONS = {
     "format": "bestaudio/best",
@@ -90,9 +90,6 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
 
 
 def stopped_card() -> dict:
-    return c_container(
-        c_text("**⏹️ Müzik Durduruldu**\n\nKuyruk bitti veya durduruldu."),
-        color=0xED4245,
-    )
+    return c_card("## ⏹️ Müzik Durduruldu", body="Kuyruk bitti veya durduruldu.", color=0xED4245)
 
 

@@ -379,7 +379,8 @@ class IsimSehirOyunu:
         items: list[dict] = [
             c_section(
                 c_text(f"## 🏆 İsim Şehir Bitti!\n### {kazanan.display_name if kazanan else '—'} kazandı"),
-                accessory=c_thumbnail(str(kazanan.display_avatar.url) if kazanan else ""),
+                # kazanan None ise accessory=None → c_section text fallback'e düşer
+                accessory=c_thumbnail(str(kazanan.display_avatar.url) if kazanan else None),
             ),
             c_separator(),
             c_text("\n\n".join(satırlar)),

@@ -26,7 +26,12 @@ def c_text(content: str) -> dict:
     return {"type": TEXT, "content": content}
 
 
-def c_thumbnail(url: str) -> dict:
+def c_thumbnail(url: str | None) -> dict | None:
+    """Thumbnail component. Boş/None URL ise None döner — c_section
+    accessory=None gelince text fallback'e geçer, böylece 400 hatası önlenir.
+    """
+    if not url:
+        return None
     return {"type": THUMBNAIL, "media": {"url": url}}
 
 

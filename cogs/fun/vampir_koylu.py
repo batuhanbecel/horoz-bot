@@ -914,10 +914,16 @@ class VampirKoyluOyunu:
 
         yaşayanlar_str = "\n".join(f"🪑 {o.mention}" for o in self.yaşayanlar) or "_—_"
 
+        # Guild icon yoksa kurucu avatarı fallback olur
+        guild_icon = (
+            str(self.kanal.guild.icon.url)
+            if self.kanal.guild and self.kanal.guild.icon
+            else str(self.kurucu.display_avatar.url)
+        )
         if kurtarıldı:
             sabah_section = c_section(
                 c_text("## 🌅 Sabah Oldu\n### 💉 Doktor Birini Kurtardı!"),
-                accessory=c_thumbnail(str(self.kanal.guild.icon.url) if self.kanal.guild and self.kanal.guild.icon else ""),
+                accessory=c_thumbnail(guild_icon),
             )
             sabah_body = "Vampirler bir kurban seçti ama Doktor onu korudu — **kimse ölmedi!**"
             renk = COLORS.SUCCESS
@@ -932,7 +938,7 @@ class VampirKoyluOyunu:
         else:
             sabah_section = c_section(
                 c_text("## 🌅 Sabah Oldu\n### 😴 Sessiz Bir Gece"),
-                accessory=c_thumbnail(str(self.kanal.guild.icon.url) if self.kanal.guild and self.kanal.guild.icon else ""),
+                accessory=c_thumbnail(guild_icon),
             )
             sabah_body = "Bu gece kimse ölmedi."
             renk = _C_DAWN

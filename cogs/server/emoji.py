@@ -33,6 +33,7 @@ class EmojiStealer(commands.Cog):
     # /emoji-ekle ─ tek emoji ekleme
     @app_commands.command(name="emoji-ekle", description="Başka bir sunucudaki özel emojiyi bu sunucuya ekler.")
     @app_commands.describe(emoji="Emoji metni  (<:isim:123456>  veya  <a:isim:123456>)")
+    @app_commands.guild_only()
     async def emoji_ekle(self, interaction: discord.Interaction, emoji: str):
         await interaction.response.defer(ephemeral=True)
 
@@ -87,6 +88,7 @@ class EmojiStealer(commands.Cog):
 
     # /oto-emoji ─ otomatik ekleme aç/kapa
     @app_commands.command(name="oto-emoji", description="Sunucuda kullanılan yabancı emojileri otomatik ekler (aç/kapat).")
+    @app_commands.guild_only()
     async def oto_emoji(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.manage_emojis_and_stickers:

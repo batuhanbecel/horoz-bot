@@ -279,6 +279,7 @@ class Social(commands.Cog):
         duyuru_yap="Etkinlik bağlantısının duyurulacağı metin kanalı",
         resim="Etkinlik kapak görseli (dosya yükle)",
     )
+    @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_events=True)
     async def etkinlik(
         self,

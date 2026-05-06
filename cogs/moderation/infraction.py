@@ -20,16 +20,16 @@ class InfractionMod(commands.Cog):
     ihlal = app_commands.Group(
         name="ihlal",
         description="İhlal yönetim komutları",
+        guild_only=True,
     )
 
     # /ihlal listele
     @ihlal.command(name="listele", description="Bir üyenin ihlal geçmişini gösterir.")
     @app_commands.describe(üye="İhlalleri görüntülenecek üye")
     async def listele(self, interaction: discord.Interaction, üye: discord.Member):
-        thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
                 ephemeral=True,
             )
 
@@ -71,10 +71,9 @@ class InfractionMod(commands.Cog):
     @ihlal.command(name="sil", description="Bir üyenin tüm ihlallerini temizler.")
     @app_commands.describe(üye="İhlalleri temizlenecek üye")
     async def sil(self, interaction: discord.Interaction, üye: discord.Member):
-        thumb = str(interaction.client.user.display_avatar.url)
         if not interaction.user.guild_permissions.administrator:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Yönetici** yetkisi gereklidir.", thumbnail=thumb, color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Yönetici** yetkisi gereklidir.", color=COLORS.DANGER),
                 ephemeral=True,
             )
         rows = await db.get_infractions(interaction.guild_id, üye.id)

@@ -12,10 +12,13 @@ from .._v2 import (
 class Messaging(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # Task referanslarını GC'den koru
+        self._reminders: set[asyncio.Task] = set()
 
     # /yaz
     @app_commands.command(name="yaz", description="Seçilen kanala botun ağzından mesaj gönderir.")
     @app_commands.describe(kanal="Mesajın gönderileceği kanal")
+    @app_commands.guild_only()
     async def yaz(self, interaction: discord.Interaction, kanal: discord.TextChannel):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
@@ -36,6 +39,7 @@ class Messaging(commands.Cog):
         app_commands.Choice(name="🟠 Turuncu", value="turuncu"),
         app_commands.Choice(name="🩷 Pembe",   value="pembe"),
     ])
+    @app_commands.guild_only()
     async def embed_gonder(self, interaction: discord.Interaction, kanal: discord.TextChannel, renk: str = "mavi"):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
@@ -52,6 +56,7 @@ class Messaging(commands.Cog):
         app_commands.Choice(name="@here",     value="@here"),
         app_commands.Choice(name="Ping Yok",  value=""),
     ])
+    @app_commands.guild_only()
     async def duyuru(self, interaction: discord.Interaction, kanal: discord.TextChannel, ping: str = ""):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
@@ -86,8 +91,8 @@ class Messaging(commands.Cog):
         guild_name = interaction.guild.name if interaction.guild else "DM"
 
         async def _remind():
-            await asyncio.sleep(dakika * 60)
             try:
+                await asyncio.sleep(dakika * 60)
                 dm = await interaction.user.create_dm()
                 await channel_send(dm, c_container(
                     c_text("## ⏰ Hatırlatma!"),
@@ -97,10 +102,12 @@ class Messaging(commands.Cog):
                     c_text(f"-# {dakika} dk önce **{guild_name}** sunucusunda ayarlandı."),
                     color=COLORS.GAME,
                 ))
-            except discord.Forbidden:
+            except (discord.Forbidden, discord.HTTPException):
                 pass
 
-        asyncio.create_task(_remind())
+        task = asyncio.create_task(_remind())
+        self._reminders.add(task)
+        task.add_done_callback(self._reminders.discard)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         await error_response(interaction, str(error))

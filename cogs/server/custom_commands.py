@@ -17,6 +17,7 @@ class CustomCommands(commands.Cog):
         isim="Komut ismi (boşluksuz, küçük harf, max 32 karakter)",
         yanıt="Komut çalıştırıldığında gönderilecek mesaj",
     )
+    @app_commands.guild_only()
     async def komut_yarat(self, interaction: discord.Interaction, isim: str, yanıt: str):
         if not interaction.user.guild_permissions.manage_guild:
             return await respond(interaction,
@@ -54,6 +55,7 @@ class CustomCommands(commands.Cog):
 
     # /komut-liste
     @app_commands.command(name="komut-liste", description="Sunucudaki özel komutları listeler.")
+    @app_commands.guild_only()
     async def komut_liste(self, interaction: discord.Interaction):
         rows = await db.list_custom_commands(interaction.guild_id)
         if not rows:
@@ -86,6 +88,7 @@ class CustomCommands(commands.Cog):
     # /komut-sil
     @app_commands.command(name="komut-sil", description="Bir özel komutu siler.")
     @app_commands.describe(isim="Silinecek komutun ismi")
+    @app_commands.guild_only()
     async def komut_sil(self, interaction: discord.Interaction, isim: str):
         if not interaction.user.guild_permissions.manage_guild:
             return await respond(interaction,
@@ -111,6 +114,7 @@ class CustomCommands(commands.Cog):
     # /komut
     @app_commands.command(name="komut", description="Bir özel komutu çalıştırır.")
     @app_commands.describe(isim="Çalıştırılacak komutun ismi")
+    @app_commands.guild_only()
     async def komut(self, interaction: discord.Interaction, isim: str):
         isim = isim.lower().strip()
         row  = await db.get_custom_command(interaction.guild_id, isim)

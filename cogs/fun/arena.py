@@ -254,6 +254,7 @@ class Arena(commands.Cog):
 
     @app_commands.command(name="arena", description="Bir oyuncuyla tur bazlı dövüş yap! (Kılıç / Büyü / Kalkan)")
     @app_commands.describe(rakip="Dövüşmek istediğin kişi")
+    @app_commands.guild_only()
     async def arena(self, interaction: discord.Interaction, rakip: discord.Member):
         thumb = str(interaction.client.user.display_avatar.url)
         if rakip.id == interaction.user.id:

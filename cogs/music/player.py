@@ -29,17 +29,47 @@ class Music(commands.Cog):
         return self.players[guild_id]
 
     async def ensure_voice(self, interaction: discord.Interaction) -> discord.VoiceClient | None:
-        if not interaction.user.voice or not interaction.user.voice.channel:
+        # interaction.user Member olmalı (guild_only komut)
+        member = interaction.user if isinstance(interaction.user, discord.Member) else None
+        if member is None or not member.voice or not member.voice.channel:
             await respond(interaction,
                 c_card("## ❌ Ses Kanalı Gerekli", body="Bir ses kanalında olmanız gerekiyor.", color=COLORS.DANGER),
                 ephemeral=True,
             )
             return None
-        vc: discord.VoiceClient = interaction.guild.voice_client
-        if vc is None:
-            vc = await interaction.user.voice.channel.connect()
-        elif vc.channel != interaction.user.voice.channel:
-            await vc.move_to(interaction.user.voice.channel)
+
+        target_channel = member.voice.channel
+        # Bot'un ses kanalına bağlanma yetkisi var mı?
+        perms = target_channel.permissions_for(interaction.guild.me)
+        if not (perms.connect and perms.speak):
+            await respond(interaction,
+                c_card(
+                    "## ❌ Botun Ses Yetkisi Yok",
+                    body=f"Botun {target_channel.mention} kanalına bağlanma + konuşma yetkisi gerekiyor.",
+                    color=COLORS.DANGER,
+                ),
+                ephemeral=True,
+            )
+            return None
+
+        vc: discord.VoiceClient = interaction.guild.voice_client  # type: ignore[assignment]
+        try:
+            if vc is None:
+                vc = await target_channel.connect()
+            elif vc.channel != target_channel:
+                await vc.move_to(target_channel)
+        except discord.ClientException as ex:
+            await respond(interaction,
+                c_card("## ❌ Ses Bağlantısı Hatası", body=f"```{ex}```", color=COLORS.DANGER),
+                ephemeral=True,
+            )
+            return None
+        except (discord.Forbidden, discord.HTTPException) as ex:
+            await respond(interaction,
+                c_card("## ❌ Bağlantı Başarısız", body=f"```{ex}```", color=COLORS.DANGER),
+                ephemeral=True,
+            )
+            return None
         return vc
 
     async def resolve_stream_url(self, track: Track) -> bool:
@@ -68,20 +98,28 @@ class Music(commands.Cog):
             with yt_dlp.YoutubeDL(YTDL_STREAM_OPTIONS) as ydl:
                 search = f"ytsearch:{query}" if not is_url(query) else query
                 info = ydl.extract_info(search, download=False)
+                if not info:
+                    return None
                 if "entries" in info:
-                    info = info["entries"][0]
+                    entries = info.get("entries") or []
+                    if not entries:
+                        return None
+                    info = entries[0]
                 return info
 
         try:
             info = await loop.run_in_executor(None, _fetch)
+            if not info:
+                return None
             return Track(
-                title=info.get("title", "Bilinmiyor"),
-                webpage_url=info.get("webpage_url", query),
+                title=info.get("title") or "Bilinmiyor",
+                webpage_url=info.get("webpage_url") or query,
                 requester=requester,
-                duration=info.get("duration", 0),
+                duration=info.get("duration") or 0,
                 stream_url=info.get("url"),
             )
-        except Exception:
+        except Exception as e:
+            print(f"[fetch_single] Hata: {e}")
             return None
 
     async def fetch_playlist(self, url: str, requester: discord.Member) -> list[Track]:
@@ -208,7 +246,11 @@ class Music(commands.Cog):
 
     # ── Commands ───────────────────────────────────────────────────────────────
 
-    music = app_commands.Group(name="müzik", description="Müzik komutları")
+    music = app_commands.Group(
+        name="müzik",
+        description="Müzik komutları",
+        guild_only=True,
+    )
 
     @music.command(name="çal", description="Şarkı adı, YouTube URL'si veya playlist çalar.")
     @app_commands.describe(sorgu="Şarkı adı, YouTube linki veya playlist linki")
@@ -285,8 +327,15 @@ class Music(commands.Cog):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 return ydl.extract_info(f"ytsearch5:{sorgu}", download=False)
 
-        info = await loop.run_in_executor(None, _search)
-        entries = [e for e in info.get("entries", []) if e][:5]
+        try:
+            info = await loop.run_in_executor(None, _search)
+        except Exception as e:
+            return await v2_followup(interaction,
+                c_card("## ❌ Arama Hatası", body=f"```{e}```", color=COLORS.DANGER),
+                ephemeral=True,
+            )
+
+        entries = [e for e in (info or {}).get("entries", []) if e][:5]
 
         if not entries:
             return await v2_followup(interaction,

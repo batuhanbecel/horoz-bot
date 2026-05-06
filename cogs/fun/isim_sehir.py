@@ -270,6 +270,14 @@ class IsimSehirOyunu:
         self.msg = await channel_send(self.kanal, self._tur_card(), view=view)
 
     async def cevap_kaydet(self, interaction: discord.Interaction, cevaplar: dict[str, str]):
+        # Race condition: kullanıcı modal açıkken tur süresi dolmuş veya başka bir submit gelmiş olabilir
+        if interaction.user not in self.oyuncular:
+            return await _v2_err(interaction, "⛔ Erişim", "Bu oyuna dahil değilsin.")
+        if interaction.user.id in self.cevaplar:
+            return await _v2_err(interaction, "🔁 Zaten Girildi", "Cevaplarını zaten kaydettin.", COLORS.WARNING)
+        if self.tur_view is None or self.tur_view._bitti:
+            return await _v2_err(interaction, "⏰ Tur Bitti", "Tur süresi doldu, cevaplar kaydedilemedi.", COLORS.WARNING)
+
         self.cevaplar[interaction.user.id] = cevaplar
         thumb = str(interaction.user.display_avatar.url)
         cevap_satırları = "\n".join(
@@ -395,6 +403,7 @@ class IsimSehir(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="isimşehir", description="Arkadaşlarla İsim Şehir oyna! (5 tur, 5 kategori)")
+    @app_commands.guild_only()
     async def isim_sehir(self, interaction: discord.Interaction):
         view = IsimSehirLobiView(interaction.user)  # type: ignore[arg-type]
         view.msg = await respond(interaction, *view._card(), view=view)

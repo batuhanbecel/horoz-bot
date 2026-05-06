@@ -156,7 +156,10 @@ def c_action_card(
         c_section(c_text(f"## {title}"), accessory=c_thumbnail(target_avatar))
         if target_avatar else c_text(f"## {title}")
     )
-    items: list[dict] = [header, c_separator(), c_text(c_kv_block(fields or []))]
+    items: list[dict] = [header]
+    if fields:
+        items.append(c_separator())
+        items.append(c_text(c_kv_block(fields)))
     if footer:
         items.append(c_separator())
         items.append(c_text(f"-# {footer}"))

@@ -570,9 +570,14 @@ class Games(commands.Cog):
     async def adamasmaca(self, interaction: discord.Interaction):
         kelime = random.choice(_KELIMELER)
         view   = AdamAsmacaView(interaction.user, kelime)
-        await interaction.response.defer(ephemeral=True)
-        msg = await channel_send(interaction.channel, view._card(), view=view)
-        view.msg = msg
+        # Public respond ile başlat — defer ephemeral askıda kalıyordu
+        try:
+            view.msg = await respond(interaction, view._card(), view=view)
+        except discord.HTTPException as ex:
+            return await respond(interaction,
+                c_card("## ❌ Hata", body=f"Oyun başlatılamadı:\n```{ex}```", color=_C_RED),
+                ephemeral=True,
+            )
 
     @app_commands.command(name="kaccm", description="Pipi ölçer. Bilimsel kesinlik garantili.")
     @app_commands.describe(kişi="Ölçülecek kişi (boş = kendin)")

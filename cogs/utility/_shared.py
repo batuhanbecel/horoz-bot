@@ -45,6 +45,11 @@ class MesajModal(discord.ui.Modal):
                 c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
                 ephemeral=True,
             )
+        except discord.HTTPException as ex:
+            await respond(interaction,
+                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
+                ephemeral=True,
+            )
 
 
 class EmbedModal(discord.ui.Modal):
@@ -83,6 +88,11 @@ class EmbedModal(discord.ui.Modal):
         except discord.Forbidden:
             await respond(interaction,
                 c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
+                ephemeral=True,
+            )
+        except discord.HTTPException as ex:
+            await respond(interaction,
+                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
                 ephemeral=True,
             )
 
@@ -135,5 +145,10 @@ class DuyuruModal(discord.ui.Modal):
         except discord.Forbidden:
             await respond(interaction,
                 c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
+                ephemeral=True,
+            )
+        except discord.HTTPException as ex:
+            await respond(interaction,
+                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
                 ephemeral=True,
             )

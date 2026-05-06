@@ -351,6 +351,7 @@ class RusRuleti(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="rusruleti", description="Rus Ruleti oyna! 6 oda, 1 mermi.")
+    @app_commands.guild_only()
     async def rusruleti(self, interaction: discord.Interaction):
         lobi = LobiView(interaction.user)
         lobi.msg = await respond(interaction, *lobi._card(), view=lobi)

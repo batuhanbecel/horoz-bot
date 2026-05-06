@@ -75,7 +75,7 @@ class Info(commands.Cog):
         d, h = divmod(h, 24)
         uptime = f"{d}g {h}sa {m}dk {s}sn" if d else f"{h}sa {m}dk {s}sn"
 
-        members = sum(g.member_count for g in self.bot.guilds)
+        members = sum(g.member_count or 0 for g in self.bot.guilds)
 
         await respond(interaction, c_info_card(
             "🐓 Horoz Bot",
@@ -139,13 +139,26 @@ class Info(commands.Cog):
 
     # /sunucu ─ rich server info card with banner
     @app_commands.command(name="sunucu", description="Sunucu hakkında bilgi verir.")
+    @app_commands.guild_only()
     async def sunucu(self, interaction: discord.Interaction):
         guild = interaction.guild
+        if guild is None:
+            return await error_response(interaction, "Bu komut sadece sunucuda çalışır.")
         created = guild.created_at.replace(tzinfo=timezone.utc)
 
-        humans = sum(1 for m in guild.members if not m.bot)
-        bots = guild.member_count - humans
-        online = sum(1 for m in guild.members if m.status != discord.Status.offline)
+        # Member cache yoksa member_count'u kullan, fallback ile bot/insan bilgisi yaklaşık
+        cached = list(guild.members)
+        toplam = guild.member_count or len(cached)
+        humans = sum(1 for m in cached if not m.bot)
+        bot_count = sum(1 for m in cached if m.bot)
+        if len(cached) < toplam:
+            # Cache eksik — humans/bot kesin değil
+            humans_str = f"`~{humans:,}`"
+            bots_str = f"`~{bot_count:,}`"
+        else:
+            humans_str = f"`{humans:,}`"
+            bots_str = f"`{bot_count:,}`"
+        online = sum(1 for m in cached if m.status != discord.Status.offline)
 
         identity = [
             ("👑 Sahip", guild.owner.mention if guild.owner else "_Bilinmiyor_"),
@@ -154,9 +167,9 @@ class Info(commands.Cog):
             ("🔒 Doğrulama", f"`{str(guild.verification_level).title()}`"),
         ]
         members = [
-            ("👥 Toplam Üye", f"`{guild.member_count:,}`"),
-            ("🧑 İnsan", f"`{humans:,}`"),
-            ("🤖 Bot", f"`{bots:,}`"),
+            ("👥 Toplam Üye", f"`{toplam:,}`"),
+            ("🧑 İnsan", humans_str),
+            ("🤖 Bot", bots_str),
             ("🟢 Aktif", f"`{online:,}`"),
         ]
         channels = [

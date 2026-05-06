@@ -13,6 +13,7 @@ class ChannelMod(commands.Cog):
     kanal = app_commands.Group(
         name="kanal",
         description="Kanal yönetim komutları",
+        guild_only=True,
     )
 
     # /kanal temizle

@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from .player import Music
 
 
-def _ephemeral_status(emoji: str, title: str, body: str = "", color: int = COLORS.PRIMARY, thumb: str | None = None) -> dict:
-    return c_card(f"## {emoji} {title}", body=body, thumbnail=thumb, color=color)
+def _ephemeral_status(emoji: str, title: str, body: str = "", color: int = COLORS.PRIMARY) -> dict:
+    return c_card(f"## {emoji} {title}", body=body, color=color)
 
 
 class PlayerView(discord.ui.View):

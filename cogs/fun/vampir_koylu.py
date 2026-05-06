@@ -1103,6 +1103,7 @@ class VampirKoylu(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="vampirkoylu", description="Arkadaşlarla Vampir Köylü oyna! (4-12 oyuncu)")
+    @app_commands.guild_only()
     async def vampirkoylu(self, interaction: discord.Interaction):
         view = VampirKoyluLobiView(interaction.user)  # type: ignore[arg-type]
         view.msg = await respond(interaction, *view._card(), view=view)

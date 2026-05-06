@@ -65,6 +65,17 @@ def _flags(ephemeral: bool) -> int:
     return _V2 | (_EPH if ephemeral else 0)
 
 
+def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None:
+    # discord.py < 2.5 uses _responded: bool, newer versions use _response_type: int
+    try:
+        resp._responded = True  # type: ignore[attr-defined]
+    except AttributeError:
+        try:
+            resp._response_type = type_id  # type: ignore[attr-defined]
+        except AttributeError:
+            pass
+
+
 # ── Interaction response helpers ──────────────────────────────────────────────
 
 async def respond(
@@ -84,7 +95,7 @@ async def respond(
         route,
         json={"type": 4, "data": {"flags": _flags(ephemeral), "components": _build(components, view)}},
     )
-    interaction.response._responded = True
+    _mark_responded(interaction.response, 4)
     if view:
         msg = await interaction.original_response()
         interaction._state.store_view(view, msg.id)
@@ -126,7 +137,7 @@ async def update(
         route,
         json={"type": 7, "data": {"flags": _V2, "components": _build(components, view)}},
     )
-    interaction.response._responded = True
+    _mark_responded(interaction.response, 7)
 
 
 async def followup(

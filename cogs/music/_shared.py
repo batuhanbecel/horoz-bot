@@ -48,6 +48,7 @@ class GuildPlayer:
     current: Track | None = None
     volume: float = 0.5
     loop: bool = False
+    paused: bool = False
     force_next: bool = False
     text_channel_id: int | None = None
     player_message: discord.Message | None = None
@@ -79,14 +80,22 @@ def yt_thumbnail(url: str) -> str | None:
 
 
 def now_playing_card(track: Track, player: GuildPlayer) -> dict:
-    """Müzik çalar kartı: thumbnail + başlık + meta."""
+    """Müzik çalar kartı: thumbnail + başlık + meta. Player state'ine göre dinamik."""
     thumb = yt_thumbnail(track.webpage_url) or str(track.requester.display_avatar.url)
     duration = duration_fmt(track.duration)
     loop_str = "🔂 Açık" if player.loop else "➡️ Kapalı"
 
+    # Durum (paused / playing) — başlık ve renk değişir
+    if player.paused:
+        title = "⏸️ Duraklatıldı"
+        color = COLORS.WARNING
+    else:
+        title = "▶️ Şimdi Çalıyor"
+        color = COLORS.MUSIC
+
     items: list[dict] = [
         c_section(
-            c_text(f"## ▶️ Şimdi Çalıyor\n### [{track.title}]({track.webpage_url})"),
+            c_text(f"## {title}\n### [{track.title}]({track.webpage_url})"),
             accessory=c_thumbnail(thumb),
         ),
         c_separator(),
@@ -104,7 +113,7 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
         items.append(c_separator())
         items.append(c_text(f"⏭️ **Sonraki:** {next_track.title[:60]}"))
 
-    return c_container(*items, color=COLORS.MUSIC)
+    return c_container(*items, color=color)
 
 
 def stopped_card() -> dict:

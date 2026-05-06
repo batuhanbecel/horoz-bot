@@ -6,7 +6,7 @@ from collections import deque
 from ._shared import GuildPlayer, Track, now_playing_card, stopped_card, duration_fmt, yt_thumbnail
 from .._v2 import (
     COLORS, msg_edit, c_text, c_section, c_thumbnail, c_separator, c_container,
-    c_card, c_action_card, respond as v2_respond, followup as v2_followup,
+    c_card, respond as v2_respond, followup as v2_followup, update as v2_update,
 )
 
 if TYPE_CHECKING:
@@ -24,13 +24,22 @@ class PlayerView(discord.ui.View):
         self.guild_id = guild_id
 
     def vc(self, interaction: discord.Interaction) -> discord.VoiceClient | None:
-        return interaction.guild.voice_client
+        return interaction.guild.voice_client  # type: ignore[return-value]
 
     def player(self) -> GuildPlayer:
         return self.cog.get_player(self.guild_id)
 
-    def _bot_thumb(self, interaction: discord.Interaction) -> str:
-        return str(interaction.client.user.display_avatar.url)
+    async def _refresh(self, interaction: discord.Interaction):
+        """Mevcut player kartını günceller (button basılan mesajı yeniler)."""
+        p = self.player()
+        if not p.current:
+            return await interaction.response.defer()
+        try:
+            await v2_update(interaction, now_playing_card(p.current, p), view=self)
+        except (discord.HTTPException, discord.NotFound):
+            # Yedek: sadece defer
+            if not interaction.response.is_done():
+                await interaction.response.defer()
 
     # ─ Satır 0: Transport (önceki / pause / atla / dur / döngü) ───────────────
 
@@ -49,33 +58,30 @@ class PlayerView(discord.ui.View):
         p.queue.appendleft(track)
         p.current = None
         vc.stop()
+        # _play_next yeni bir player_message gönderecek; mevcut interaction'ı sessizce defer et
         await interaction.response.defer()
 
     @discord.ui.button(emoji="⏯️", style=discord.ButtonStyle.primary, row=0)
     async def duraklat(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = self.vc(interaction)
-        if not vc:
+        p = self.player()
+        if not vc or not p.current:
             return await v2_respond(interaction,
-                _ephemeral_status("❌", "Hata", "Bot ses kanalında değil.", COLORS.DANGER),
+                _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING),
                 ephemeral=True,
             )
         if vc.is_playing():
             vc.pause()
-            await v2_respond(interaction,
-                _ephemeral_status("⏸️", "Duraklatıldı", "Müzik duraklatıldı.", COLORS.WARNING),
-                ephemeral=True,
-            )
+            p.paused = True
         elif vc.is_paused():
             vc.resume()
-            await v2_respond(interaction,
-                _ephemeral_status("▶️", "Devam Ediyor", "Müzik devam ediyor.", COLORS.SUCCESS),
-                ephemeral=True,
-            )
+            p.paused = False
         else:
-            await v2_respond(interaction,
+            return await v2_respond(interaction,
                 _ephemeral_status("⚠️", "Çalan Yok", "Şu an çalan bir şey yok.", COLORS.WARNING),
                 ephemeral=True,
             )
+        await self._refresh(interaction)
 
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.secondary, row=0)
     async def atla(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -102,28 +108,27 @@ class PlayerView(discord.ui.View):
         p.queue.clear()
         p.current = None
         p.loop = False
+        p.paused = False
         p.force_next = False
+        # Mevcut kartı stopped_card'a çevir
+        for c in self.children:
+            c.disabled = True
         try:
-            await msg_edit(interaction.message, stopped_card())
-        except Exception:
-            pass
+            await v2_update(interaction, stopped_card(), view=self)
+        except (discord.HTTPException, discord.NotFound):
+            if not interaction.response.is_done():
+                await interaction.response.defer()
         p.player_message = None
         try:
             await vc.disconnect()
         except (discord.HTTPException, AttributeError):
             pass
-        await interaction.response.defer()
 
     @discord.ui.button(emoji="🔁", style=discord.ButtonStyle.secondary, row=0)
     async def dongu(self, interaction: discord.Interaction, button: discord.ui.Button):
         p = self.player()
         p.loop = not p.loop
-        durum = "Açık 🔂" if p.loop else "Kapalı"
-        body = "Şu an çalan şarkı sürekli tekrar edecek." if p.loop else "Döngü kapatıldı."
-        await v2_respond(interaction,
-            _ephemeral_status("🔁", f"Döngü {durum}", body, COLORS.MUSIC),
-            ephemeral=True,
-        )
+        await self._refresh(interaction)
 
     # ─ Satır 1: Yardımcılar (ses- / ses+ / karıştır / sıra) ───────────────────
 
@@ -134,10 +139,7 @@ class PlayerView(discord.ui.View):
         p.volume = max(0.0, round(p.volume - 0.1, 1))
         if vc and vc.source:
             vc.source.volume = p.volume
-        await v2_respond(interaction,
-            _ephemeral_status("🔉", "Ses Azaltıldı", f"Yeni seviye: **`{int(p.volume * 100)}%`**", COLORS.MUSIC),
-            ephemeral=True,
-        )
+        await self._refresh(interaction)
 
     @discord.ui.button(emoji="🔊", style=discord.ButtonStyle.secondary, row=1)
     async def ses_artir(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -146,10 +148,7 @@ class PlayerView(discord.ui.View):
         p.volume = min(2.0, round(p.volume + 0.1, 1))
         if vc and vc.source:
             vc.source.volume = p.volume
-        await v2_respond(interaction,
-            _ephemeral_status("🔊", "Ses Artırıldı", f"Yeni seviye: **`{int(p.volume * 100)}%`**", COLORS.MUSIC),
-            ephemeral=True,
-        )
+        await self._refresh(interaction)
 
     @discord.ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=1)
     async def karistir(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -162,13 +161,11 @@ class PlayerView(discord.ui.View):
         q = list(p.queue)
         random.shuffle(q)
         p.queue = deque(q)
-        await v2_respond(interaction,
-            _ephemeral_status("🔀", "Karıştırıldı", f"`{len(q)}` şarkı rastgele sıralandı.", COLORS.SUCCESS),
-            ephemeral=True,
-        )
+        await self._refresh(interaction)
 
     @discord.ui.button(emoji="📋", style=discord.ButtonStyle.secondary, row=1)
     async def sira(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Sıra listesi farklı bilgi içerdiği için ephemeral kalsın
         p = self.player()
         if not p.current and not p.queue:
             return await v2_respond(interaction,

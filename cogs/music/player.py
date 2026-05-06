@@ -15,6 +15,7 @@ from .._v2 import (
     COLORS, c_text, c_section, c_thumbnail, c_separator, c_container,
     c_card, c_action_card, c_list_card,
     channel_send as v2_channel_send, followup as v2_followup, respond,
+    msg_edit as v2_msg_edit,
 )
 
 
@@ -194,6 +195,7 @@ class Music(commands.Cog):
             volume=player.volume,
         )
         vc.play(source, after=lambda e: self.play_next(guild_id, vc))
+        player.paused = False
         await self._send_player_message(guild_id, track, player)
 
     async def _send_player_message(self, guild_id: int, track: Track, player: GuildPlayer):
@@ -219,6 +221,17 @@ class Music(commands.Cog):
             except (discord.NotFound, discord.HTTPException):
                 pass
             player.player_message = None
+
+    async def _refresh_player_message(self, guild_id: int) -> bool:
+        """Mevcut player mesajını now_playing_card ile günceller. Aktif kart yoksa False."""
+        p = self.get_player(guild_id)
+        if not p.current or not p.player_message:
+            return False
+        try:
+            await v2_msg_edit(p.player_message, now_playing_card(p.current, p), view=PlayerView(self, guild_id))
+            return True
+        except (discord.HTTPException, discord.NotFound):
+            return False
 
     # ── Track card builder ─────────────────────────────────────────────────────
 
@@ -386,7 +399,7 @@ class Music(commands.Cog):
 
     @music.command(name="duraklat", description="Çalmayı duraklatır.")
     async def duraklat(self, interaction: discord.Interaction):
-        vc: discord.VoiceClient = interaction.guild.voice_client
+        vc: discord.VoiceClient = interaction.guild.voice_client  # type: ignore[assignment]
         if not vc or not vc.is_playing():
             return await respond(interaction,
                 c_card("## ❌ Hata", body="Şu anda çalan bir şey yok.", color=COLORS.DANGER),
@@ -394,20 +407,16 @@ class Music(commands.Cog):
             )
         vc.pause()
         p = self.get_player(interaction.guild_id)
-        if p.current:
-            await respond(interaction, self._track_card(
-                "⏸️ Duraklatıldı",
-                p.current,
-                color=COLORS.WARNING,
-            ))
-        else:
-            await respond(interaction,
-                c_card("## ⏸️ Duraklatıldı", color=COLORS.WARNING),
-            )
+        p.paused = True
+        await self._refresh_player_message(interaction.guild_id)
+        await respond(interaction,
+            c_card("## ⏸️ Duraklatıldı", body="Müzik duraklatıldı.", color=COLORS.WARNING),
+            ephemeral=True,
+        )
 
     @music.command(name="devam", description="Duraklatılmış müziği devam ettirir.")
     async def devam(self, interaction: discord.Interaction):
-        vc: discord.VoiceClient = interaction.guild.voice_client
+        vc: discord.VoiceClient = interaction.guild.voice_client  # type: ignore[assignment]
         if not vc or not vc.is_paused():
             return await respond(interaction,
                 c_card("## ❌ Hata", body="Duraklatılmış bir şey yok.", color=COLORS.DANGER),
@@ -415,16 +424,12 @@ class Music(commands.Cog):
             )
         vc.resume()
         p = self.get_player(interaction.guild_id)
-        if p.current:
-            await respond(interaction, self._track_card(
-                "▶️ Devam Ediyor",
-                p.current,
-                color=COLORS.SUCCESS,
-            ))
-        else:
-            await respond(interaction,
-                c_card("## ▶️ Devam", body="Müzik devam ediyor.", color=COLORS.SUCCESS),
-            )
+        p.paused = False
+        await self._refresh_player_message(interaction.guild_id)
+        await respond(interaction,
+            c_card("## ▶️ Devam Ediyor", body="Müzik devam ediyor.", color=COLORS.SUCCESS),
+            ephemeral=True,
+        )
 
     @music.command(name="dur", description="Müziği durdurur ve kanaldan ayrılır.")
     async def dur(self, interaction: discord.Interaction):
@@ -460,13 +465,13 @@ class Music(commands.Cog):
         if vc and vc.source:
             vc.source.volume = p.volume
 
-        emoji = "🔇" if seviye == 0 else "🔈" if seviye < 50 else "🔉" if seviye < 120 else "🔊"
+        await self._refresh_player_message(interaction.guild_id)
 
-        await respond(interaction, c_card(
-            f"## {emoji} Ses Seviyesi",
-            body=f"Seviye **`{seviye}%`** olarak ayarlandı.",
-            color=COLORS.MUSIC,
-        ))
+        emoji = "🔇" if seviye == 0 else "🔈" if seviye < 50 else "🔉" if seviye < 120 else "🔊"
+        await respond(interaction,
+            c_card(f"## {emoji} Ses Ayarlandı", body=f"Seviye **`{seviye}%`**", color=COLORS.MUSIC),
+            ephemeral=True,
+        )
 
     @music.command(name="sıra", description="Mevcut müzik sırasını gösterir.")
     async def sira(self, interaction: discord.Interaction):
@@ -508,14 +513,11 @@ class Music(commands.Cog):
         p = self.get_player(interaction.guild_id)
         count = len(p.queue)
         p.queue.clear()
-        await respond(interaction, c_action_card(
-            "🗑️ Sıra Temizlendi",
-            fields=[
-                ("🧹 Silinen Şarkı", f"`{count}`"),
-                ("👤 İsteyen", interaction.user.mention),
-            ],
-            color=COLORS.SUCCESS,
-        ))
+        await self._refresh_player_message(interaction.guild_id)
+        await respond(interaction,
+            c_card("## 🗑️ Sıra Temizlendi", body=f"`{count}` şarkı kaldırıldı.", color=COLORS.SUCCESS),
+            ephemeral=True,
+        )
 
     @music.command(name="karıştır", description="Müzik sırasını rastgele karıştırır.")
     async def karistir(self, interaction: discord.Interaction):
@@ -528,26 +530,22 @@ class Music(commands.Cog):
         q = list(p.queue)
         random.shuffle(q)
         p.queue = deque(q)
-        await respond(interaction, c_action_card(
-            "🔀 Sıra Karıştırıldı",
-            fields=[
-                ("🎲 Karıştırılan", f"`{len(q)}` şarkı"),
-                ("👤 İsteyen", interaction.user.mention),
-            ],
-            color=COLORS.SUCCESS,
-        ))
+        await self._refresh_player_message(interaction.guild_id)
+        await respond(interaction,
+            c_card("## 🔀 Sıra Karıştırıldı", body=f"`{len(q)}` şarkı rastgele sıralandı.", color=COLORS.SUCCESS),
+            ephemeral=True,
+        )
 
     @music.command(name="döngü", description="Döngü modunu açar/kapatır.")
     async def dongu(self, interaction: discord.Interaction):
         p = self.get_player(interaction.guild_id)
         p.loop = not p.loop
+        await self._refresh_player_message(interaction.guild_id)
         durum = "Açık 🔂" if p.loop else "Kapalı"
-        body = "Şu an çalan şarkı sürekli tekrar edecek." if p.loop else "Döngü modu kapatıldı, sıradaki şarkıya geçilecek."
-        await respond(interaction, c_card(
-            f"## 🔁 Döngü {durum}",
-            body=body,
-            color=COLORS.MUSIC if p.loop else COLORS.NEUTRAL,
-        ))
+        await respond(interaction,
+            c_card(f"## 🔁 Döngü {durum}", color=COLORS.MUSIC),
+            ephemeral=True,
+        )
 
     @music.command(name="şimdi", description="Şu an çalan şarkıyı gösterir.")
     async def simdi(self, interaction: discord.Interaction):

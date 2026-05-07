@@ -19,10 +19,8 @@ from .._v2 import (
     COLORS,
     c_card,
     c_container,
-    c_section,
     c_separator,
     c_text,
-    c_thumbnail,
     edit_original,
     error_response,
     respond,
@@ -144,11 +142,9 @@ class SuperLig(commands.Cog):
             ))
             return
 
-        items: list[dict] = [
-            c_text(f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n-# {season} Sezonu"),
-            c_separator(),
-        ]
+        log.info("Standings: API returned %d teams", len(teams))
 
+        rows: list[str] = []
         for team in teams:
             rank     = int(team.get("intRank") or 0)
             name     = team.get("strTeam", "?")
@@ -161,23 +157,29 @@ class SuperLig(commands.Cog):
             ay       = team.get("intGoalsAgainst", "0")
             diff     = _diff_str(team.get("intGoalDifference", 0))
             zone     = _zone(team.get("strDescription") or "")
-            badge    = team.get("strTeamBadge") or None
             rank_str = RANK_EMOJI.get(rank, f"`{rank:2d}.`")
-
-            items.append(
-                c_section(
-                    c_text(f"{rank_str} {zone} **{name}**"),
-                    c_text(f"**{pts}P** · O:{oyn} G:{g} B:{b} M:{m} · {af}:{ay} ({diff})"),
-                    accessory=c_thumbnail(badge),
-                )
+            rows.append(
+                f"{rank_str} {zone} **{name}** — **{pts}P**"
+                f" · O:{oyn} G:{g} B:{b} M:{m} · {af}:{ay} ({diff})"
             )
 
-        items += [
-            c_separator(),
-            c_text("-# 🔵 Şampiyonlar Ligi · 🟠 Avrupa Ligi · 🟢 Konferans Ligi · 🔴 Küme Düşme"),
-        ]
+        # Split at 10 for readability; single block if ≤10 returned
+        top, bot = rows[:10], rows[10:]
+        body_items: list[dict] = [c_text("\n".join(top))]
+        if bot:
+            body_items += [c_separator(spacing=1), c_text("\n".join(bot))]
 
-        await edit_original(interaction, c_container(*items, color=0xE32429))
+        await edit_original(
+            interaction,
+            c_container(
+                c_text(f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n-# {season} Sezonu"),
+                c_separator(),
+                *body_items,
+                c_separator(),
+                c_text("-# 🔵 Şampiyonlar Ligi · 🟠 Avrupa Ligi · 🟢 Konferans Ligi · 🔴 Küme Düşme"),
+                color=0xE32429,
+            ),
+        )
 
     # /lig takvim ───────────────────────────────────────────────────────────────
 

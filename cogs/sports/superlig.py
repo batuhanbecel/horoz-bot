@@ -30,7 +30,7 @@ from .._v2 import (
 log = logging.getLogger("horoz_bot.superlig")
 
 LEAGUE_ID = 322               # Trendyol Süper Lig — allsportsapi.com
-API_BASE  = "https://apiv3.allsportsapi.com/football/"
+API_BASE  = "https://apiv2.allsportsapi.com/football/"
 
 RANK_EMOJI = {1: "🥇", 2: "🥈", 3: "🥉"}
 

@@ -209,7 +209,10 @@ class SuperLig(commands.Cog):
             return
 
         raw = data.get("result")
-        log.debug("AllSportsAPI Standings raw type=%s val=%r", type(raw).__name__, str(raw)[:400])
+        if isinstance(raw, dict):
+            log.warning("Standings result keys: %s | first 600: %r", list(raw.keys()), str(raw)[:600])
+        else:
+            log.warning("Standings result type=%s val=%r", type(raw).__name__, str(raw)[:600])
         teams, season = _extract_standings(raw)
         if not data.get("success") or not teams:
             await edit_original(interaction, self._error_card(

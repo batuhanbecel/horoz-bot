@@ -5,6 +5,7 @@ cogs/sports/superlig.py — Trendyol Süper Lig komutları
 """
 from __future__ import annotations
 
+import html as html_lib
 import json
 import logging
 import re
@@ -36,8 +37,6 @@ WIKI_HEADERS = {"User-Agent": "HorozBot/1.0 (+https://github.com/batuhanbecel/ho
 # ── TheSportsDB (fixtures) ────────────────────────────────────────────────────
 TSDB_LEAGUE_ID = 4339
 TSDB_BASE      = "https://www.thesportsdb.com/api/v1/json/123/"
-
-RANK_EMOJI = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 ZONE_MAP = {
     "champions": "🔵",
@@ -80,13 +79,8 @@ def _wiki_season_url() -> str:
 
 def _strip_html(s: str) -> str:
     s = re.sub(r"<[^>]+>", "", s)
-    s = (
-        s.replace("&amp;", "&")
-         .replace("&lt;", "<")
-         .replace("&gt;", ">")
-         .replace("&nbsp;", " ")
-         .replace("&#160;", " ")
-    )
+    s = html_lib.unescape(s)
+    s = re.sub(r"\[[^\]]+\]", "", s)  # [a], [1], [note 2] gibi Wikipedia dipnotlarını çıkar
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -230,37 +224,59 @@ class SuperLig(commands.Cog):
             )
             return
 
-        season_label = url.rsplit("/", 1)[-1].replace("%E2%80%93", "–").replace("S%C3%BCper", "Süper").replace("_", " ")
-
-        rows: list[str] = []
-        for t in teams:
-            rank = t["position"]
-            name = t["name"]
-            zone = _zone(t["qualification"])
-            diff = _diff_str(t["gd"])
-            rank_str = RANK_EMOJI.get(rank, f"`{rank:2d}.`")
-            rows.append(
-                f"{rank_str} {zone} **{name}** — **{t['points']}P**"
-                f" · O:{t['played']} G:{t['wins']} B:{t['draws']} M:{t['losses']}"
-                f" · {t['gf']}:{t['ga']} ({diff})"
-            )
-
-        top, bot = rows[:10], rows[10:]
-        body_items: list[dict] = [c_text("\n".join(top))]
-        if bot:
-            body_items += [c_separator(spacing=1), c_text("\n".join(bot))]
-
-        await edit_original(
-            interaction,
-            c_container(
-                c_text(f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n-# {season_label}"),
-                c_separator(),
-                *body_items,
-                c_separator(),
-                c_text("-# 🔵 Şampiyonlar Ligi · 🟠 Avrupa Ligi · 🟢 Konferans Ligi · 🔴 Küme Düşme · Kaynak: Wikipedia"),
-                color=0xE32429,
-            ),
+        season_label = (
+            url.rsplit("/", 1)[-1]
+               .replace("%E2%80%93", "–")
+               .replace("S%C3%BCper", "Süper")
+               .replace("_", " ")
         )
+
+        # Hizalı kod-bloğu tablosu
+        NAME_W = 17
+        table_lines = [
+            f"  #  {'Takım'.ljust(NAME_W)} O   G   B   M   GF:GA   AV   P",
+            f"  ─  {'─' * NAME_W} ──  ──  ──  ──  ─────  ───  ──",
+        ]
+        for t in teams:
+            pos  = f"{t['position']:>2}"
+            name = (t["name"] or "")[:NAME_W].ljust(NAME_W)
+            p    = str(t["played"]).rjust(2)
+            w    = str(t["wins"]).rjust(2)
+            d    = str(t["draws"]).rjust(2)
+            l    = str(t["losses"]).rjust(2)
+            gfga = f"{t['gf']}:{t['ga']}".rjust(5)
+            gd   = _diff_str(t["gd"]).rjust(3)
+            pts  = str(t["points"]).rjust(2)
+            table_lines.append(f" {pos}  {name} {p}  {w}  {d}  {l}  {gfga}  {gd}  {pts}")
+        table_block = "```\n" + "\n".join(table_lines) + "\n```"
+
+        # Zone gruplandırması — alt kısımda özet
+        groups: dict[str, list[str]] = {"🔵": [], "🟠": [], "🟢": [], "🔴": []}
+        for t in teams:
+            z = _zone(t["qualification"])
+            if z in groups:
+                groups[z].append(t["name"])
+
+        legend_lines: list[str] = []
+        if groups["🔵"]:
+            legend_lines.append(f"🔵 **Şampiyonlar Ligi** · {', '.join(groups['🔵'])}")
+        if groups["🟠"]:
+            legend_lines.append(f"🟠 **Avrupa Ligi** · {', '.join(groups['🟠'])}")
+        if groups["🟢"]:
+            legend_lines.append(f"🟢 **Konferans Ligi** · {', '.join(groups['🟢'])}")
+        if groups["🔴"]:
+            legend_lines.append(f"🔴 **Küme Düşme** · {', '.join(groups['🔴'])}")
+
+        items: list[dict] = [
+            c_text(f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n-# {season_label}"),
+            c_separator(),
+            c_text(table_block),
+        ]
+        if legend_lines:
+            items += [c_separator(), c_text("\n".join(legend_lines))]
+        items += [c_separator(), c_text("-# Kaynak: Wikipedia")]
+
+        await edit_original(interaction, c_container(*items, color=0xE32429))
 
     # /lig takvim ───────────────────────────────────────────────────────────────
 

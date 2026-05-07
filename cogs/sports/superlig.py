@@ -69,7 +69,57 @@ def _parse_score(result: str) -> tuple[int, int] | None:
 
 
 def _round_label(rnd: str) -> str:
-    return (rnd or "").replace("Week ", "Hafta ").replace("Regular Season - ", "Hafta ")
+    return (
+        (rnd or "")
+        .replace("Week ", "Hafta ")
+        .replace("Regular Season - ", "Hafta ")
+        .replace("Round ", "Hafta ")
+    )
+
+
+def _extract_standings(result) -> tuple[list[dict], str]:
+    """AllSportsAPI v2 standings result → (takım listesi, sezon).
+
+    API formatı (v2 docs p.15):
+      result = {"total": [team, ...], "home": [...], "away": [...]}
+    Fallback olarak list[dict] ve düz dict de desteklenir.
+    """
+    teams: list[dict] = []
+    season = ""
+
+    if isinstance(result, dict):
+        # Normal format: {"total": [...], "home": [...], "away": [...]}
+        total = result.get("total") or []
+        if isinstance(total, list) and total:
+            teams = [t for t in total if isinstance(t, dict)]
+            season = (teams[0].get("league_season") or "") if teams else ""
+            return teams, season
+        # Fallback: herhangi bir list değeri
+        for val in result.values():
+            if isinstance(val, list) and val:
+                teams = [t for t in val if isinstance(t, dict)]
+                if teams:
+                    season = (teams[0].get("league_season") or "")
+                    return teams, season
+
+    elif isinstance(result, list):
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            if "standing_place" in item:
+                teams.append(item)
+            else:
+                nested = item.get("league_standings") or item.get("standings")
+                if isinstance(nested, dict):
+                    for group in nested.values():
+                        if isinstance(group, list):
+                            teams.extend(t for t in group if isinstance(t, dict))
+                elif isinstance(nested, list):
+                    teams.extend(t for t in nested if isinstance(t, dict))
+        if teams:
+            season = (teams[0].get("league_season") or "")
+
+    return teams, season
 
 
 def _loading() -> dict:
@@ -158,26 +208,28 @@ class SuperLig(commands.Cog):
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
             return
 
-        teams = data.get("result") or []
+        raw = data.get("result")
+        log.debug("AllSportsAPI Standings raw type=%s val=%r", type(raw).__name__, str(raw)[:400])
+        teams, season = _extract_standings(raw)
         if not data.get("success") or not teams:
             await edit_original(interaction, self._error_card(
                 f"Puan tablosu alınamadı.\n"
-                f"-# success={data.get('success')} · league_id={LEAGUE_ID}"
+                f"-# success={data.get('success')} · result type={type(raw).__name__} · leagueId={LEAGUE_ID}"
             ))
             return
 
         rows: list[str] = []
         for team in teams:
             rank = int(team.get("standing_place") or 0)
-            name = team.get("team_name", "?")
+            name = team.get("standing_team", "?")
             pts  = team.get("standing_PTS", "0")
-            oyn  = team.get("standing_played", "0")
-            g    = team.get("standing_won", "0")
-            b    = team.get("standing_draw", "0")
-            m    = team.get("standing_lost", "0")
-            af   = team.get("standing_goals_scored", "0")
-            ay   = team.get("standing_goals_against", "0")
-            diff = _diff_str(team.get("standing_goals_diff", "0"))
+            oyn  = team.get("standing_P", "0")
+            g    = team.get("standing_W", "0")
+            b    = team.get("standing_D", "0")
+            m    = team.get("standing_L", "0")
+            af   = team.get("standing_F", "0")
+            ay   = team.get("standing_A", "0")
+            diff = _diff_str(team.get("standing_GD", "0"))
             zone = _zone(team.get("standing_place_type", ""))
             rank_str = RANK_EMOJI.get(rank, f"`{rank:2d}.`")
 
@@ -186,8 +238,7 @@ class SuperLig(commands.Cog):
                 f" · O:{oyn} G:{g} B:{b} M:{m} · {af}:{ay} ({diff})"
             )
 
-        mid      = (len(rows) + 1) // 2
-        season   = (teams[0].get("league_season") or "").strip()
+        mid = (len(rows) + 1) // 2
 
         await edit_original(
             interaction,

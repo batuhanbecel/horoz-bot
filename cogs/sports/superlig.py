@@ -5,9 +5,10 @@ Env: FOOTBALL_API_KEY
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import aiohttp
 import discord
@@ -16,6 +17,7 @@ from discord.ext import commands
 
 from .._v2 import (
     COLORS,
+    c_card,
     c_container,
     c_separator,
     c_text,
@@ -24,22 +26,17 @@ from .._v2 import (
     respond,
 )
 
+log = logging.getLogger("horoz_bot.superlig")
+
 LEAGUE_ID = 203          # Trendyol Süper Lig
 API_BASE  = "https://v3.football.api-sports.io"
 
 RANK_EMOJI  = {1: "🥇", 2: "🥈", 3: "🥉"}
 FORM_EMOJI  = {"W": "🟩", "D": "🟨", "L": "🟥"}
 
-# Rank → (zone emoji, zone label)  — 18 takımlı lig
-ZONES: dict[int, tuple[str, str]] = {
-    1: ("🔵", "Şampiyonlar Ligi"),
-    2: ("🔵", "Şampiyonlar Ligi (E)"),
-    3: ("🔵", "Şampiyonlar Ligi (E)"),
-    4: ("🟠", "Avrupa Ligi"),
-    5: ("🟠", "Avrupa Ligi (E)"),
-    6: ("🟢", "Konferans Ligi"),
-}
-RELEGATION_FROM = 16  # 16, 17, 18 → küme düşme
+# Rank → zone emoji (18 takımlı lig, 3 küme düşer)
+ZONES: dict[int, str] = {1: "🔵", 2: "🔵", 3: "🔵", 4: "🟠", 5: "🟠", 6: "🟢"}
+RELEGATION_FROM = 16
 
 
 def _current_season() -> int:
@@ -50,7 +47,7 @@ def _current_season() -> int:
 def _zone(rank: int) -> str:
     if rank >= RELEGATION_FROM:
         return "🔴"
-    return ZONES.get(rank, ("⬛", ""))[0]
+    return ZONES.get(rank, "⬛")
 
 
 def _form(raw: str) -> str:
@@ -61,6 +58,15 @@ def _round_label(api_round: str) -> str:
     return api_round.replace("Regular Season - ", "Hafta ")
 
 
+# Loading card — ping komutundaki gibi önce bu gönderilir, sonra edit_original
+def _loading() -> dict:
+    return c_card(
+        "## 🏆 Trendyol Süper Lig",
+        body="`─────────────────` Yükleniyor...",
+        color=0xE32429,
+    )
+
+
 class SuperLig(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -69,9 +75,8 @@ class SuperLig(commands.Cog):
 
     # ── API helpers ────────────────────────────────────────────────────────────
 
-    async def _fetch(
-        self, endpoint: str, params: dict, *, ttl: int = 300
-    ) -> dict | None:
+    async def _fetch(self, endpoint: str, params: dict, *, ttl: int = 300) -> dict | None:
+        """API isteği yapar. HTTP 200 dışındaki cevapları da döner (hata detayı için)."""
         if not self._key:
             return None
         cache_key = f"{endpoint}:{sorted(params.items())}"
@@ -84,13 +89,33 @@ class SuperLig(commands.Cog):
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(headers=headers, timeout=timeout) as s:
                 async with s.get(f"{API_BASE}/{endpoint}", params=params) as r:
+                    data = await r.json(content_type=None)
                     if r.status == 200:
-                        data = await r.json()
                         self._cache[cache_key] = (data, time.time())
-                        return data
-        except Exception:
-            pass
+                    else:
+                        log.warning("API %s %s → HTTP %d: %s", endpoint, params, r.status, data)
+                    return data
+        except Exception as exc:
+            log.error("API fetch error (%s %s): %s", endpoint, params, exc)
         return None
+
+    def _api_error_msg(self, data: dict | None) -> str:
+        if data is None:
+            return "API'ye ulaşılamadı (timeout veya ağ hatası)."
+        errors = data.get("errors")
+        if isinstance(errors, dict) and errors:
+            return "API hatası: " + " · ".join(f"`{k}: {v}`" for k, v in errors.items())
+        if isinstance(errors, list) and errors:
+            return "API hatası: " + str(errors[0])
+        return f"Sezon veya lig için veri bulunamadı. (results: {data.get('results', '?')})"
+
+    def _error_card(self, msg: str) -> dict:
+        return c_container(
+            c_text("## ❌ Hata"),
+            c_separator(),
+            c_text(msg),
+            color=COLORS.DANGER,
+        )
 
     def _no_key_card(self) -> dict:
         return c_container(
@@ -98,17 +123,8 @@ class SuperLig(commands.Cog):
             c_separator(),
             c_text(
                 "`.env` dosyasına `FOOTBALL_API_KEY` eklemen gerekiyor.\n\n"
-                "Ücretsiz (100 istek/gün) almak için:\n"
-                "**[api-football.com](https://www.api-football.com/)** → Register → API Key"
+                "Ücretsiz (100 istek/gün): **api-football.com** → Register → API Key"
             ),
-            color=COLORS.DANGER,
-        )
-
-    def _error_card(self, msg: str = "Veri alınamadı. Lütfen daha sonra tekrar dene.") -> dict:
-        return c_container(
-            c_text("## ❌ Hata"),
-            c_separator(),
-            c_text(msg),
             color=COLORS.DANGER,
         )
 
@@ -123,41 +139,40 @@ class SuperLig(commands.Cog):
 
     @lig.command(name="sıralama", description="Süper Lig puan tablosunu gösterir.")
     async def siralama(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        # Ping patterni: önce loading kartı gönder (type-4 V2), sonra edit_original
+        await respond(interaction, _loading())
 
         if not self._key:
             await edit_original(interaction, self._no_key_card())
             return
 
         season = _current_season()
-        data = await self._fetch(
-            "standings", {"league": LEAGUE_ID, "season": season}
-        )
+        data = await self._fetch("standings", {"league": LEAGUE_ID, "season": season})
 
         if not data or not data.get("response"):
-            await edit_original(interaction, self._error_card())
+            await edit_original(interaction, self._error_card(self._api_error_msg(data)))
             return
 
         try:
             standings = data["response"][0]["league"]["standings"][0]
-        except (KeyError, IndexError):
-            await edit_original(interaction, self._error_card("Puan tablosu verisi okunamadı."))
+        except (KeyError, IndexError) as exc:
+            await edit_original(interaction, self._error_card(f"Puan tablosu ayrıştırılamadı: `{exc}`"))
             return
 
         rows: list[str] = []
         for team in standings:
-            rank  = team["rank"]
-            name  = team["team"]["name"]
-            pts   = team["points"]
-            played = team["all"]["played"]
-            w     = team["all"]["win"]
-            d     = team["all"]["draw"]
-            l     = team["all"]["lose"]
-            gf    = team["all"]["goals"]["for"]
-            ga    = team["all"]["goals"]["against"]
-            diff  = gf - ga
+            rank     = team["rank"]
+            name     = team["team"]["name"]
+            pts      = team["points"]
+            played   = team["all"]["played"]
+            w        = team["all"]["win"]
+            d        = team["all"]["draw"]
+            l        = team["all"]["lose"]
+            gf       = team["all"]["goals"]["for"] or 0
+            ga       = team["all"]["goals"]["against"] or 0
+            diff     = gf - ga
             form_raw = (team.get("form") or "")
-            form  = _form(form_raw) if form_raw else "─ ─ ─ ─ ─"
+            form     = _form(form_raw) if form_raw else "─ ─ ─ ─ ─"
 
             rank_str = RANK_EMOJI.get(rank, f"`{rank:2d}.`")
             zone     = _zone(rank)
@@ -196,23 +211,26 @@ class SuperLig(commands.Cog):
 
     @lig.command(name="takvim", description="Yaklaşan Süper Lig maçlarını gösterir.")
     async def takvim(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await respond(interaction, _loading())
 
         if not self._key:
             await edit_original(interaction, self._no_key_card())
             return
 
-        season  = _current_season()
-        today   = datetime.now(timezone.utc)
-        from_dt = today.strftime("%Y-%m-%d")
-        to_dt   = (today + timedelta(days=30)).strftime("%Y-%m-%d")
-
+        season = _current_season()
+        # `next=N` parametresi otomatik olarak oynamanmış (NS) maçları döner —
+        # from/to/status kombinasyonu bazı plan seviyelerinde desteklenmez.
         data = await self._fetch(
             "fixtures",
-            {"league": LEAGUE_ID, "season": season, "from": from_dt, "to": to_dt, "status": "NS"},
+            {"league": LEAGUE_ID, "season": season, "next": 10},
         )
 
-        if not data or not data.get("response"):
+        if not data:
+            await edit_original(interaction, self._error_card(self._api_error_msg(data)))
+            return
+
+        fixtures = data.get("response", [])
+        if not fixtures:
             await edit_original(
                 interaction,
                 c_container(
@@ -224,16 +242,14 @@ class SuperLig(commands.Cog):
             )
             return
 
-        fixtures = data["response"][:15]
         rounds: dict[str, list[str]] = {}
-
         for fix in fixtures:
-            rnd     = fix["league"]["round"]
-            dt      = datetime.fromisoformat(fix["fixture"]["date"].replace("Z", "+00:00"))
-            ts      = int(dt.timestamp())
-            home    = fix["teams"]["home"]["name"]
-            away    = fix["teams"]["away"]["name"]
-            row     = f"📅 <t:{ts}:d> <t:{ts}:t> · **{home}** 🆚 **{away}**"
+            rnd  = fix["league"]["round"]
+            dt   = datetime.fromisoformat(fix["fixture"]["date"].replace("Z", "+00:00"))
+            ts   = int(dt.timestamp())
+            home = fix["teams"]["home"]["name"]
+            away = fix["teams"]["away"]["name"]
+            row  = f"📅 <t:{ts}:d> <t:{ts}:t> · **{home}** 🆚 **{away}**"
             rounds.setdefault(rnd, []).append(row)
 
         sections = [
@@ -246,10 +262,10 @@ class SuperLig(commands.Cog):
             c_container(
                 c_text(
                     f"## 📅 Trendyol Süper Lig — Maç Takvimi\n"
-                    f"-# {season}–{season + 1} Sezonu · Önümüzdeki 30 gün"
+                    f"-# {season}–{season + 1} Sezonu · Sonraki {len(fixtures)} maç"
                 ),
                 c_separator(),
-                c_text("\n\n".join(sections) if sections else "Yaklaşan maç yok."),
+                c_text("\n\n".join(sections)),
                 c_separator(),
                 c_text("-# Saatler yerel saat diliminize göre gösterilir"),
                 color=COLORS.INFO,
@@ -260,7 +276,7 @@ class SuperLig(commands.Cog):
 
     @lig.command(name="sonuçlar", description="Son Süper Lig maç sonuçlarını gösterir.")
     async def sonuclar(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await respond(interaction, _loading())
 
         if not self._key:
             await edit_original(interaction, self._no_key_card())
@@ -269,10 +285,15 @@ class SuperLig(commands.Cog):
         season = _current_season()
         data = await self._fetch(
             "fixtures",
-            {"league": LEAGUE_ID, "season": season, "last": 15, "status": "FT"},
+            {"league": LEAGUE_ID, "season": season, "last": 15},
         )
 
-        if not data or not data.get("response"):
+        if not data:
+            await edit_original(interaction, self._error_card(self._api_error_msg(data)))
+            return
+
+        fixtures = list(reversed(data.get("response", [])))
+        if not fixtures:
             await edit_original(
                 interaction,
                 c_container(
@@ -284,9 +305,7 @@ class SuperLig(commands.Cog):
             )
             return
 
-        fixtures = list(reversed(data["response"]))
         rounds: dict[str, list[str]] = {}
-
         for fix in fixtures:
             rnd      = fix["league"]["round"]
             dt       = datetime.fromisoformat(fix["fixture"]["date"].replace("Z", "+00:00"))
@@ -320,7 +339,7 @@ class SuperLig(commands.Cog):
                     f"-# {season}–{season + 1} Sezonu"
                 ),
                 c_separator(),
-                c_text("\n\n".join(sections) if sections else "Sonuç bulunamadı."),
+                c_text("\n\n".join(sections)),
                 c_separator(),
                 c_text("-# 🟩 Kazanan kalın · 🟨 Beraberlik"),
                 color=COLORS.SUCCESS,
@@ -331,7 +350,7 @@ class SuperLig(commands.Cog):
 
     @lig.command(name="canlı", description="Devam eden Süper Lig maçlarının canlı skorlarını gösterir.")
     async def canli(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await respond(interaction, _loading())
 
         if not self._key:
             await edit_original(interaction, self._no_key_card())
@@ -343,7 +362,12 @@ class SuperLig(commands.Cog):
             ttl=60,
         )
 
-        if not data or not data.get("response"):
+        if not data:
+            await edit_original(interaction, self._error_card(self._api_error_msg(data)))
+            return
+
+        fixtures = data.get("response", [])
+        if not fixtures:
             await edit_original(
                 interaction,
                 c_container(
@@ -356,7 +380,7 @@ class SuperLig(commands.Cog):
             return
 
         rows: list[str] = []
-        for fix in data["response"]:
+        for fix in fixtures:
             home    = fix["teams"]["home"]["name"]
             away    = fix["teams"]["away"]["name"]
             gh      = fix["goals"]["home"] or 0
@@ -381,6 +405,7 @@ class SuperLig(commands.Cog):
     async def cog_app_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ):
+        log.error("Lig komutu hatası: %s", error)
         await error_response(interaction, str(error))
 
 

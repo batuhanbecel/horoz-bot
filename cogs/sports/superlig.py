@@ -31,9 +31,16 @@ API_BASE      = "https://api.sofascore.com/api/v1"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "application/json",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9,tr;q=0.8",
+    "Origin": "https://www.sofascore.com",
+    "Referer": "https://www.sofascore.com/",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+    "Cache-Control": "no-cache",
 }
 
 RANK_EMOJI = {1: "🥇", 2: "🥈", 3: "🥉"}

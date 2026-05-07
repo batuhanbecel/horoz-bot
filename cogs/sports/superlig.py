@@ -1,10 +1,11 @@
 """
 cogs/sports/superlig.py — Trendyol Süper Lig komutları
-API: allsportsapi.com (ücretsiz, 200 istek/ay)
+API: allsportsapi.com v3 (ücretsiz, 200 istek/ay)
 Env: ALLSPORTS_API_KEY
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -28,8 +29,8 @@ from .._v2 import (
 
 log = logging.getLogger("horoz_bot.superlig")
 
-LEAGUE_ID = 148               # Trendyol Süper Lig — allsportsapi.com
-API_BASE  = "https://allsportsapi.com/api/football/"
+LEAGUE_ID = 322               # Trendyol Süper Lig — allsportsapi.com
+API_BASE  = "https://apiv3.allsportsapi.com/football/"
 
 RANK_EMOJI = {1: "🥇", 2: "🥈", 3: "🥉"}
 
@@ -87,26 +88,35 @@ class SuperLig(commands.Cog):
 
     # ── API helpers ────────────────────────────────────────────────────────────
 
-    async def _fetch(self, action: str, params: dict, *, ttl: int = 300) -> dict | None:
+    async def _fetch(self, met: str, params: dict, *, ttl: int = 300) -> dict | None:
+        """apiv3.allsportsapi.com/football/ — met= parametresiyle istek atar."""
         if not self._key:
             return None
-        cache_key = f"{action}:{sorted(params.items())}"
+        cache_key = f"{met}:{sorted(params.items())}"
         if cache_key in self._cache:
             data, ts = self._cache[cache_key]
             if time.time() - ts < ttl:
                 return data
-        query = {"action": action, "APIkey": self._key, **params}
+        query = {"met": met, "APIkey": self._key, **params}
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
                 async with s.get(API_BASE, params=query) as r:
-                    data = await r.json(content_type=None)
+                    text = await r.text()
+                    if not text.strip():
+                        log.error("AllSportsAPI %s → boş yanıt (HTTP %d). URL: %s", met, r.status, r.url)
+                        return None
+                    try:
+                        data = json.loads(text)
+                    except Exception:
+                        log.error("AllSportsAPI %s → JSON parse hatası. İlk 300 karakter: %r", met, text[:300])
+                        return None
                     if r.status == 200:
                         self._cache[cache_key] = (data, time.time())
                     else:
-                        log.warning("AllSportsAPI %s %s → HTTP %d", action, params, r.status)
+                        log.warning("AllSportsAPI %s %s → HTTP %d", met, params, r.status)
                     return data
         except Exception as exc:
-            log.error("AllSportsAPI hata (%s): %s", action, exc)
+            log.error("AllSportsAPI hata (%s): %s", met, exc)
         return None
 
     def _no_key_card(self) -> dict:
@@ -142,7 +152,7 @@ class SuperLig(commands.Cog):
             await edit_original(interaction, self._no_key_card())
             return
 
-        data = await self._fetch("get_standings", {"league_id": LEAGUE_ID})
+        data = await self._fetch("Standings", {"leagueId": LEAGUE_ID})
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
@@ -210,7 +220,7 @@ class SuperLig(commands.Cog):
         from_s = today.strftime("%Y-%m-%d")
         to_s   = (today + timedelta(days=21)).strftime("%Y-%m-%d")
 
-        data = await self._fetch("get_events", {"from": from_s, "to": to_s, "league_id": LEAGUE_ID})
+        data = await self._fetch("Fixtures", {"leagueId": LEAGUE_ID, "from": from_s, "to": to_s})
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
@@ -285,7 +295,7 @@ class SuperLig(commands.Cog):
         from_s = (today - timedelta(days=30)).strftime("%Y-%m-%d")
         to_s   = today.strftime("%Y-%m-%d")
 
-        data = await self._fetch("get_events", {"from": from_s, "to": to_s, "league_id": LEAGUE_ID})
+        data = await self._fetch("Fixtures", {"leagueId": LEAGUE_ID, "from": from_s, "to": to_s})
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
@@ -366,19 +376,14 @@ class SuperLig(commands.Cog):
             await edit_original(interaction, self._no_key_card())
             return
 
-        data = await self._fetch("get_livescore", {}, ttl=60)
+        data = await self._fetch("Livescore", {"leagueId": LEAGUE_ID}, ttl=60)
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
             return
 
         all_live = data.get("result") or []
-        # league_key veya league_id ile Süper Lig maçlarını filtrele
-        fixtures = [
-            e for e in all_live
-            if str(e.get("league_key", "")) == str(LEAGUE_ID)
-            or str(e.get("league_id", "")) == str(LEAGUE_ID)
-        ]
+        fixtures = [e for e in all_live if e.get("event_live") == "1"]
 
         if not fixtures:
             await edit_original(

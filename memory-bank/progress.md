@@ -42,6 +42,13 @@
 - README.md: Windows + Ubuntu kurulum kılavuzu
 - memory-bank: AGENTS.md uyumlu tam dokümantasyon
 
+### ✅ Spor — Trendyol Süper Lig (`/lig`) — v1.2
+- `/lig sıralama` — tam puan tablosu (sıra, puan, G/B/M, averaj, zon rengi, form)
+- `/lig takvim` — önümüzdeki 30 gündeki maçlar, hafta gruplu, Discord timestamp
+- `/lig sonuçlar` — son 15 tamamlanmış maç, hafta gruplu, kazanan kalın
+- `/lig canlı` — devam eden maçlar ve anlık skor (60s cache)
+- API: api-football.com (FOOTBALL_API_KEY env), 5dk cache (canlı 60s)
+
 ## Yapılmadı / Planlı Değil
 - Levels / XP sistemi
 - Economy sistemi

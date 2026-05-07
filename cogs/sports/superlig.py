@@ -169,6 +169,22 @@ class SuperLig(commands.Cog):
             log.error("AllSportsAPI hata (%s): %s", met, exc)
         return None
 
+    async def _get_season_id(self) -> str | None:
+        """League 322 için mevcut sezon ID'sini döndürür."""
+        data = await self._fetch("Leagues", {"leagueId": LEAGUE_ID}, ttl=3600)
+        if not data:
+            return None
+        result = data.get("result") or []
+        log.warning("Leagues result: %r", str(result)[:600])
+        if isinstance(result, list) and result:
+            league = result[0]
+            seasons = league.get("league_seasons") or []
+            if seasons:
+                latest = max(seasons, key=lambda s: s.get("season_id", 0))
+                log.warning("Using season_id=%s", latest.get("season_id"))
+                return str(latest.get("season_id", ""))
+        return None
+
     def _no_key_card(self) -> dict:
         return c_container(
             c_text("## ❌ API Anahtarı Eksik"),
@@ -202,7 +218,11 @@ class SuperLig(commands.Cog):
             await edit_original(interaction, self._no_key_card())
             return
 
-        data = await self._fetch("Standings", {"leagueId": LEAGUE_ID})
+        season_id = await self._get_season_id()
+        params: dict = {"leagueId": LEAGUE_ID}
+        if season_id:
+            params["seasonId"] = season_id
+        data = await self._fetch("Standings", params)
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))

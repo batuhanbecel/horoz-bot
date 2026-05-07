@@ -224,20 +224,16 @@ class SuperLig(commands.Cog):
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
             return
 
-        # Debug: fixtures kontrolü — leagueId=322 gerçekten veri döndürüyor mu?
-        today = datetime.now(timezone.utc)
-        fix_data = await self._fetch(
-            "Fixtures",
-            {"leagueId": LEAGUE_ID,
-             "from": (today - timedelta(days=14)).strftime("%Y-%m-%d"),
-             "to": today.strftime("%Y-%m-%d")},
-            ttl=60,
-        )
-        fix_count = len((fix_data or {}).get("result") or []) if fix_data else 0
-        log.warning("Fixtures test leagueId=%d last14days count=%d", LEAGUE_ID, fix_count)
-        if fix_data and fix_count:
-            sample = (fix_data.get("result") or [])[0]
-            log.warning("Fixtures sample: %r", str(sample)[:400])
+        # Debug: Turkey ülke anahtarını bul, ardından ligleri listele
+        countries_data = await self._fetch("Countries", {}, ttl=3600)
+        countries = (countries_data or {}).get("result") or []
+        turkey = next((c for c in countries if "turk" in (c.get("country_name") or "").lower()), None)
+        log.warning("Turkey country entry: %r", turkey)
+        if turkey:
+            ckey = turkey.get("country_key") or turkey.get("country_id")
+            leagues_data = await self._fetch("Leagues", {"countryId": ckey}, ttl=3600)
+            leagues = (leagues_data or {}).get("result") or []
+            log.warning("Turkey leagues (%d): %r", len(leagues), str(leagues)[:800])
 
         raw = data.get("result")
         teams, season = _extract_standings(raw)

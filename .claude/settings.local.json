@@ -5,7 +5,8 @@
       "PowerShell(python --version 2>&1)",
       "Bash(python main.py)",
       "WebFetch(domain:www.thesportsdb.com)",
-      "WebFetch(domain:api.sofascore.com)"
+      "WebFetch(domain:api.sofascore.com)",
+      "WebFetch(domain:en.wikipedia.org)"
     ]
   }
 }

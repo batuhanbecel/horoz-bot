@@ -218,21 +218,28 @@ class SuperLig(commands.Cog):
             await edit_original(interaction, self._no_key_card())
             return
 
-        season_id = await self._get_season_id()
-        params: dict = {"leagueId": LEAGUE_ID}
-        if season_id:
-            params["seasonId"] = season_id
-        data = await self._fetch("Standings", params)
+        data = await self._fetch("Standings", {"leagueId": LEAGUE_ID})
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
             return
 
+        # Debug: fixtures kontrolü — leagueId=322 gerçekten veri döndürüyor mu?
+        today = datetime.now(timezone.utc)
+        fix_data = await self._fetch(
+            "Fixtures",
+            {"leagueId": LEAGUE_ID,
+             "from": (today - timedelta(days=14)).strftime("%Y-%m-%d"),
+             "to": today.strftime("%Y-%m-%d")},
+            ttl=60,
+        )
+        fix_count = len((fix_data or {}).get("result") or []) if fix_data else 0
+        log.warning("Fixtures test leagueId=%d last14days count=%d", LEAGUE_ID, fix_count)
+        if fix_data and fix_count:
+            sample = (fix_data.get("result") or [])[0]
+            log.warning("Fixtures sample: %r", str(sample)[:400])
+
         raw = data.get("result")
-        if isinstance(raw, dict):
-            log.warning("Standings result keys: %s | first 600: %r", list(raw.keys()), str(raw)[:600])
-        else:
-            log.warning("Standings result type=%s val=%r", type(raw).__name__, str(raw)[:600])
         teams, season = _extract_standings(raw)
         if not data.get("success") or not teams:
             await edit_original(interaction, self._error_card(

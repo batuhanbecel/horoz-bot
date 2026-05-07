@@ -214,7 +214,7 @@ class TetikView(discord.ui.View):
                 items.append(c_media(gif))
             await update(interaction, c_container(*items, color=COLORS.DANGER), view=self)
             await asyncio.sleep(2)
-            await _oyun_bitti(interaction, self.oyun, kurban)
+            await _oyun_bitti(interaction, self.oyun, kurban, self.msg)
         else:
             for c in self.children:
                 c.disabled = True
@@ -231,7 +231,7 @@ class TetikView(discord.ui.View):
                 color=COLORS.WARNING,
             ), view=self)
             await asyncio.sleep(1.5)
-            await _sonraki_tur(interaction, self.oyun)
+            await _sonraki_tur(interaction, self.oyun, self.msg)
 
     async def on_timeout(self):
         if self._tamamlandı:
@@ -313,13 +313,13 @@ async def _oyunu_başlat(interaction: discord.Interaction, oyuncular: list[disco
     view.msg = msg
 
 
-async def _sonraki_tur(interaction: discord.Interaction, oyun: RusRuletiOyun):
+async def _sonraki_tur(interaction: discord.Interaction, oyun: RusRuletiOyun, msg: discord.Message):
     view = TetikView(oyun, interaction.channel)
-    msg  = await channel_send(interaction.channel, _tetik_card(oyun), view=view)
     view.msg = msg
+    await msg_edit(msg, _tetik_card(oyun), view=view)
 
 
-async def _oyun_bitti(interaction: discord.Interaction, oyun: RusRuletiOyun, kurban: discord.Member):
+async def _oyun_bitti(interaction: discord.Interaction, oyun: RusRuletiOyun, kurban: discord.Member, msg: discord.Message):
     hayatta = [o for o in oyun.oyuncular if o.id != kurban.id]
     gif = await giphy("bang gunshot dead")
 
@@ -340,8 +340,8 @@ async def _oyun_bitti(interaction: discord.Interaction, oyun: RusRuletiOyun, kur
 
     son_kart = (c_container(*items, color=COLORS.DANGER),)
     view = TekrarOynaView(oyun.oyuncular, kurban, son_kart)
-    msg  = await channel_send(interaction.channel, *son_kart, view=view)
     view.msg = msg
+    await msg_edit(msg, *son_kart, view=view)
 
 
 # ── Cog ───────────────────────────────────────────────────────────────────────

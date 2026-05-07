@@ -67,16 +67,12 @@ class MemberMod(commands.Cog):
         # DM bilgilendirme — başarısız olabilir, sessizce geç
         try:
             dm = await üye.create_dm()
-            await channel_send(dm, c_action_card(
-                f"⚠️ Uyarı — {interaction.guild.name}",
-                target_avatar=str(interaction.guild.icon.url) if interaction.guild.icon else str(üye.display_avatar.url),
-                fields=[
-                    ("📝 Sebep", sebep),
-                    ("📊 Toplam İhlal", f"`{len(rows)}`"),
-                ],
-                color=COLORS.WARNING,
-            ))
-        except (discord.Forbidden, discord.HTTPException):
+            await dm.send(
+                f"⚠️ **{interaction.guild.name}** sunucusunda uyarı aldın.\n"
+                f"**Sebep:** {sebep}\n"
+                f"**Toplam ihlal:** {len(rows)}"
+            )
+        except Exception:
             pass
 
     # /üye at

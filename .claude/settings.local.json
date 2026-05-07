@@ -3,7 +3,8 @@
     "allow": [
       "PowerShell(gh auth status 2>&1)",
       "PowerShell(python --version 2>&1)",
-      "Bash(python main.py)"
+      "Bash(python main.py)",
+      "WebFetch(domain:www.thesportsdb.com)"
     ]
   }
 }

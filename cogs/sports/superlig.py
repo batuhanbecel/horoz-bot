@@ -1,7 +1,6 @@
 """
 cogs/sports/superlig.py — Trendyol Süper Lig komutları
-API: allsportsapi.com v3 (ücretsiz, 200 istek/ay)
-Env: ALLSPORTS_API_KEY
+API: TheSportsDB (thesportsdb.com) — ücretsiz, key 123
 """
 from __future__ import annotations
 
@@ -9,7 +8,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import aiohttp
 import discord
@@ -29,8 +28,9 @@ from .._v2 import (
 
 log = logging.getLogger("horoz_bot.superlig")
 
-LEAGUE_ID = 322               # Trendyol Süper Lig — allsportsapi.com
-API_BASE  = "https://apiv2.allsportsapi.com/football/"
+LEAGUE_ID = 4339   # Turkish Super Lig — thesportsdb.com
+API_BASE  = "https://www.thesportsdb.com/api/v1/json/"
+API_KEY   = os.getenv("THESPORTSDB_KEY", "123")
 
 RANK_EMOJI = {1: "🥇", 2: "🥈", 3: "🥉"}
 
@@ -43,83 +43,27 @@ ZONE_MAP = {
 }
 
 
-def _zone(place_type: str) -> str:
-    pt = (place_type or "").lower()
+def _zone(description: str) -> str:
+    desc = (description or "").lower()
     for key, emoji in ZONE_MAP.items():
-        if key in pt:
+        if key in desc:
             return emoji
     return "⬛"
 
 
-def _diff_str(raw: str | int) -> str:
-    """'+35', '-10' veya raw int'i düzgün formatlar."""
+def _diff_str(val) -> str:
     try:
-        v = int(str(raw).replace("+", ""))
+        v = int(val or 0)
         return f"+{v}" if v >= 0 else str(v)
     except (ValueError, TypeError):
-        return str(raw)
+        return str(val)
 
 
-def _parse_score(result: str) -> tuple[int, int] | None:
-    """'2 - 1' → (2, 1). Ayrıştırılamazsa None."""
-    parts = [p.strip() for p in result.split("-")]
-    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-        return int(parts[0]), int(parts[1])
-    return None
-
-
-def _round_label(rnd: str) -> str:
-    return (
-        (rnd or "")
-        .replace("Week ", "Hafta ")
-        .replace("Regular Season - ", "Hafta ")
-        .replace("Round ", "Hafta ")
-    )
-
-
-def _extract_standings(result) -> tuple[list[dict], str]:
-    """AllSportsAPI v2 standings result → (takım listesi, sezon).
-
-    API formatı (v2 docs p.15):
-      result = {"total": [team, ...], "home": [...], "away": [...]}
-    Fallback olarak list[dict] ve düz dict de desteklenir.
-    """
-    teams: list[dict] = []
-    season = ""
-
-    if isinstance(result, dict):
-        # Normal format: {"total": [...], "home": [...], "away": [...]}
-        total = result.get("total") or []
-        if isinstance(total, list) and total:
-            teams = [t for t in total if isinstance(t, dict)]
-            season = (teams[0].get("league_season") or "") if teams else ""
-            return teams, season
-        # Fallback: herhangi bir list değeri
-        for val in result.values():
-            if isinstance(val, list) and val:
-                teams = [t for t in val if isinstance(t, dict)]
-                if teams:
-                    season = (teams[0].get("league_season") or "")
-                    return teams, season
-
-    elif isinstance(result, list):
-        for item in result:
-            if not isinstance(item, dict):
-                continue
-            if "standing_place" in item:
-                teams.append(item)
-            else:
-                nested = item.get("league_standings") or item.get("standings")
-                if isinstance(nested, dict):
-                    for group in nested.values():
-                        if isinstance(group, list):
-                            teams.extend(t for t in group if isinstance(t, dict))
-                elif isinstance(nested, list):
-                    teams.extend(t for t in nested if isinstance(t, dict))
-        if teams:
-            season = (teams[0].get("league_season") or "")
-
-    return teams, season
+def _current_season() -> str:
+    now = datetime.now(timezone.utc)
+    if now.month >= 7:
+        return f"{now.year}-{now.year + 1}"
+    return f"{now.year - 1}-{now.year}"
 
 
 def _loading() -> dict:
@@ -132,69 +76,39 @@ def _loading() -> dict:
 
 class SuperLig(commands.Cog):
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self._key  = os.getenv("ALLSPORTS_API_KEY", "")
+        self.bot   = bot
         self._cache: dict[str, tuple[dict, float]] = {}
 
-    # ── API helpers ────────────────────────────────────────────────────────────
+    # ── API helper ─────────────────────────────────────────────────────────────
 
-    async def _fetch(self, met: str, params: dict, *, ttl: int = 300) -> dict | None:
-        """apiv3.allsportsapi.com/football/ — met= parametresiyle istek atar."""
-        if not self._key:
-            return None
-        cache_key = f"{met}:{sorted(params.items())}"
+    async def _fetch(self, endpoint: str, params: dict | None = None, *, ttl: int = 300) -> dict | None:
+        params = params or {}
+        cache_key = f"{endpoint}:{sorted(params.items())}"
         if cache_key in self._cache:
             data, ts = self._cache[cache_key]
             if time.time() - ts < ttl:
                 return data
-        query = {"met": met, "APIkey": self._key, **params}
+        url = f"{API_BASE}{API_KEY}/{endpoint}"
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
-                async with s.get(API_BASE, params=query) as r:
+                async with s.get(url, params=params) as r:
                     text = await r.text()
                     if not text.strip():
-                        log.error("AllSportsAPI %s → boş yanıt (HTTP %d). URL: %s", met, r.status, r.url)
+                        log.error("TheSportsDB %s → boş yanıt (HTTP %d)", endpoint, r.status)
                         return None
                     try:
                         data = json.loads(text)
                     except Exception:
-                        log.error("AllSportsAPI %s → JSON parse hatası. İlk 300 karakter: %r", met, text[:300])
+                        log.error("TheSportsDB %s → JSON parse hatası: %r", endpoint, text[:300])
                         return None
                     if r.status == 200:
                         self._cache[cache_key] = (data, time.time())
                     else:
-                        log.warning("AllSportsAPI %s %s → HTTP %d", met, params, r.status)
+                        log.warning("TheSportsDB %s → HTTP %d", endpoint, r.status)
                     return data
         except Exception as exc:
-            log.error("AllSportsAPI hata (%s): %s", met, exc)
+            log.error("TheSportsDB hata (%s): %s", endpoint, exc)
         return None
-
-    async def _get_season_id(self) -> str | None:
-        """League 322 için mevcut sezon ID'sini döndürür."""
-        data = await self._fetch("Leagues", {"leagueId": LEAGUE_ID}, ttl=3600)
-        if not data:
-            return None
-        result = data.get("result") or []
-        log.warning("Leagues result: %r", str(result)[:600])
-        if isinstance(result, list) and result:
-            league = result[0]
-            seasons = league.get("league_seasons") or []
-            if seasons:
-                latest = max(seasons, key=lambda s: s.get("season_id", 0))
-                log.warning("Using season_id=%s", latest.get("season_id"))
-                return str(latest.get("season_id", ""))
-        return None
-
-    def _no_key_card(self) -> dict:
-        return c_container(
-            c_text("## ❌ API Anahtarı Eksik"),
-            c_separator(),
-            c_text(
-                "`.env` dosyasına `ALLSPORTS_API_KEY` eklemen gerekiyor.\n"
-                "Ücretsiz (200 istek/ay): **allsportsapi.com**"
-            ),
-            color=COLORS.DANGER,
-        )
 
     def _error_card(self, msg: str) -> dict:
         return c_container(
@@ -214,49 +128,33 @@ class SuperLig(commands.Cog):
     async def siralama(self, interaction: discord.Interaction):
         await respond(interaction, _loading())
 
-        if not self._key:
-            await edit_original(interaction, self._no_key_card())
-            return
-
-        data = await self._fetch("Standings", {"leagueId": LEAGUE_ID})
+        season = _current_season()
+        data   = await self._fetch("lookuptable.php", {"l": LEAGUE_ID, "s": season})
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
             return
 
-        # Debug: Turkey ülke anahtarını bul, ardından ligleri listele
-        countries_data = await self._fetch("Countries", {}, ttl=3600)
-        countries = (countries_data or {}).get("result") or []
-        turkey = next((c for c in countries if "turk" in (c.get("country_name") or "").lower()), None)
-        log.warning("Turkey country entry: %r", turkey)
-        if turkey:
-            ckey = turkey.get("country_key") or turkey.get("country_id")
-            leagues_data = await self._fetch("Leagues", {"countryId": ckey}, ttl=3600)
-            leagues = (leagues_data or {}).get("result") or []
-            log.warning("Turkey leagues (%d): %r", len(leagues), str(leagues)[:800])
-
-        raw = data.get("result")
-        teams, season = _extract_standings(raw)
-        if not data.get("success") or not teams:
+        teams = data.get("table") or []
+        if not teams:
             await edit_original(interaction, self._error_card(
-                f"Puan tablosu alınamadı.\n"
-                f"-# success={data.get('success')} · result type={type(raw).__name__} · leagueId={LEAGUE_ID}"
+                f"Puan tablosu alınamadı.\n-# Sezon: {season} · leagueId: {LEAGUE_ID}"
             ))
             return
 
         rows: list[str] = []
         for team in teams:
-            rank = int(team.get("standing_place") or 0)
-            name = team.get("standing_team", "?")
-            pts  = team.get("standing_PTS", "0")
-            oyn  = team.get("standing_P", "0")
-            g    = team.get("standing_W", "0")
-            b    = team.get("standing_D", "0")
-            m    = team.get("standing_L", "0")
-            af   = team.get("standing_F", "0")
-            ay   = team.get("standing_A", "0")
-            diff = _diff_str(team.get("standing_GD", "0"))
-            zone = _zone(team.get("standing_place_type", ""))
+            rank     = int(team.get("intRank") or 0)
+            name     = team.get("strTeam", "?")
+            pts      = team.get("intPoints", "0")
+            oyn      = team.get("intPlayed", "0")
+            g        = team.get("intWin", "0")
+            b        = team.get("intDraw", "0")
+            m        = team.get("intLoss", "0")
+            af       = team.get("intGoalsFor", "0")
+            ay       = team.get("intGoalsAgainst", "0")
+            diff     = _diff_str(team.get("intGoalDifference", 0))
+            zone     = _zone(team.get("strDescription") or "")
             rank_str = RANK_EMOJI.get(rank, f"`{rank:2d}.`")
 
             rows.append(
@@ -265,14 +163,10 @@ class SuperLig(commands.Cog):
             )
 
         mid = (len(rows) + 1) // 2
-
         await edit_original(
             interaction,
             c_container(
-                c_text(
-                    f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n"
-                    f"-# {season} Sezonu"
-                ),
+                c_text(f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n-# {season} Sezonu"),
                 c_separator(),
                 c_text("\n\n".join(rows[:mid])),
                 c_separator(),
@@ -289,29 +183,14 @@ class SuperLig(commands.Cog):
     async def takvim(self, interaction: discord.Interaction):
         await respond(interaction, _loading())
 
-        if not self._key:
-            await edit_original(interaction, self._no_key_card())
-            return
-
-        today  = datetime.now(timezone.utc)
-        from_s = today.strftime("%Y-%m-%d")
-        to_s   = (today + timedelta(days=21)).strftime("%Y-%m-%d")
-
-        data = await self._fetch("Fixtures", {"leagueId": LEAGUE_ID, "from": from_s, "to": to_s})
+        data = await self._fetch("eventsnextleague.php", {"id": LEAGUE_ID})
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
             return
 
-        events = data.get("result") or []
-        # Oynanmamış maçlar: result "-" ve status boş
-        fixtures = [
-            e for e in events
-            if (e.get("event_final_result") or "-").strip() == "-"
-            and not (e.get("event_status") or "").strip()
-        ]
-
-        if not fixtures:
+        events = data.get("events") or []
+        if not events:
             await edit_original(
                 interaction,
                 c_container(
@@ -324,23 +203,23 @@ class SuperLig(commands.Cog):
             return
 
         rounds: dict[str, list[str]] = {}
-        for fix in fixtures:
-            rnd      = fix.get("league_round", "")
-            date_str = fix.get("event_date", "")
-            time_str = (fix.get("event_time") or "00:00").strip()
-            home     = fix.get("event_home_team", "?")
-            away     = fix.get("event_away_team", "?")
+        for ev in events:
+            rnd      = str(ev.get("intRound") or "?")
+            date_str = ev.get("dateEvent", "")
+            time_str = (ev.get("strTime") or "00:00:00")[:5]
+            home     = ev.get("strHomeTeam", "?")
+            away     = ev.get("strAwayTeam", "?")
             try:
                 dt  = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
                 ts  = int(dt.replace(tzinfo=timezone.utc).timestamp())
                 row = f"📅 <t:{ts}:d> <t:{ts}:t> · **{home}** 🆚 **{away}**"
             except (ValueError, TypeError):
                 row = f"📅 {date_str} {time_str} · **{home}** 🆚 **{away}**"
-            rounds.setdefault(rnd, []).append(row)
+            rounds.setdefault(f"Hafta {rnd}", []).append(row)
 
         sections = [
-            f"**📌 {_round_label(r)}**\n" + "\n".join(m)
-            for r, m in rounds.items()
+            f"**📌 {rnd}**\n" + "\n".join(matches)
+            for rnd, matches in rounds.items()
         ]
 
         await edit_original(
@@ -348,7 +227,7 @@ class SuperLig(commands.Cog):
             c_container(
                 c_text(
                     f"## 📅 Trendyol Süper Lig — Maç Takvimi\n"
-                    f"-# Önümüzdeki {len(fixtures)} maç"
+                    f"-# Önümüzdeki {len(events)} maç"
                 ),
                 c_separator(),
                 c_text("\n\n".join(sections)),
@@ -364,47 +243,33 @@ class SuperLig(commands.Cog):
     async def sonuclar(self, interaction: discord.Interaction):
         await respond(interaction, _loading())
 
-        if not self._key:
-            await edit_original(interaction, self._no_key_card())
-            return
-
-        today  = datetime.now(timezone.utc)
-        from_s = (today - timedelta(days=30)).strftime("%Y-%m-%d")
-        to_s   = today.strftime("%Y-%m-%d")
-
-        data = await self._fetch("Fixtures", {"leagueId": LEAGUE_ID, "from": from_s, "to": to_s})
+        data = await self._fetch("eventspastleague.php", {"id": LEAGUE_ID})
 
         if not data:
             await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
             return
 
-        events = data.get("result") or []
-        # Tamamlanmış maçlar: status "Finished" veya result hane içeriyor
-        finished = [
-            e for e in reversed(events)
-            if (e.get("event_status") or "").strip().lower() == "finished"
-            or _parse_score(e.get("event_final_result") or "-") is not None
-        ]
-
-        if not finished:
+        events = list(reversed(data.get("events") or []))
+        if not events:
             await edit_original(
                 interaction,
                 c_container(
                     c_text("## 📊 Son Sonuçlar"),
                     c_separator(),
-                    c_text("Son 30 günde tamamlanmış maç bulunamadı."),
+                    c_text("Tamamlanmış maç bulunamadı."),
                     color=COLORS.INFO,
                 ),
             )
             return
 
         rounds: dict[str, list[str]] = {}
-        for fix in finished[:15]:
-            rnd    = fix.get("league_round", "")
-            date_s = fix.get("event_date", "")
-            home   = fix.get("event_home_team", "?")
-            away   = fix.get("event_away_team", "?")
-            result = (fix.get("event_final_result") or "?").strip()
+        for ev in events[:15]:
+            rnd    = str(ev.get("intRound") or "?")
+            home   = ev.get("strHomeTeam", "?")
+            away   = ev.get("strAwayTeam", "?")
+            gh_raw = ev.get("intHomeScore")
+            ga_raw = ev.get("intAwayScore")
+            date_s = ev.get("dateEvent", "")
 
             try:
                 ts       = int(datetime.strptime(date_s, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
@@ -412,9 +277,8 @@ class SuperLig(commands.Cog):
             except (ValueError, TypeError):
                 date_str = date_s
 
-            score = _parse_score(result)
-            if score:
-                gh, ga = score
+            if gh_raw is not None and ga_raw is not None:
+                gh, ga = int(gh_raw), int(ga_raw)
                 if gh > ga:
                     row = f"🟩 {date_str} · **{home} {gh}–{ga}** {away}"
                 elif ga > gh:
@@ -422,13 +286,13 @@ class SuperLig(commands.Cog):
                 else:
                     row = f"🟨 {date_str} · {home} {gh}–{ga} {away}"
             else:
-                row = f"✅ {date_str} · {home} **{result}** {away}"
+                row = f"✅ {date_str} · {home} 🆚 {away}"
 
-            rounds.setdefault(rnd, []).append(row)
+            rounds.setdefault(f"Hafta {rnd}", []).append(row)
 
         sections = [
-            f"**📌 {_round_label(r)}**\n" + "\n".join(m)
-            for r, m in rounds.items()
+            f"**📌 {rnd}**\n" + "\n".join(matches)
+            for rnd, matches in rounds.items()
         ]
 
         await edit_original(
@@ -448,51 +312,16 @@ class SuperLig(commands.Cog):
     @lig.command(name="canlı", description="Devam eden Süper Lig maçlarının canlı skorlarını gösterir.")
     async def canli(self, interaction: discord.Interaction):
         await respond(interaction, _loading())
-
-        if not self._key:
-            await edit_original(interaction, self._no_key_card())
-            return
-
-        data = await self._fetch("Livescore", {"leagueId": LEAGUE_ID}, ttl=60)
-
-        if not data:
-            await edit_original(interaction, self._error_card("API'ye ulaşılamadı."))
-            return
-
-        all_live = data.get("result") or []
-        fixtures = [e for e in all_live if e.get("event_live") == "1"]
-
-        if not fixtures:
-            await edit_original(
-                interaction,
-                c_container(
-                    c_text("## 🔴 Canlı Maçlar"),
-                    c_separator(),
-                    c_text("Şu an devam eden Süper Lig maçı yok."),
-                    color=COLORS.NEUTRAL,
-                ),
-            )
-            return
-
-        rows: list[str] = []
-        for fix in fixtures:
-            home   = fix.get("event_home_team", "?")
-            away   = fix.get("event_away_team", "?")
-            result = (fix.get("event_final_result") or "? - ?").strip()
-            status = (fix.get("event_status") or "?").strip()
-            score  = _parse_score(result)
-            score_str = f"{score[0]}–{score[1]}" if score else result
-            rows.append(f"🔴 **{status}'** · **{home} {score_str} {away}**")
-
         await edit_original(
             interaction,
             c_container(
-                c_text("## 🔴 Canlı Maçlar — Trendyol Süper Lig"),
+                c_text("## 🔴 Canlı Maçlar"),
                 c_separator(),
-                c_text("\n".join(rows)),
-                c_separator(),
-                c_text("-# Canlı skorlar · Komut tekrarlanarak yenilenir"),
-                color=0xFF0000,
+                c_text(
+                    "Canlı skor özelliği bu API'nin ücretsiz planında mevcut değil.\n"
+                    "-# TheSportsDB Patreon aboneliği gerektirir."
+                ),
+                color=COLORS.NEUTRAL,
             ),
         )
 

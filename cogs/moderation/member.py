@@ -41,10 +41,10 @@ class MemberMod(commands.Cog):
 
     # /üye uyar
     @üye.command(name="uyar", description="Bir üyeye uyarı verir.")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.checks.bot_has_permissions(manage_messages=True)
     @app_commands.describe(üye="Uyarılacak üye", sebep="Uyarı sebebi")
     async def uyar(self, interaction: discord.Interaction, üye: discord.Member, sebep: str = "Belirtilmedi"):
-        if not interaction.user.guild_permissions.manage_messages:
-            return await respond(interaction, _no_perm("Mesajları Yönet"), ephemeral=True)
         if err := hierarchy_ok(interaction, üye):
             return await respond(interaction, _hierarchy_err(err), ephemeral=True)
 
@@ -79,12 +79,10 @@ class MemberMod(commands.Cog):
 
     # /üye at
     @üye.command(name="at", description="Bir üyeyi sunucudan atar.")
+    @app_commands.checks.has_permissions(kick_members=True)
+    @app_commands.checks.bot_has_permissions(kick_members=True)
     @app_commands.describe(üye="Atılacak üye", sebep="Atılma sebebi")
     async def at(self, interaction: discord.Interaction, üye: discord.Member, sebep: str = "Belirtilmedi"):
-        if not interaction.user.guild_permissions.kick_members:
-            return await respond(interaction, _no_perm("Üye At"), ephemeral=True)
-        if not interaction.guild.me.guild_permissions.kick_members:
-            return await respond(interaction, _bot_no_perm("Üye At"), ephemeral=True)
         if err := hierarchy_ok(interaction, üye):
             return await respond(interaction, _hierarchy_err(err), ephemeral=True)
 
@@ -116,6 +114,8 @@ class MemberMod(commands.Cog):
 
     # /üye yasakla
     @üye.command(name="yasakla", description="Bir üyeyi kalıcı olarak yasaklar.")
+    @app_commands.checks.has_permissions(ban_members=True)
+    @app_commands.checks.bot_has_permissions(ban_members=True)
     @app_commands.describe(üye="Yasaklanacak üye", sebep="Yasaklama sebebi", mesaj_sil="Kaç günlük mesaj silinsin (0-7)")
     async def yasakla(
         self,
@@ -124,10 +124,6 @@ class MemberMod(commands.Cog):
         sebep: str = "Belirtilmedi",
         mesaj_sil: app_commands.Range[int, 0, 7] = 0,
     ):
-        if not interaction.user.guild_permissions.ban_members:
-            return await respond(interaction, _no_perm("Üye Yasakla"), ephemeral=True)
-        if not interaction.guild.me.guild_permissions.ban_members:
-            return await respond(interaction, _bot_no_perm("Üye Yasakla"), ephemeral=True)
         if err := hierarchy_ok(interaction, üye):
             return await respond(interaction, _hierarchy_err(err), ephemeral=True)
 
@@ -163,12 +159,10 @@ class MemberMod(commands.Cog):
 
     # /üye sustur
     @üye.command(name="sustur", description="Bir üyeyi timeout ile susturur.")
+    @app_commands.checks.has_permissions(moderate_members=True)
+    @app_commands.checks.bot_has_permissions(moderate_members=True)
     @app_commands.describe(üye="Susturulacak üye", süre="Süre (10m, 2h, 1d)", sebep="Susturma sebebi")
     async def sustur(self, interaction: discord.Interaction, üye: discord.Member, süre: str, sebep: str = "Belirtilmedi"):
-        if not interaction.user.guild_permissions.moderate_members:
-            return await respond(interaction, _no_perm("Üyeleri Yönet"), ephemeral=True)
-        if not interaction.guild.me.guild_permissions.moderate_members:
-            return await respond(interaction, _bot_no_perm("Üyeleri Yönet"), ephemeral=True)
         if err := hierarchy_ok(interaction, üye):
             return await respond(interaction, _hierarchy_err(err), ephemeral=True)
 
@@ -213,12 +207,10 @@ class MemberMod(commands.Cog):
 
     # /üye sus-kaldır
     @üye.command(name="sus-kaldır", description="Bir üyenin susturmasını kaldırır.")
+    @app_commands.checks.has_permissions(moderate_members=True)
+    @app_commands.checks.bot_has_permissions(moderate_members=True)
     @app_commands.describe(üye="Susturması kaldırılacak üye")
     async def sus_kaldir(self, interaction: discord.Interaction, üye: discord.Member):
-        if not interaction.user.guild_permissions.moderate_members:
-            return await respond(interaction, _no_perm("Üyeleri Yönet"), ephemeral=True)
-        if not interaction.guild.me.guild_permissions.moderate_members:
-            return await respond(interaction, _bot_no_perm("Üyeleri Yönet"), ephemeral=True)
         if not üye.is_timed_out():
             return await respond(interaction,
                 c_card("## ⚠️ Hata", body="Bu üye zaten susturulmuş değil.", color=COLORS.WARNING),

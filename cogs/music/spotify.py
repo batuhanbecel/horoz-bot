@@ -153,3 +153,10 @@ def format_query(artist: str, title: str) -> str:
     if artist:
         return f"{artist} - {title}"
     return title
+
+
+# ── Extension entry-point (required by discord.py) ────────────────────────────
+
+async def setup(bot: commands.Bot):
+    """Helper module — no cog to load, but required for extension discovery."""
+    pass

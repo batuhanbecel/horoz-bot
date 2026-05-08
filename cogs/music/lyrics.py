@@ -75,3 +75,10 @@ async def fetch_for_track(track_title: str) -> tuple[str, str, str | None]:
     if not lyrics and artist:
         lyrics = await fetch_lyrics("", f"{artist} {title}")
     return (artist, title, lyrics)
+
+
+# ── Extension entry-point (required by discord.py) ────────────────────────────
+
+async def setup(bot: commands.Bot):
+    """Helper module — no cog to load, but required for extension discovery."""
+    pass

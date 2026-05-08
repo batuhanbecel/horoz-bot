@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import logging
 
-from .._v2 import COLORS, c_card, respond, error_response
+from ._v2 import COLORS, c_card, respond, error_response
 
 log = logging.getLogger("horoz_bot")
 

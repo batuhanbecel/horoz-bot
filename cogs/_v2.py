@@ -117,7 +117,7 @@ def c_rich_card(
     thumbnail: str | None = None,
     badges: list[str] | None = None,
     footer: str | None = None,
-    color: int = COLORS.PRIMARY,
+    color: int | None = None,
 ) -> discord.ui.Container:
     """All-in-one rich card: title + subtitle + badges + body + thumbnail + footer."""
     header_lines = [f"## {title}"]
@@ -150,7 +150,7 @@ def c_card(
     title: str,
     body: str = "",
     thumbnail: str | None = None,
-    color: int = COLORS.PRIMARY,
+    color: int | None = None,
 ) -> discord.ui.Container:
     header = (
         c_section(c_text(title), accessory=c_thumbnail(thumbnail))
@@ -177,7 +177,7 @@ def c_action_card(
     fields: list[tuple[str, str | int]] | None = None,
     *,
     footer: str | None = None,
-    color: int = COLORS.MOD,
+    color: int | None = None,
 ) -> discord.ui.Container:
     header = (
         c_section(c_text(f"## {title}"), accessory=c_thumbnail(target_avatar))
@@ -200,7 +200,7 @@ def c_info_card(
     groups: list[list[tuple[str, str | int]] | str],
     media: str | None = None,
     footer: str | None = None,
-    color: int = COLORS.INFO,
+    color: int | None = None,
 ) -> discord.ui.Container:
     items: list[discord.ui.Item] = [
         c_section(c_text(f"## {title}"), accessory=c_thumbnail(thumbnail))
@@ -228,7 +228,7 @@ def c_list_card(
     thumbnail: str | None = None,
     footer: str | None = None,
     empty: str = "Henüz öğe yok.",
-    color: int = COLORS.PRIMARY,
+    color: int | None = None,
 ) -> discord.ui.Container:
     header = (
         c_section(c_text(f"## {title}"), accessory=c_thumbnail(thumbnail))

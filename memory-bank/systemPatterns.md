@@ -4,7 +4,8 @@
 - **Cog tabanlı modüler yapı**: Her özellik grubu kendi alt-klasöründe (`moderation/`, `music/`, `fun/`, `utility/`, `server/`, `sports/`)
 - `main.py` otomatik cog keşfi yapar (`discover_cogs()`): `cogs/` altındaki tüm `*.py` dosyalarını bulur (`_*` ve `views.py` hariç)
 - `database/db.py` tüm DB işlemlerini merkezi yönetir (helper functions)
-- **Components V2**: Tüm UI `cogs/_v2.py` üzerinden raw Discord API ile render edilir (container, section, text, thumbnail, media, separator). Standart discord.py embed kullanılmaz.
+- **Components V2**: Tüm UI `cogs/_v2.py` üzerinden native discord.py 2.7.1 V2 sınıfları ile render edilir: `discord.ui.Container`, `TextDisplay`, `Section`, `Thumbnail`, `Separator`, `MediaGallery`, `LayoutView`. Native `to_component_dict()` / `to_components()` serialize edilir; raw dict builder kullanılmaz. Standart discord.py embed kullanılmaz.
+- **Accent color policy**: `c_card`, `c_rich_card`, `c_action_card`, `c_info_card`, `c_list_card` default `color=None` (temiz container, accent bar yok). Sadece `c_error` (DANGER) ve `c_success` (SUCCESS) sabit renk taşır — hata/başarı durumlarında sol kenarlık belirgin.
 
 ## Slash Command Grupları
 discord.py'nin `app_commands.Group` kullanılır:

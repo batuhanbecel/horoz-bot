@@ -22,7 +22,7 @@ horoz_bot/
 ├── .gitignore
 ├── bot.log                  # Runtime log
 ├── cogs/
-│   ├── _v2.py               # Components V2 raw-API renderer
+│   ├── _v2.py               # Native discord.py 2.7.1 V2 component renderer. Uses discord.ui.Container, TextDisplay, Section, Thumbnail, Separator, MediaGallery. Accent color policy: default None (clean containers), only c_error/c_success use fixed DANGER/SUCCESS.
 │   ├── moderation/
 │   │   ├── channel.py       # /kanal temizle, yavaşmod, kilitle
 │   │   ├── member.py        # /üye uyar, at, yasakla, sustur, sus-kaldır

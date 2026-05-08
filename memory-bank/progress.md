@@ -7,7 +7,7 @@
 - SQLite async veritabanı (WAL mode)
 - .env ile güvenli token yönetimi
 - Logging (konsol + bot.log)
-- Components V2 raw-API renderer (`cogs/_v2.py`)
+- Native Components V2 renderer (`cogs/_v2.py`) — `discord.ui.Container`, `TextDisplay`, `Section`, `Thumbnail`, `Separator`, `MediaGallery` via native `to_component_dict()`. Accent color policy: default `None` for most cards, only `c_error`/`c_success` use fixed DANGER/SUCCESS.
 
 ### ✅ Moderasyon
 - `/kanal temizle`, `/kanal yavaşmod`, `/kanal kilitle`, `/kanal kilit-aç`

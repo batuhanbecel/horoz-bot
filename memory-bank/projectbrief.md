@@ -3,7 +3,7 @@
 ## Proje Özeti
 Horoz Bot, Discord sunucuları için geliştirilmiş çok amaçlı bir Türkçe Discord botudur.
 Tüm komutlar Discord'un native slash command (/) sistemiyle çalışır.
-Tüm yanıtlar **Components V2** (raw Discord API container/section/text/thumbnail/media) ile render edilir.
+Tüm yanıtlar **Components V2** (native discord.py 2.7.1 `Container`, `TextDisplay`, `Section`, `Thumbnail`, `MediaGallery`) ile render edilir. Accent color kullanımı minimal: hata/başarı durumlarında sabit DANGER/SUCCESS renk, diğer tüm kartlarda temiz container (accent bar yok).
 
 ## Temel Gereksinimler
 - Sadece slash commands (prefix yok)

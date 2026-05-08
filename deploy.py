@@ -88,7 +88,7 @@ def deploy() -> int:
         return 1
     print("[✓] Kod güncellendi.\n")
 
-    # 2) Servisi yeniden başlat
+    # 2) Servisi yeniden başlat (ama rate limit varsa durdur)
     print(f"[→] systemctl restart {SERVICE}")
     ec, out, err = run_remote(client, f"systemctl restart {SERVICE}")
     if ec != 0:
@@ -97,6 +97,17 @@ def deploy() -> int:
         client.close()
         return 1
     print("[✓] Servis restart edildi.\n")
+    
+    # Rate limit koruması: 5 saniye bekle, sonra status kontrol et
+    time.sleep(5)
+    ec2, out2, err2 = run_remote(client, f"systemctl is-active {SERVICE}")
+    if "inactive" in out2.lower() or "failed" in out2.lower():
+        print("[!] Servis başlatılamadı — muhtemel rate limit.")
+        print("[→] Servis durduruluyor (rate limit'in kalkması için)...")
+        run_remote(client, f"systemctl stop {SERVICE}")
+        print("[✓] Servis durduruldu. Lütfen 5-10 dakika bekleyip tekrar deploy edin.")
+        client.close()
+        return 1
 
     # 3) Durum kontrolü
     print(f"[→] systemctl status {SERVICE} --no-pager")
@@ -120,4 +131,21 @@ def deploy() -> int:
 
 
 if __name__ == "__main__":
+    import os
+    
+    # Lokalde direkt çalıştırıldıysa uyarı ver
+    if not os.environ.get("_DEPLOY_FROM_VPS"):
+        print("=" * 60)
+        print("[!] UYARI: Bu scripti lokalde çalıştırıyorsun.")
+        print("    Bot zaten VPS'te çalışıyor — deploy.py onu günceller.")
+        print("    Lokalde 'python main.py' ÇALIŞTIRMA — rate limit sebebi olur.")
+        print("    Devam etmek için ENTER'a bas (VPS deploy için).")
+        print("    İptal etmek için Ctrl+C.")
+        print("=" * 60)
+        try:
+            input()
+        except KeyboardInterrupt:
+            print("\n[✗] İptal edildi.")
+            sys.exit(1)
+    
     sys.exit(deploy())

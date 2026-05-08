@@ -319,7 +319,7 @@ class Social(commands.Cog):
         seçenek5: str | None = None,
         süre: int = 24,
     ):
-        opts = [discord.PollAnswer(text=s) for s in [seçenek1, seçenek2, seçenek3, seçenek4, seçenek5] if s]
+        opts = [discord.PollAnswer(poll_media=discord.PollMedia(text=s)) for s in [seçenek1, seçenek2, seçenek3, seçenek4, seçenek5] if s]
         poll = discord.Poll(
             question=soru,
             answers=opts,

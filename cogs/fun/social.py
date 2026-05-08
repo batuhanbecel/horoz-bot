@@ -5,69 +5,11 @@ from datetime import timedelta
 from ._shared import parse_datetime
 from .._v2 import (
     COLORS, c_text, c_section, c_thumbnail, c_separator, c_media, c_container,
-    c_card, c_progress, respond, update, followup as v2_followup, channel_send, error_response,
+    c_card, followup as v2_followup, channel_send, error_response,
 )
 
 
-# ── Anket ─────────────────────────────────────────────────────────────────────
-
-# Lider olan seçenek için hafif vurgu emoji'si
-_RANK_EMOJI = ["🥇", "🥈", "🥉"]
-
-
-class PollView(discord.ui.View):
-    def __init__(self, soru: str, seçenekler: list[str], creator: discord.Member | None = None):
-        super().__init__(timeout=None)
-        self.soru = soru
-        self.seçenekler = seçenekler
-        self.creator = creator
-        self.votes: dict[int, int] = {}
-        self.counts = [0] * len(seçenekler)
-        for i, opt in enumerate(seçenekler):
-            self.add_item(PollButton(i, opt, self))
-
-    def build_card(self) -> tuple[dict, ...]:
-        total = sum(self.counts)
-        # Lider sıralaması (oy sayısına göre)
-        ranking = sorted(range(len(self.seçenekler)), key=lambda i: -self.counts[i])
-        rank_map = {idx: pos for pos, idx in enumerate(ranking)}
-
-        items: list[dict] = [c_text(f"## 📊 {self.soru}")]
-
-        for i, opt in enumerate(self.seçenekler):
-            pct = (self.counts[i] / total * 100) if total else 0
-            bar = c_progress(self.counts[i], max(total, 1), length=14)
-            rank_emoji = _RANK_EMOJI[rank_map[i]] if total > 0 and self.counts[i] > 0 and rank_map[i] < 3 else f"`#{i + 1}`"
-            items.append(c_separator())
-            items.append(c_text(
-                f"{rank_emoji} **{opt}**\n"
-                f"`{bar}` `{pct:5.1f}%` · **{self.counts[i]}** oy"
-            ))
-
-        items.append(c_separator())
-        creator_str = f" · 👤 {self.creator.mention}" if self.creator else ""
-        items.append(c_text(f"-# 🗳️ Toplam: **{total}** oy{creator_str}"))
-
-        return (c_container(*items, color=COLORS.PRIMARY),)
-
-
-class PollButton(discord.ui.Button):
-    def __init__(self, index: int, label: str, poll: "PollView"):
-        super().__init__(label=f"{index + 1}. {label}", style=discord.ButtonStyle.primary, row=index // 3)
-        self.index = index
-        self.poll = poll
-
-    async def callback(self, interaction: discord.Interaction):
-        uid = interaction.user.id
-        prev = self.poll.votes.get(uid)
-        if prev is not None:
-            self.poll.counts[prev] -= 1
-        self.poll.votes[uid] = self.index
-        self.poll.counts[self.index] += 1
-        await update(interaction, *self.poll.build_card(), view=self.poll)
-
-
-# ── Etkinlik Modal ─────────────────────────────────────────────────────────────
+# ── Etkinlik Modal
 
 class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
     açıklama = discord.ui.TextInput(
@@ -247,30 +189,6 @@ class Social(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # /anket
-    @app_commands.command(name="anket", description="Butonlu anket oluşturur.")
-    @app_commands.describe(
-        soru="Anket sorusu",
-        seçenek1="1. seçenek",
-        seçenek2="2. seçenek",
-        seçenek3="3. seçenek (isteğe bağlı)",
-        seçenek4="4. seçenek (isteğe bağlı)",
-        seçenek5="5. seçenek (isteğe bağlı)",
-    )
-    async def anket(
-        self,
-        interaction: discord.Interaction,
-        soru: str,
-        seçenek1: str,
-        seçenek2: str,
-        seçenek3: str | None = None,
-        seçenek4: str | None = None,
-        seçenek5: str | None = None,
-    ):
-        seçenekler = [s for s in [seçenek1, seçenek2, seçenek3, seçenek4, seçenek5] if s]
-        view = PollView(soru, seçenekler, creator=interaction.user)
-        await respond(interaction, *view.build_card(), view=view)
-
     # /etkinlik
     @app_commands.command(name="etkinlik", description="Discord sunucu etkinliği oluşturur.")
     @app_commands.describe(
@@ -291,7 +209,7 @@ class Social(commands.Cog):
     ):
         await interaction.response.send_modal(EtkinlikModal(başlık, kanal, duyuru_yap, resim))
 
-    @app_commands.command(name="anket-hızlı", description="Discord'un yerel anket sistemiyle hızlı oylama.")
+    @app_commands.command(name="anket", description="Discord'un yerel anket sistemiyle oylama.")
     @app_commands.describe(
         soru="Anket sorusu",
         seçenek1="1. seçenek",
@@ -308,7 +226,7 @@ class Social(commands.Cog):
         app_commands.Choice(name="3 gün", value=72),
         app_commands.Choice(name="7 gün", value=168),
     ])
-    async def anket_hizli(
+    async def anket(
         self,
         interaction: discord.Interaction,
         soru: str,

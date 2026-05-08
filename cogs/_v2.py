@@ -1,115 +1,113 @@
 """
-cogs/_v2.py — Components V2 raw-API helpers.
-discord.py >= 2.4.0 ile native V2 desteği gerektirmeden çalışır.
+cogs/_v2.py — Native discord.py Components V2 helpers.
+discord.py >= 2.7.1 ile native `discord.ui.Container`, `TextDisplay`, `Section`,
+`Thumbnail`, `Separator`, `MediaGallery`, `LayoutView` kullanır.
 """
 from __future__ import annotations
 from typing import Any
 
 import discord
+from discord import ui
 from discord.http import Route
 
 _V2  = 1 << 15   # IS_COMPONENTS_V2
 _EPH = 1 << 6    # EPHEMERAL
 
-# ── Component type IDs ────────────────────────────────────────────────────────
-CONTAINER = 17
-SECTION   = 9
-TEXT      = 10
-THUMBNAIL = 11
-MEDIA     = 12
-SEPARATOR = 14
-
 
 # ── Color palette ─────────────────────────────────────────────────────────────
-# Önce tanımlanmalı — aşağıdaki builder fonksiyonlarının default argümanları
-# bu sınıfa referans verir (forward-reference hatası önlenir).
-
 class COLORS:
     """Tutarlı renk paleti — komut türüne göre ayrılmış."""
-    PRIMARY = 0x5865F2  # Discord blurple — info/default
-    SUCCESS = 0x57F287  # green — onay, başarı
-    DANGER  = 0xED4245  # red — hata, ban
-    WARNING = 0xFEE75C  # yellow — uyarı, mute
-    INFO    = 0x3498DB  # mavi — bilgi kartları
-    MOD     = 0xE67E22  # turuncu — moderasyon (kick)
-    MUSIC   = 0x9B59B6  # mor — müzik
-    EVENT   = 0xE91E63  # pembe — etkinlik
-    GAME    = 0xF1C40F  # altın — oyunlar
-    NEUTRAL = 0x2B2D31  # discord card bg
+    PRIMARY = 0x5865F2
+    SUCCESS = 0x57F287
+    DANGER  = 0xED4245
+    WARNING = 0xFEE75C
+    INFO    = 0x3498DB
+    MOD     = 0xE67E22
+    MUSIC   = 0x9B59B6
+    EVENT   = 0xE91E63
+    GAME    = 0xF1C40F
+    NEUTRAL = 0x2B2D31
 
 
-# ── Builders ──────────────────────────────────────────────────────────────────
+# ── Native component builders ─────────────────────────────────────────────────
 
-def c_text(content: str) -> dict:
-    return {"type": TEXT, "content": content}
+def c_text(content: str) -> discord.ui.TextDisplay:
+    return ui.TextDisplay(content)
 
 
-def c_thumbnail(url: str | None) -> dict | None:
-    """Thumbnail component. Boş/None URL ise None döner — c_section
-    accessory=None gelince text fallback'e geçer, böylece 400 hatası önlenir.
-    """
+def c_thumbnail(url: str | None) -> discord.ui.Thumbnail | None:
     if not url:
         return None
-    return {"type": THUMBNAIL, "media": {"url": url}}
+    return ui.Thumbnail(url)
 
 
-def c_separator(spacing: int = 2) -> dict:
-    return {"type": SEPARATOR, "divider": True, "spacing": spacing}
+def c_separator(spacing: int = 2) -> discord.ui.Separator:
+    """Separator — spacing 2=large, 1=small."""
+    sp = discord.SeparatorSpacing.large if spacing >= 2 else discord.SeparatorSpacing.small
+    return ui.Separator(spacing=sp)
 
 
-def c_section(*texts: dict, accessory: dict | None = None) -> dict:
-    """Section component — accessory zorunludur. Verilmediğinde sessizce
-    sade bir text component'e fallback yaparız (Discord API section'ı
-    accessory olmadan reddeder).
+def c_section(
+    *children: discord.ui.TextDisplay,
+    accessory: discord.ui.Thumbnail | None = None,
+) -> discord.ui.Section | discord.ui.TextDisplay:
+    """Section component — accessory zorunludur.
+    Verilmediğinde tek TextDisplay veya birleştirilmiş TextDisplay döner.
     """
     if accessory is None:
-        # Tek text varsa direkt onu döndür; birden fazla varsa birleştir
-        if len(texts) == 1:
-            return texts[0]
-        merged = "\n".join(
-            t.get("content", "") for t in texts if t.get("type") == TEXT
-        )
-        return c_text(merged)
-    return {"type": SECTION, "components": list(texts), "accessory": accessory}
+        if len(children) == 1:
+            return children[0]
+        merged = "\n".join(c.content for c in children if isinstance(c, ui.TextDisplay))
+        return ui.TextDisplay(merged)
+    return ui.Section(*children, accessory=accessory)
 
 
-def c_container(*items: dict, color: int | None = None) -> dict:
-    d: dict[str, Any] = {"type": CONTAINER, "components": list(items)}
-    if color is not None:
-        d["accent_color"] = color
-    return d
+def c_container(*children: discord.ui.Item, color: int | None = None) -> discord.ui.Container:
+    return ui.Container(*children, accent_color=color)
 
 
-def c_media(*urls: str) -> dict:
-    return {"type": MEDIA, "items": [{"media": {"url": u}} for u in urls]}
+def c_media(*urls: str) -> discord.ui.MediaGallery:
+    items = [discord.MediaGalleryItem(media=u) for u in urls]
+    return ui.MediaGallery(*items)
 
+
+# ── Inline formatters ─────────────────────────────────────────────────────────
 
 def c_badge(label: str, color_emoji: str = "🔵") -> str:
-    """Inline badge/pill text for use inside c_text content."""
     return f"`{color_emoji} {label}`"
 
 
 def c_status_indicator(status: str, text: str = "") -> str:
-    """Colored status indicator line: 🟢 active, 🟡 warning, 🔴 critical."""
     emoji = {"ok": "🟢", "success": "🟢", "warn": "🟡", "warning": "🟡",
              "err": "🔴", "error": "🔴", "critical": "🔴", "info": "🔵"}.get(status.lower(), "⚪")
     return f"{emoji} {text}" if text else emoji
 
 
 def c_code_block(code: str, lang: str = "") -> str:
-    """Fenced code block string for embedding in c_text."""
     return f"```{lang}\n{code}\n```"
 
 
 def c_timestamp(ts: int) -> str:
-    """Discord dynamic timestamp string for embedding in c_text."""
     return f"<t:{int(ts)}:F>"
 
 
-def c_media_grid(*urls: str) -> dict:
-    """Media component with multiple images in a grid-friendly layout."""
-    return {"type": MEDIA, "items": [{"media": {"url": u}} for u in urls]}
+def c_field(label: str, value: str | int) -> str:
+    return f"**{label}:** {value}"
 
+
+def c_progress(current, total, length: int = 14) -> str:
+    if not total or total <= 0:
+        return "─" * length
+    pct = max(0.0, min(1.0, float(current) / float(total)))
+    filled = int(pct * length)
+    return "━" * filled + "─" * (length - filled)
+
+
+def c_kv_block(pairs: list[tuple[str, str | int]]) -> str:
+    return "\n".join(c_field(l, v) for l, v in pairs)
+
+
+# ── Composite cards (native V2) ───────────────────────────────────────────────
 
 def c_rich_card(
     title: str,
@@ -120,7 +118,7 @@ def c_rich_card(
     badges: list[str] | None = None,
     footer: str | None = None,
     color: int = COLORS.PRIMARY,
-) -> dict:
+) -> discord.ui.Container:
     """All-in-one rich card: title + subtitle + badges + body + thumbnail + footer."""
     header_lines = [f"## {title}"]
     if subtitle:
@@ -131,7 +129,7 @@ def c_rich_card(
         c_section(c_text(header_text), accessory=c_thumbnail(thumbnail))
         if thumbnail else c_text(header_text)
     )
-    items: list[dict] = [header]
+    items: list[discord.ui.Item] = [header]
 
     if badges:
         items.append(c_separator())
@@ -148,60 +146,30 @@ def c_rich_card(
     return c_container(*items, color=color)
 
 
-# ── Convenience card builders ─────────────────────────────────────────────────
-
 def c_card(
     title: str,
     body: str = "",
     thumbnail: str | None = None,
     color: int = COLORS.PRIMARY,
-) -> dict:
-    """8top-style card: ## title + optional thumbnail (right) + separator + body."""
+) -> discord.ui.Container:
     header = (
         c_section(c_text(title), accessory=c_thumbnail(thumbnail))
         if thumbnail else c_text(title)
     )
-    items: list[dict] = [header]
+    items: list[discord.ui.Item] = [header]
     if body:
         items.append(c_separator())
         items.append(c_text(body))
     return c_container(*items, color=color)
 
 
-def c_error(msg: str, thumbnail: str | None = None) -> dict:
+def c_error(msg: str, thumbnail: str | None = None) -> discord.ui.Container:
     return c_card("## ❌ Hata", body=msg, thumbnail=thumbnail, color=COLORS.DANGER)
 
 
-def c_success(msg: str, thumbnail: str | None = None) -> dict:
+def c_success(msg: str, thumbnail: str | None = None) -> discord.ui.Container:
     return c_card("## ✅ Başarılı", body=msg, thumbnail=thumbnail, color=COLORS.SUCCESS)
 
-
-# ── Inline formatters ─────────────────────────────────────────────────────────
-
-def c_field(label: str, value: str | int) -> str:
-    """Format an inline label-value pair: '**Label:** value'"""
-    return f"**{label}:** {value}"
-
-
-def c_progress(current, total, length: int = 14) -> str:
-    """Build a slim line-based progress bar (heavy + light box-drawing).
-
-    Discord'da `━` ve `─` karakterleri tek satırlı, ince ve temiz görünür —
-    blok karakterlerinden daha 'native' bir progress bar verir.
-    """
-    if not total or total <= 0:
-        return "─" * length
-    pct = max(0.0, min(1.0, float(current) / float(total)))
-    filled = int(pct * length)
-    return "━" * filled + "─" * (length - filled)
-
-
-def c_kv_block(pairs: list[tuple[str, str | int]]) -> str:
-    """Multi-line label-value block."""
-    return "\n".join(c_field(l, v) for l, v in pairs)
-
-
-# ── Composite cards ───────────────────────────────────────────────────────────
 
 def c_action_card(
     title: str,
@@ -210,13 +178,12 @@ def c_action_card(
     *,
     footer: str | None = None,
     color: int = COLORS.MOD,
-) -> dict:
-    """Eylem kartı: başlık + (opsiyonel) hedef avatarı + label/değer çiftleri."""
+) -> discord.ui.Container:
     header = (
         c_section(c_text(f"## {title}"), accessory=c_thumbnail(target_avatar))
         if target_avatar else c_text(f"## {title}")
     )
-    items: list[dict] = [header]
+    items: list[discord.ui.Item] = [header]
     if fields:
         items.append(c_separator())
         items.append(c_text(c_kv_block(fields)))
@@ -234,9 +201,8 @@ def c_info_card(
     media: str | None = None,
     footer: str | None = None,
     color: int = COLORS.INFO,
-) -> dict:
-    """Bilgi kartı: başlık + thumbnail + ayraçlarla bölünmüş çoklu gruplar."""
-    items: list[dict] = [
+) -> discord.ui.Container:
+    items: list[discord.ui.Item] = [
         c_section(c_text(f"## {title}"), accessory=c_thumbnail(thumbnail))
         if thumbnail else c_text(f"## {title}"),
     ]
@@ -263,13 +229,12 @@ def c_list_card(
     footer: str | None = None,
     empty: str = "Henüz öğe yok.",
     color: int = COLORS.PRIMARY,
-) -> dict:
-    """Liste kartı: başlık + thumbnail + satır listesi."""
+) -> discord.ui.Container:
     header = (
         c_section(c_text(f"## {title}"), accessory=c_thumbnail(thumbnail))
         if thumbnail else c_text(f"## {title}")
     )
-    items: list[dict] = [header, c_separator(), c_text("\n".join(rows) if rows else empty)]
+    items: list[discord.ui.Item] = [header, c_separator(), c_text("\n".join(rows) if rows else empty)]
     if footer:
         items.append(c_separator())
         items.append(c_text(f"-# {footer}"))
@@ -288,10 +253,20 @@ async def error_response(interaction: discord.Interaction, msg: str) -> None:
 
 # ── Internals ─────────────────────────────────────────────────────────────────
 
-def _build(components: tuple[dict, ...], view: discord.ui.View | None) -> list[dict]:
-    result = list(components)
-    if view:
-        result.extend(view.to_components())
+def _serialize(items: tuple[Any, ...]) -> list[dict]:
+    """Native discord.ui Items → raw component dict list."""
+    result: list[dict] = []
+    for item in items:
+        if isinstance(item, discord.ui.Container):
+            result.extend(item.to_components())
+        elif isinstance(item, discord.ui.LayoutView):
+            result.extend(item.to_components())
+        elif hasattr(item, "to_component_dict"):
+            result.append(item.to_component_dict())
+        elif isinstance(item, dict):
+            result.append(item)
+        else:
+            result.append(item)
     return result
 
 
@@ -300,7 +275,6 @@ def _flags(ephemeral: bool) -> int:
 
 
 def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None:
-    # discord.py < 2.5 uses _responded: bool, newer versions use _response_type: int
     try:
         resp._responded = True  # type: ignore[attr-defined]
     except AttributeError:
@@ -314,7 +288,7 @@ def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None
 
 async def respond(
     interaction: discord.Interaction,
-    *components: dict,
+    *items: discord.ui.Item,
     view: discord.ui.View | None = None,
     ephemeral: bool = False,
 ) -> discord.InteractionMessage | None:
@@ -325,9 +299,12 @@ async def respond(
         interaction_id=interaction.id,
         interaction_token=interaction.token,
     )
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
     await interaction._state.http.request(
         route,
-        json={"type": 4, "data": {"flags": _flags(ephemeral), "components": _build(components, view)}},
+        json={"type": 4, "data": {"flags": _flags(ephemeral), "components": components}},
     )
     _mark_responded(interaction.response, 4)
     if view:
@@ -339,7 +316,7 @@ async def respond(
 
 async def edit_original(
     interaction: discord.Interaction,
-    *components: dict,
+    *items: discord.ui.Item,
     view: discord.ui.View | None = None,
 ) -> None:
     """Orijinal interaction yanıtını düzenle."""
@@ -349,15 +326,18 @@ async def edit_original(
         webhook_id=interaction.application_id,
         webhook_token=interaction.token,
     )
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
     await interaction._state.http.request(
         route,
-        json={"flags": _V2, "components": _build(components, view)},
+        json={"flags": _V2, "components": components},
     )
 
 
 async def update(
     interaction: discord.Interaction,
-    *components: dict,
+    *items: discord.ui.Item,
     view: discord.ui.View | None = None,
 ) -> None:
     """Type-7: bu interaction'ı tetikleyen mesajı güncelle."""
@@ -367,16 +347,19 @@ async def update(
         interaction_id=interaction.id,
         interaction_token=interaction.token,
     )
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
     await interaction._state.http.request(
         route,
-        json={"type": 7, "data": {"flags": _V2, "components": _build(components, view)}},
+        json={"type": 7, "data": {"flags": _V2, "components": components}},
     )
     _mark_responded(interaction.response, 7)
 
 
 async def followup(
     interaction: discord.Interaction,
-    *components: dict,
+    *items: discord.ui.Item,
     view: discord.ui.View | None = None,
     ephemeral: bool = False,
 ) -> int:
@@ -387,9 +370,12 @@ async def followup(
         webhook_id=interaction.application_id,
         webhook_token=interaction.token,
     )
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
     data = await interaction._state.http.request(
         route,
-        json={"flags": _flags(ephemeral), "components": _build(components, view)},
+        json={"flags": _flags(ephemeral), "components": components},
         params={"wait": 1},
     )
     msg_id = int(data["id"])
@@ -401,7 +387,7 @@ async def followup(
 async def edit_followup(
     interaction: discord.Interaction,
     message_id: int,
-    *components: dict,
+    *items: discord.ui.Item,
     view: discord.ui.View | None = None,
 ) -> None:
     """Followup mesajını ID ile düzenle."""
@@ -412,22 +398,28 @@ async def edit_followup(
         webhook_token=interaction.token,
         message_id=message_id,
     )
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
     await interaction._state.http.request(
         route,
-        json={"flags": _V2, "components": _build(components, view)},
+        json={"flags": _V2, "components": components},
     )
 
 
 async def channel_send(
     channel: discord.abc.Messageable,
-    *components: dict,
+    *items: discord.ui.Item,
     view: discord.ui.View | None = None,
     content: str | None = None,
 ) -> discord.Message:
     """Metin kanalına V2 mesaj gönderir (interaction dışı). Message döner."""
     state = channel._state  # type: ignore[attr-defined]
     route = Route("POST", "/channels/{channel_id}/messages", channel_id=channel.id)  # type: ignore[attr-defined]
-    payload: dict = {"flags": _V2, "components": _build(components, view)}
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
+    payload: dict = {"flags": _V2, "components": components}
     if content:
         payload["content"] = content
     data = await state.http.request(route, json=payload)
@@ -439,7 +431,7 @@ async def channel_send(
 
 async def msg_edit(
     msg: discord.Message,
-    *components: dict,
+    *items: discord.ui.Item,
     view: discord.ui.View | None = None,
 ) -> None:
     """Herhangi bir mesajı V2 componentleriyle düzenle."""
@@ -449,9 +441,12 @@ async def msg_edit(
         channel_id=msg.channel.id,
         message_id=msg.id,
     )
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
     await msg._state.http.request(
         route,
-        json={"flags": _V2, "components": _build(components, view)},
+        json={"flags": _V2, "components": components},
     )
     if view:
         msg._state.store_view(view, msg.id)
@@ -461,12 +456,12 @@ async def msg_edit(
 
 async def respond_with_files(
     interaction: discord.Interaction,
-    *components: dict,
+    *items: discord.ui.Item,
     files: list[discord.File],
     view: discord.ui.View | None = None,
     ephemeral: bool = False,
 ) -> discord.InteractionMessage | None:
-    """Type-4: yeni mesaj yanıtı + dosya eki (attachment:// ile c_media'da kullanılır)."""
+    """Type-4: yeni mesaj yanıtı + dosya eki."""
     import json as _json
     try:
         from aiohttp import FormData
@@ -480,11 +475,15 @@ async def respond_with_files(
         interaction_token=interaction.token,
     )
 
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
+
     payload = {
         "type": 4,
         "data": {
             "flags": _flags(ephemeral),
-            "components": _build(components, view),
+            "components": components,
             "attachments": [{"id": str(i), "filename": f.filename} for i, f in enumerate(files)],
         },
     }
@@ -505,7 +504,7 @@ async def respond_with_files(
 
 async def msg_edit_with_files(
     msg: discord.Message,
-    *components: dict,
+    *items: discord.ui.Item,
     files: list[discord.File],
     view: discord.ui.View | None = None,
 ) -> None:
@@ -523,9 +522,13 @@ async def msg_edit_with_files(
         message_id=msg.id,
     )
 
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
+
     payload = {
         "flags": _V2,
-        "components": _build(components, view),
+        "components": components,
         "attachments": [{"id": str(i), "filename": f.filename} for i, f in enumerate(files)],
     }
 
@@ -541,7 +544,7 @@ async def msg_edit_with_files(
 
 async def channel_send_with_files(
     channel: discord.abc.Messageable,
-    *components: dict,
+    *items: discord.ui.Item,
     files: list[discord.File],
     view: discord.ui.View | None = None,
     content: str | None = None,
@@ -556,9 +559,13 @@ async def channel_send_with_files(
     state = channel._state  # type: ignore[attr-defined]
     route = Route("POST", "/channels/{channel_id}/messages", channel_id=channel.id)  # type: ignore[attr-defined]
 
+    components = _serialize(items)
+    if view:
+        components.extend(view.to_components())
+
     payload: dict = {
         "flags": _V2,
-        "components": _build(components, view),
+        "components": components,
         "attachments": [{"id": str(i), "filename": f.filename} for i, f in enumerate(files)],
     }
     if content:

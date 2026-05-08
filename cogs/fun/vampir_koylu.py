@@ -889,7 +889,12 @@ class VampirKoyluOyunu:
     async def _gece_coz(self):
         kurban_id: int | None = None
         if self.vampir_oyları:
-            kurban_id = Counter(self.vampir_oyları.values()).most_common(1)[0][0]
+            vote_counts = Counter(self.vampir_oyları.values())
+            most_common = vote_counts.most_common()
+            top_votes = most_common[0][1]
+            # Tie handling: if multiple targets have equal top votes, randomize
+            tied = [target_id for target_id, count in most_common if count == top_votes]
+            kurban_id = random.choice(tied)
 
         öldü: discord.Member | None = None
         kurtarıldı = False

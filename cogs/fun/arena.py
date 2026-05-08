@@ -1,275 +1,596 @@
 import asyncio
+import random
+from dataclasses import dataclass
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-import random
-
-from ._shared import giphy
-from .._v2 import (
-    COLORS, c_card, c_text, c_thumbnail, c_section, c_container, c_separator, c_media,
-    c_progress, respond, update, channel_send, msg_edit, followup as v2_followup,
-)
-
-_EYLEM_EMOJI = {"kılıç": "⚔️", "büyü": "🔮", "kalkan": "🛡️"}
-_EYLEM_LABEL = {"kılıç": "Kılıç", "büyü": "Büyü", "kalkan": "Kalkan"}
-
-MAKS_HP  = 150
-MAKS_TUR = 20
-
-_ARENA_RED  = 0xB41E1E
-_ARENA_GOLD = COLORS.GAME
 
 
-async def _v2_err(interaction: discord.Interaction, title: str, body: str = "", color: int = COLORS.DANGER):
-    thumb = str(interaction.client.user.display_avatar.url)
-    if interaction.response.is_done():
-        await v2_followup(interaction, c_card(f"## {title}", body=body, thumbnail=thumb, color=color), ephemeral=True)
-    else:
-        await respond(interaction, c_card(f"## {title}", body=body, thumbnail=thumb, color=color), ephemeral=True)
+# ────────────────────────────────────────────────────────────────────────────────
+#  ArenaGame — Oyun Durumu & Kurallar
+# ────────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class Fighter:
+    """Bir savaşçının anlık durumunu tutan veri yapısı."""
+    member: discord.Member
+    hp: int = 100
+    max_hp: int = 100
+    ep: int = 50
+    max_ep: int = 50
+    potions_left: int = 2
+    shield_active: bool = False
+    is_bot: bool = False
 
 
-def _hasar(saldirgan: str, savunmaci: str) -> tuple[int, str]:
-    if saldirgan == "kalkan":
-        return 0, ""
-    if saldirgan == "kılıç":
-        if savunmaci == "kalkan":
-            return 0, "Kalkan engelledi!"
-        dmg = random.randint(20, 35)
-        if random.random() < 0.15:
-            dmg = int(dmg * 1.6)
-            return dmg, f"Kritik Kılıç! {dmg} hasar"
-        return dmg, f"Kılıç {dmg} hasar verdi"
-    if random.random() > 0.80:
-        return 0, "Büyü ıskaladı!"
-    dmg = random.randint(30, 45)
-    if savunmaci == "kalkan":
-        dmg = int(dmg * 0.45)
-        return dmg, f"Kalkan büyüyü hafifletti → {dmg} hasar"
-    if random.random() < 0.12:
-        dmg = int(dmg * 1.6)
-        return dmg, f"Kritik Büyü! {dmg} hasar"
-    return dmg, f"Büyü {dmg} hasar verdi"
+class ArenaGame:
+    """
+    Sıra tabanlı arena oyununun *saf* mantık katmanı.
+    Discord veya UI ile doğrudan iletişimi yoktur — sadece durum yönetir.
+    """
+
+    def __init__(
+        self,
+        challenger: discord.Member,
+        opponent: discord.Member,
+        is_vs_bot: bool = False,
+    ):
+        self.challenger = Fighter(challenger)
+        self.opponent = Fighter(opponent, is_bot=is_vs_bot)
+        self.turn_index: int = 0          # 0 = meydan okuyan, 1 = rakip
+        self.turn_count: int = 1
+        self.log: list[str] = []
+        self.finished: bool = False
+        self.winner: Fighter | None = None
+
+    # ── Yardımcı Özellikler ───────────────────────────────────────────────────
+
+    @property
+    def current(self) -> Fighter:
+        """Sırası gelen savaşçıyı döndürür."""
+        return self.challenger if self.turn_index == 0 else self.opponent
+
+    @property
+    def other(self) -> Fighter:
+        """Sırası gelmeyen (rakip) savaşçıyı döndürür."""
+        return self.opponent if self.turn_index == 0 else self.challenger
+
+    def _next_turn(self) -> None:
+        """Sırayı diğer oyuncuya geçirir ve tur sayacını artırır."""
+        self.turn_index = 1 - self.turn_index
+        self.turn_count += 1
+
+    def _hp_bar(self, value: int, maximum: int, length: int = 10) -> str:
+        """Metin tabanlı bir ilerleme çubuğu üretir (█/░)."""
+        ratio = value / maximum if maximum > 0 else 0
+        filled = max(0, min(length, int(ratio * length)))
+        return f"{'█' * filled}{'░' * (length - filled)}"
+
+    def _log(self, line: str) -> None:
+        """Savaş günlüğüne bir satır ekler (son 8 satır tutulur)."""
+        self.log.append(line)
+        if len(self.log) > 8:
+            self.log.pop(0)
+
+    # ── Eylem: Kılıç (Temel Saldırı) ───────────────────────────────────────────
+
+    def action_sword(self) -> str:
+        """
+        ⚔️ 10–18 hasar verir. %20 şansla kritik (×1.5).
+        Enerji harcamaz, aksine +10 EP kazandırır.
+        Rakip kalkan aktifse hasar %80 düşürülür + 5 yansıma.
+        """
+        attacker = self.current
+        defender = self.other
+
+        base_dmg = random.randint(10, 18)
+        is_crit = random.random() < 0.20
+
+        if is_crit:
+            base_dmg = int(base_dmg * 1.5)
+            msg = f"⚔️ **{attacker.member.display_name}**: **Kritik Vuruş!** Kılıç ile `{base_dmg}` hasar verdi"
+        else:
+            msg = f"⚔️ **{attacker.member.display_name}**: Kılıç ile `{base_dmg}` hasar verdi"
+
+        # Kalkan kontrolü: savunma aktifse hasarı %80 azalt, yansıma uygula
+        if defender.shield_active:
+            reduced = max(1, int(base_dmg * 0.20))   # geçen hasar (en az 1)
+            blocked = base_dmg - reduced
+            msg += f" (🛡️ Kalkan `{blocked}` engelledi, `{reduced}` geçti)"
+            base_dmg = reduced
+            defender.shield_active = False
+            # Diken yansıması — saldırgana 5 hasar
+            attacker.hp = max(0, attacker.hp - 5)
+            msg += " → 🗡️ Diken: `5` yansıma hasarı aldı!"
+
+        defender.hp = max(0, defender.hp - base_dmg)
+        attacker.ep = min(attacker.max_ep, attacker.ep + 10)
+        self._log(msg)
+        self._next_turn()
+        return msg
+
+    # ── Eylem: Büyü (Ağır Saldırı) ─────────────────────────────────────────────
+
+    def action_spell(self) -> str | None:
+        """
+        🔮 25–40 hasar verir. Bedeli 20 EP.
+        Yeterli enerji yoksa None döner (tur geçişi olmaz).
+        Kalkan etkisi kılıç ile aynıdır.
+        """
+        attacker = self.current
+        if attacker.ep < 20:
+            return None
+
+        attacker.ep -= 20
+        base_dmg = random.randint(25, 40)
+        msg = f"🔮 **{attacker.member.display_name}**: Büyü ile `{base_dmg}` hasar verdi"
+
+        defender = self.other
+        if defender.shield_active:
+            reduced = max(1, int(base_dmg * 0.20))
+            blocked = base_dmg - reduced
+            msg += f" (🛡️ Kalkan `{blocked}` engelledi, `{reduced}` geçti)"
+            base_dmg = reduced
+            defender.shield_active = False
+            attacker.hp = max(0, attacker.hp - 5)
+            msg += " → 🗡️ Diken: `5` yansıma hasarı aldı!"
+
+        defender.hp = max(0, defender.hp - base_dmg)
+        self._log(msg)
+        self._next_turn()
+        return msg
+
+    # ── Eylem: Kalkan (Savunma + Yansıtma) ─────────────────────────────────────
+
+    def action_shield(self) -> str | None:
+        """
+        🛡️ 10 EP harcar. Sonraki gelen saldırıyı %80 zayıflatır.
+        Diken: saldırgana 5 sabit yansıma hasarı verir.
+        Yeterli EP yoksa None döner.
+        """
+        attacker = self.current
+        if attacker.ep < 10:
+            return None
+
+        attacker.ep -= 10
+        attacker.shield_active = True
+        msg = (
+            f"🛡️ **{attacker.member.display_name}**: Kalkan kaldırdı! "
+            f"(Gelecek saldırı `%80` zayıflatılacak + `5` yansıma)"
+        )
+        self._log(msg)
+        self._next_turn()
+        return msg
+
+    # ── Eylem: İksir (İyileşme) ────────────────────────────────────────────────
+
+    def action_potion(self) -> str | None:
+        """
+        🧪 20–30 HP yeniler. Maç başına 2 kullanım hakkı.
+        Enerji harcamaz. Maksimum 100 HP'yi geçemez.
+        Hakkı bittiyse None döner.
+        """
+        attacker = self.current
+        if attacker.potions_left <= 0:
+            return None
+
+        attacker.potions_left -= 1
+        heal = random.randint(20, 30)
+        before = attacker.hp
+        attacker.hp = min(attacker.max_hp, attacker.hp + heal)
+        actual = attacker.hp - before
+        msg = (
+            f"🧪 **{attacker.member.display_name}**: İksir içti ve "
+            f"`{actual}` HP yeniledi! (Kalan: `{attacker.potions_left}/2`)"
+        )
+        self._log(msg)
+        self._next_turn()
+        return msg
+
+    # ── Bitiş Kontrolü ─────────────────────────────────────────────────────────
+
+    def check_end(self) -> bool:
+        """
+        Oyunun bitip bitmediğini kontrol eder.
+        Önce hedefin ölümünü kontrol eder: öldürme vuruşu her zaman kazandırır
+        (yansıma hasarının aynı anda öldürmesi durumunda saldıran öncelikli).
+        """
+        if self.opponent.hp <= 0:
+            self.finished = True
+            self.winner = self.challenger
+            self._log(f"🏆 **{self.winner.member.display_name}** kazandı!")
+            return True
+        if self.challenger.hp <= 0:
+            self.finished = True
+            self.winner = self.opponent
+            self._log(f"🏆 **{self.winner.member.display_name}** kazandı!")
+            return True
+        return False
 
 
-# ── Tekrar Oyna ─────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+#  ChallengeView — Meydan Okuma (Kabul / Red)
+# ────────────────────────────────────────────────────────────────────────────────
 
-class ArenaTekrarView(discord.ui.View):
-    def __init__(self, p1: discord.Member, p2: discord.Member, son_kart: dict):
-        super().__init__(timeout=120)
-        self.p1       = p1
-        self.p2       = p2
-        self.son_kart = son_kart
-        self.msg: discord.Message | None = None
+class ChallengeView(discord.ui.View):
+    """Rakibin savaş davetini kabul etmesini veya reddetmesini sağlayan View."""
 
-    async def on_timeout(self):
-        for c in self.children:
-            c.disabled = True
-        if self.msg:
-            try:
-                await msg_edit(self.msg, self.son_kart, view=self)
-            except discord.HTTPException:
-                pass
+    def __init__(self, challenger: discord.Member, opponent: discord.Member, cog: "Arena"):
+        super().__init__(timeout=60)
+        self.challenger = challenger
+        self.opponent = opponent
+        self.cog = cog
+        self.message: discord.Message | None = None
 
-    @discord.ui.button(label="Tekrar Oyna", emoji="🔄", style=discord.ButtonStyle.success)
-    async def tekrar(self, interaction: discord.Interaction, btn: discord.ui.Button):
-        if interaction.user.id not in (self.p1.id, self.p2.id):
-            return await _v2_err(interaction, "⛔ Erişim", "Bu oyuna dahil değildin.")
-        btn.disabled = True
+    async def on_timeout(self) -> None:
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            await self.message.edit(content="⏰ Davet süresi doldu.", view=self)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id not in (self.challenger.id, self.opponent.id):
+            await interaction.response.send_message("Bu davet sana değil!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Kabul Et", style=discord.ButtonStyle.success, emoji="✅")
+    async def accept(self, interaction: discord.Interaction, _: discord.ui.Button):
+        # Sadece davet edilen rakip kabul edebilir
+        if interaction.user.id != self.opponent.id:
+            await interaction.response.send_message(
+                "❌ Sadece davet edilen kişi kabul edebilir.", ephemeral=True
+            )
+            return
+
+        for child in self.children:
+            child.disabled = True
+
+        await interaction.response.edit_message(
+            content=f"⚔️ Savaş başlıyor! **{self.challenger.display_name}** vs **{self.opponent.display_name}**",
+            view=self,
+        )
+
+        # Oyunu ve savaş View'ini oluştur
+        game = ArenaGame(self.challenger, self.opponent)
+        battle_view = BattleView(game, self.cog)
+        embed = battle_view.build_embed()
+
+        msg = await interaction.followup.send(embed=embed, view=battle_view)
+        battle_view.message = msg
+
+    @discord.ui.button(label="Reddet", style=discord.ButtonStyle.danger, emoji="❌")
+    async def reject(self, interaction: discord.Interaction, _: discord.ui.Button):
+        if interaction.user.id != self.opponent.id:
+            await interaction.response.send_message(
+                "❌ Sadece davet edilen kişi reddedebilir.", ephemeral=True
+            )
+            return
+
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(
+            content=f"❌ **{self.opponent.display_name}** daveti reddetti.",
+            view=self,
+        )
         self.stop()
-        await update(interaction, self.son_kart, view=self)
-        view = ArenaView(self.p1, self.p2)
-        new_msg = await channel_send(interaction.channel, view._card(), view=view)
-        view.msg = new_msg
 
 
-# ── Ana Oyun View ────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+#  BattleView — Savaş Arayüzü (4 Aksiyon Butonu)
+# ────────────────────────────────────────────────────────────────────────────────
 
-class ArenaView(discord.ui.View):
-    def __init__(self, p1: discord.Member, p2: discord.Member):
-        super().__init__(timeout=90)
-        self.oyuncular = [p1, p2]
-        self.hp        = [MAKS_HP, MAKS_HP]
-        self.seçimler: dict[int, str] = {}
-        self.tur       = 1
-        self.msg: discord.Message | None = None
+class BattleView(discord.ui.View):
+    """
+    Savaşın ana arayüzüdür. 4 aksiyon butonu, durum embed'i ve
+    bot sırasıysa otomatik hamle mekanizmasını barındırır.
+    """
 
-    def _hp_color(self, hp: int) -> str:
-        """HP yüzdesine göre durum emojisi."""
-        pct = hp / MAKS_HP
-        if pct >= 0.7: return "🟢"
-        if pct >= 0.4: return "🟡"
-        if pct >= 0.15: return "🟠"
-        return "🔴"
+    def __init__(self, game: ArenaGame, cog: "Arena"):
+        super().__init__(timeout=180)
+        self.game = game
+        self.cog = cog
+        self.message: discord.Message | None = None
+        self._bot_task: asyncio.Task | None = None
 
-    def _player_section(self, member: discord.Member, hp: int, secti: bool, color: int) -> dict:
-        bar = c_progress(hp, MAKS_HP, length=15)
-        status = "✅ Hazır" if secti else "⏳ Bekleniyor..."
-        emoji = self._hp_color(hp)
-        text = (
-            f"### {emoji} {member.display_name}\n"
-            f"`{bar}` `{hp}/{MAKS_HP}` HP\n"
-            f"-# {status}"
-        )
-        return c_section(c_text(text), accessory=c_thumbnail(str(member.display_avatar.url)))
+    # ── Embed Oluşturucu ──────────────────────────────────────────────────────
 
-    def _card(self, son_log: str = "") -> dict:
-        p1, p2 = self.oyuncular
-        items: list[dict] = [
-            c_text(f"## ⚔️ Arena Dövüşü\n-# Tur **{self.tur}** / {MAKS_TUR}"),
-            c_separator(),
-            self._player_section(p1, self.hp[0], p1.id in self.seçimler, _ARENA_RED),
-            self._player_section(p2, self.hp[1], p2.id in self.seçimler, _ARENA_RED),
+    def build_embed(self) -> discord.Embed:
+        g = self.game
+        p1, p2 = g.challenger, g.opponent
+
+        if g.finished and g.winner:
+            embed = discord.Embed(
+                title=f"🏆 {g.winner.member.display_name} Kazandı!",
+                color=discord.Color.gold(),
+            )
+        else:
+            embed = discord.Embed(
+                title=f"⚔️ Arena Savaşı — Tur {g.turn_count}",
+                color=0xB41E1E,
+            )
+
+        def bar(val: int, max_val: int, length: int = 10) -> str:
+            ratio = val / max_val if max_val else 0
+            filled = max(0, min(length, int(ratio * length)))
+            return f"{'█' * filled}{'░' * (length - filled)}"
+
+        # Meydan okuyan (P1) durum kartı
+        p1_lines = [
+            f"❤️ HP: {bar(p1.hp, p1.max_hp)} `{p1.hp}/{p1.max_hp}`",
+            f"⚡ EP: {bar(p1.ep, p1.max_ep)} `{p1.ep}/{p1.max_ep}`",
+            f"🧪 İksir: `{'🟢' * p1.potions_left}{'⚫' * (2 - p1.potions_left)}`  ({p1.potions_left}/2)",
         ]
-        if son_log:
-            items.append(c_separator())
-            items.append(c_text(f"**📜 Son Eylem**\n{son_log}"))
-        return c_container(*items, color=_ARENA_RED)
+        if p1.shield_active:
+            p1_lines.append("🛡️ **Kalkan aktif!**")
 
-    async def _eylem_seç(self, interaction: discord.Interaction, eylem: str):
-        uid = interaction.user.id
-        if uid not in (self.oyuncular[0].id, self.oyuncular[1].id):
-            return await _v2_err(interaction, "⛔ Erişim", "Bu dövüşe dahil değilsin.")
-        if uid in self.seçimler:
-            return await _v2_err(interaction, "🔁 Tekrar", "Bu tur için zaten seçim yaptın.", COLORS.WARNING)
+        # Rakip (P2) durum kartı
+        p2_lines = [
+            f"❤️ HP: {bar(p2.hp, p2.max_hp)} `{p2.hp}/{p2.max_hp}`",
+            f"⚡ EP: {bar(p2.ep, p2.max_ep)} `{p2.ep}/{p2.max_ep}`",
+            f"🧪 İksir: `{'🟢' * p2.potions_left}{'⚫' * (2 - p2.potions_left)}`  ({p2.potions_left}/2)",
+        ]
+        if p2.shield_active:
+            p2_lines.append("🛡️ **Kalkan aktif!**")
 
-        self.seçimler[uid] = eylem
-        thumb = str(interaction.client.user.display_avatar.url)
-        await respond(interaction,
-            c_card(
-                f"## {_EYLEM_EMOJI[eylem]} {_EYLEM_LABEL[eylem]} Seçildi",
-                body="Rakibin seçimi bekleniyor...",
-                thumbnail=thumb,
-                color=_ARENA_RED,
-            ),
-            ephemeral=True,
+        embed.add_field(
+            name=f"🟢 {p1.member.display_name}",
+            value="\n".join(p1_lines),
+            inline=True,
+        )
+        embed.add_field(name="VS", value="⚔️", inline=True)
+        embed.add_field(
+            name=f"🔴 {p2.member.display_name}",
+            value="\n".join(p2_lines),
+            inline=True,
         )
 
-        assert self.msg
-        await msg_edit(self.msg, self._card(), view=self)
+        # Sıra göstergesi
+        if not g.finished:
+            turn_emoji = "🤖" if g.current.is_bot else "🎯"
+            embed.add_field(
+                name="🎲 Sıra",
+                value=f"{turn_emoji} **{g.current.member.display_name}** hamle yapıyor...",
+                inline=False,
+            )
 
-        if len(self.seçimler) < 2:
-            return
+        # Savaş günlüğü (son 5 kayıt)
+        if g.log:
+            log_text = "\n".join(f"> *{line}*" for line in g.log[-5:])
+        else:
+            log_text = "> *Savaş alanına hoş geldiniz... İlk hamle meydan okuyana ait!*"
+        embed.add_field(name="📜 Savaş Günlüğü", value=log_text, inline=False)
 
-        e1 = self.seçimler[self.oyuncular[0].id]
-        e2 = self.seçimler[self.oyuncular[1].id]
+        embed.set_footer(text="Sıranı bekle • Her aksiyon bir tur harcar • 3 dakika süre sınırı")
+        return embed
 
-        d_on_p2, acik2 = _hasar(e1, e2)
-        d_on_p1, acik1 = _hasar(e2, e1)
+    # ── Bot AI ────────────────────────────────────────────────────────────────
 
-        self.hp[0] = max(0, self.hp[0] - d_on_p1)
-        self.hp[1] = max(0, self.hp[1] - d_on_p2)
+    def _bot_decide(self) -> str:
+        """
+        Botun hamle seçimini yapan basit yapay zeka.
+        Öncelikler: İyileşme > Bitirici vuruş > Büyü > Kalkan > Kılıç.
+        """
+        bot = self.game.current
+        opp = self.game.other
 
-        p1n, p2n = self.oyuncular[0].display_name, self.oyuncular[1].display_name
-        log_lines = [
-            f"{_EYLEM_EMOJI[e1]} **{p1n}** → {_EYLEM_LABEL[e1]}",
-            f"{_EYLEM_EMOJI[e2]} **{p2n}** → {_EYLEM_LABEL[e2]}",
-        ]
-        if acik2:
-            log_lines.append(f"┗ **{p1n}:** {acik2}")
-        if acik1:
-            log_lines.append(f"┗ **{p2n}:** {acik1}")
-        son_log = "\n".join(log_lines)
+        # 1. Ölümcül durumda iyileş
+        if bot.hp <= 25 and bot.potions_left > 0:
+            return "potion"
 
-        self.tur += 1
-        self.seçimler.clear()
+        # 2. Rakibi öldürebilirsek güçlü hamle kullan
+        if opp.hp <= 18:
+            if bot.ep >= 20:
+                return "spell"
+            return "sword"
 
-        bitti = self.hp[0] <= 0 or self.hp[1] <= 0 or self.tur > MAKS_TUR
-        if bitti:
-            self.stop()
-            for c in self.children:
-                c.disabled = True
+        # 3. Yeterli enerji varsa büyü (yüksek hasar)
+        if bot.ep >= 20 and opp.hp >= 30:
+            return "spell"
 
-            if self.hp[0] <= 0 and self.hp[1] <= 0:
-                başlık, renk_int, tag, kazanan_avatar = "🤝 Berabere — İkiniz de yıkıldınız", 0x95A5A6, "tie draw", str(self.oyuncular[0].display_avatar.url)
-            elif self.hp[0] <= 0:
-                başlık, renk_int, tag, kazanan_avatar = f"🏆 {p2n} Kazandı!", COLORS.SUCCESS, "victory winner", str(self.oyuncular[1].display_avatar.url)
-            elif self.hp[1] <= 0:
-                başlık, renk_int, tag, kazanan_avatar = f"🏆 {p1n} Kazandı!", COLORS.SUCCESS, "victory winner", str(self.oyuncular[0].display_avatar.url)
-            else:
-                kazanan = self.oyuncular[0] if self.hp[0] > self.hp[1] else self.oyuncular[1]
-                başlık, renk_int, tag, kazanan_avatar = f"⏱️ {kazanan.display_name} Daha Çok Canla Kaldı", _ARENA_GOLD, "victory winner", str(kazanan.display_avatar.url)
+        # 4. EP azaldıysa kılıçla enerji topla
+        if bot.ep < 15:
+            return "sword"
 
-            gif = await giphy(tag)
+        # 5. Pot yoksa ve can düşükse, ara sıra kalkan kullan
+        if bot.ep >= 10 and bot.potions_left == 0 and bot.hp < 50 and random.random() < 0.35:
+            return "shield"
 
-            bar1 = c_progress(self.hp[0], MAKS_HP, length=15)
-            bar2 = c_progress(self.hp[1], MAKS_HP, length=15)
+        # 6. Varsayılan: güvenli tercih
+        return "sword"
 
-            fin_items: list[dict] = [
-                c_section(
-                    c_text(f"## {başlık}"),
-                    accessory=c_thumbnail(kazanan_avatar),
-                ),
-                c_separator(),
-                c_text(
-                    f"{self._hp_color(self.hp[0])} **{p1n}**\n"
-                    f"`{bar1}` `{self.hp[0]}/{MAKS_HP}`\n\n"
-                    f"{self._hp_color(self.hp[1])} **{p2n}**\n"
-                    f"`{bar2}` `{self.hp[1]}/{MAKS_HP}`"
-                ),
-                c_separator(),
-                c_text(f"**📜 Son Eylem**\n{son_log}"),
-            ]
-            if gif:
-                fin_items.append(c_separator())
-                fin_items.append(c_media(gif))
+    # ── Hamle İşleyici ─────────────────────────────────────────────────────────
 
-            son_kart = c_container(*fin_items, color=renk_int)
-            tekrar = ArenaTekrarView(self.oyuncular[0], self.oyuncular[1], son_kart)
-            await msg_edit(self.msg, son_kart, view=tekrar)
-            tekrar.msg = self.msg
-            return
+    async def _execute_action(self, action: str, interaction: discord.Interaction | None) -> None:
+        """
+        Bir aksiyonu çalıştırır, embed'i günceller ve oyun bittiğini kontrol eder.
+        interaction=None ise bot hamlesidir; mesaj doğrudan editlenir.
+        """
+        g = self.game
+        current = g.current
 
-        await msg_edit(self.msg, self._card(son_log), view=self)
-
-    async def on_timeout(self):
-        for c in self.children:
-            c.disabled = True
-        if self.msg:
-            try:
-                await msg_edit(self.msg,
-                    c_card("## ⏰ Süre Doldu", body="Dövüş süresi içinde tamamlanmadı, oyun iptal edildi.", color=0x95A5A6),
-                    view=self,
+        # ── Kaynak kontrolü (yetersizse tur geçişi olmaz) ──────────────────────
+        if action == "spell" and current.ep < 20:
+            if interaction:
+                await interaction.response.send_message(
+                    "🔮 Büyü kullanmak için `20` EP gerekli!", ephemeral=True
                 )
-            except discord.HTTPException:
-                pass
+            return
 
-    @discord.ui.button(label="Kılıç", emoji="⚔️", style=discord.ButtonStyle.danger)
-    async def kılıç_btn(self, i: discord.Interaction, _: discord.ui.Button):
-        await self._eylem_seç(i, "kılıç")
+        if action == "shield" and current.ep < 10:
+            if interaction:
+                await interaction.response.send_message(
+                    "🛡️ Kalkan kullanmak için `10` EP gerekli!", ephemeral=True
+                )
+            return
 
-    @discord.ui.button(label="Büyü", emoji="🔮", style=discord.ButtonStyle.primary)
-    async def büyü_btn(self, i: discord.Interaction, _: discord.ui.Button):
-        await self._eylem_seç(i, "büyü")
+        if action == "potion" and current.potions_left <= 0:
+            if interaction:
+                await interaction.response.send_message(
+                    "🧪 İksir hakkın kalmadı!", ephemeral=True
+                )
+            return
 
-    @discord.ui.button(label="Kalkan", emoji="🛡️", style=discord.ButtonStyle.secondary)
-    async def kalkan_btn(self, i: discord.Interaction, _: discord.ui.Button):
-        await self._eylem_seç(i, "kalkan")
+        # ── Hamleyi uygula ──────────────────────────────────────────────────────
+        if action == "sword":
+            g.action_sword()
+        elif action == "spell":
+            g.action_spell()
+        elif action == "shield":
+            g.action_shield()
+        elif action == "potion":
+            g.action_potion()
+
+        # ── Oyun bitti mi? ──────────────────────────────────────────────────────
+        if g.check_end():
+            for child in self.children:
+                child.disabled = True
+            self.stop()
+            embed = self.build_embed()
+            if interaction and not interaction.response.is_done():
+                await interaction.response.edit_message(embed=embed, view=self)
+            elif self.message:
+                await self.message.edit(embed=embed, view=self)
+            return
+
+        # ── Normal güncelleme ───────────────────────────────────────────────────
+        embed = self.build_embed()
+        if interaction and not interaction.response.is_done():
+            await interaction.response.edit_message(embed=embed, view=self)
+        elif self.message:
+            await self.message.edit(embed=embed, view=self)
+
+        # ── Sıradaki bot mu? Otomatik hamle tetikle ─────────────────────────────
+        if g.current.is_bot and not g.finished:
+            self._bot_task = asyncio.create_task(self._bot_turn())
+
+    async def _bot_turn(self) -> None:
+        """Botun "düşünme" süresi sonrası otomatik hamle yapmasını sağlar."""
+        await asyncio.sleep(1.5)
+        if self.game.finished or self.is_finished():
+            return
+
+        # Bot düşünürken butonları geçici olarak pasifleştir (spam koruması)
+        for child in self.children:
+            child.disabled = True
+        embed = self.build_embed()
+        if self.message:
+            await self.message.edit(embed=embed, view=self)
+
+        await asyncio.sleep(0.8)
+        if self.game.finished or self.is_finished():
+            return
+
+        action = self._bot_decide()
+        await self._execute_action(action, None)
+
+        # Bot hamlesi bitti, butonları tekrar aktif et (eğer oyun bitmediyse)
+        if not self.game.finished:
+            for child in self.children:
+                child.disabled = False
+            embed = self.build_embed()
+            if self.message:
+                await self.message.edit(embed=embed, view=self)
+
+    # ── View Callback'leri ──────────────────────────────────────────────────────
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Sadece sırası gelen oyuncunun butona basmasına izin verir."""
+        if self.game.finished:
+            return False
+        expected_id = self.game.current.member.id
+        if interaction.user.id != expected_id:
+            await interaction.response.send_message(
+                "⛔ Sıra sende değil! Rakibin hamlesini bekle.", ephemeral=True
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Kılıç", emoji="⚔️", style=discord.ButtonStyle.danger, row=0)
+    async def sword_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
+        await self._execute_action("sword", interaction)
+
+    @discord.ui.button(label="Büyü", emoji="🔮", style=discord.ButtonStyle.primary, row=0)
+    async def spell_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
+        await self._execute_action("spell", interaction)
+
+    @discord.ui.button(label="Kalkan", emoji="🛡️", style=discord.ButtonStyle.secondary, row=1)
+    async def shield_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
+        await self._execute_action("shield", interaction)
+
+    @discord.ui.button(label="İksir", emoji="🧪", style=discord.ButtonStyle.success, row=1)
+    async def potion_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
+        await self._execute_action("potion", interaction)
+
+    async def on_timeout(self) -> None:
+        if self._bot_task and not self._bot_task.done():
+            self._bot_task.cancel()
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            embed = self.build_embed()
+            embed.title = "⏰ Süre Doldu — Savaş Sonlandırıldı"
+            embed.color = discord.Color.dark_grey()
+            await self.message.edit(embed=embed, view=self)
 
 
-# ── Cog ─────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+#  Arena Cog
+# ────────────────────────────────────────────────────────────────────────────────
 
 class Arena(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="arena", description="Bir oyuncuyla tur bazlı dövüş yap! (Kılıç / Büyü / Kalkan)")
-    @app_commands.describe(rakip="Dövüşmek istediğin kişi")
+    @app_commands.command(
+        name="arena",
+        description="Bir oyuncuyla veya botla taktiksel arena savaşı yap!",
+    )
+    @app_commands.describe(rakip="Dövüşmek istediğin kişi (boş bırakırsan botla savaşırsın)")
     @app_commands.guild_only()
-    async def arena(self, interaction: discord.Interaction, rakip: discord.Member):
-        thumb = str(interaction.client.user.display_avatar.url)
-        if rakip.id == interaction.user.id:
-            return await respond(interaction,
-                c_card("## ❌ Hata", body="Kendinle dövüşemezsin!", thumbnail=thumb, color=COLORS.DANGER),
-                ephemeral=True,
-            )
-        if rakip.bot:
-            return await respond(interaction,
-                c_card("## ❌ Hata", body="Botlarla dövüşemezsin!", thumbnail=thumb, color=COLORS.DANGER),
-                ephemeral=True,
-            )
+    async def arena(
+        self,
+        interaction: discord.Interaction,
+        rakip: discord.Member | None = None,
+    ):
+        # ── Bot ile savaş (anlık başlangıç) ────────────────────────────────────
+        if rakip is None:
+            bot_member = interaction.guild.me
+            game = ArenaGame(interaction.user, bot_member, is_vs_bot=True)
+            view = BattleView(game, self)
+            embed = view.build_embed()
 
-        view = ArenaView(interaction.user, rakip)
-        view.msg = await respond(interaction, view._card(), view=view)
+            await interaction.response.send_message(embed=embed, view=view)
+            view.message = await interaction.original_response()
+            return
+
+        # ── Kendine savaş kontrolü ─────────────────────────────────────────────
+        if rakip.id == interaction.user.id:
+            await interaction.response.send_message(
+                "❌ Kendinle savaşamazsın!", ephemeral=True
+            )
+            return
+
+        # ── Başka bir bota meydan okuma engeli ─────────────────────────────────
+        if rakip.bot:
+            await interaction.response.send_message(
+                "❌ Botlarla savaşamazsın! `/arena` yazarak kendi botunla savaşabilirsin.",
+                ephemeral=True,
+            )
+            return
+
+        # ── İnsan rakibe davet gönder ────────────────────────────────────────────
+        view = ChallengeView(interaction.user, rakip, self)
+        await interaction.response.send_message(
+            content=f"🎯 {rakip.mention}, **{interaction.user.display_name}** seni arena savaşına davet ediyor!",
+            embed=discord.Embed(
+                description="Aşağıdaki butonlardan birini seç.",
+                color=0xB41E1E,
+            ),
+            view=view,
+        )
+        view.message = await interaction.original_response()
 
 
 async def setup(bot: commands.Bot):

@@ -66,6 +66,70 @@ def c_media(*urls: str) -> dict:
     return {"type": MEDIA, "items": [{"media": {"url": u}} for u in urls]}
 
 
+def c_badge(label: str, color_emoji: str = "🔵") -> str:
+    """Inline badge/pill text for use inside c_text content."""
+    return f"`{color_emoji} {label}`"
+
+
+def c_status_indicator(status: str, text: str = "") -> str:
+    """Colored status indicator line: 🟢 active, 🟡 warning, 🔴 critical."""
+    emoji = {"ok": "🟢", "success": "🟢", "warn": "🟡", "warning": "🟡",
+             "err": "🔴", "error": "🔴", "critical": "🔴", "info": "🔵"}.get(status.lower(), "⚪")
+    return f"{emoji} {text}" if text else emoji
+
+
+def c_code_block(code: str, lang: str = "") -> str:
+    """Fenced code block string for embedding in c_text."""
+    return f"```{lang}\n{code}\n```"
+
+
+def c_timestamp(ts: int) -> str:
+    """Discord dynamic timestamp string for embedding in c_text."""
+    return f"<t:{int(ts)}:F>"
+
+
+def c_media_grid(*urls: str) -> dict:
+    """Media component with multiple images in a grid-friendly layout."""
+    return {"type": MEDIA, "items": [{"media": {"url": u}} for u in urls]}
+
+
+def c_rich_card(
+    title: str,
+    *,
+    subtitle: str = "",
+    body: str = "",
+    thumbnail: str | None = None,
+    badges: list[str] | None = None,
+    footer: str | None = None,
+    color: int = COLORS.PRIMARY,
+) -> dict:
+    """All-in-one rich card: title + subtitle + badges + body + thumbnail + footer."""
+    header_lines = [f"## {title}"]
+    if subtitle:
+        header_lines.append(f"### {subtitle}")
+    header_text = "\n".join(header_lines)
+
+    header = (
+        c_section(c_text(header_text), accessory=c_thumbnail(thumbnail))
+        if thumbnail else c_text(header_text)
+    )
+    items: list[dict] = [header]
+
+    if badges:
+        items.append(c_separator())
+        items.append(c_text(" ".join(badges)))
+
+    if body:
+        items.append(c_separator())
+        items.append(c_text(body))
+
+    if footer:
+        items.append(c_separator())
+        items.append(c_text(f"-# {footer}"))
+
+    return c_container(*items, color=color)
+
+
 # ── Internals ─────────────────────────────────────────────────────────────────
 
 def _build(components: tuple[dict, ...], view: discord.ui.View | None) -> list[dict]:
@@ -389,3 +453,122 @@ async def msg_edit(
     )
     if view:
         msg._state.store_view(view, msg.id)
+
+
+# ── File upload helpers ─────────────────────────────────────────────────────────
+
+async def respond_with_files(
+    interaction: discord.Interaction,
+    *components: dict,
+    files: list[discord.File],
+    view: discord.ui.View | None = None,
+    ephemeral: bool = False,
+) -> discord.InteractionMessage | None:
+    """Type-4: yeni mesaj yanıtı + dosya eki (attachment:// ile c_media'da kullanılır)."""
+    import json as _json
+    try:
+        from aiohttp import FormData
+    except ImportError:
+        raise ImportError("respond_with_files requires aiohttp")
+
+    route = Route(
+        "POST",
+        "/interactions/{interaction_id}/{interaction_token}/callback",
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+    )
+
+    payload = {
+        "type": 4,
+        "data": {
+            "flags": _flags(ephemeral),
+            "components": _build(components, view),
+            "attachments": [{"id": str(i), "filename": f.filename} for i, f in enumerate(files)],
+        },
+    }
+
+    form = FormData()
+    form.add_field("payload_json", _json.dumps(payload), content_type="application/json")
+    for i, f in enumerate(files):
+        form.add_field(f"files[{i}]", f.fp, filename=f.filename)
+
+    await interaction._state.http.request(route, multipart=form)
+    _mark_responded(interaction.response, 4)
+    if view:
+        msg = await interaction.original_response()
+        interaction._state.store_view(view, msg.id)
+        return msg
+    return None
+
+
+async def msg_edit_with_files(
+    msg: discord.Message,
+    *components: dict,
+    files: list[discord.File],
+    view: discord.ui.View | None = None,
+) -> None:
+    """Mesajı V2 componentleri + yeni dosya ekleriyle düzenle."""
+    import json as _json
+    try:
+        from aiohttp import FormData
+    except ImportError:
+        raise ImportError("msg_edit_with_files requires aiohttp")
+
+    route = Route(
+        "PATCH",
+        "/channels/{channel_id}/messages/{message_id}",
+        channel_id=msg.channel.id,
+        message_id=msg.id,
+    )
+
+    payload = {
+        "flags": _V2,
+        "components": _build(components, view),
+        "attachments": [{"id": str(i), "filename": f.filename} for i, f in enumerate(files)],
+    }
+
+    form = FormData()
+    form.add_field("payload_json", _json.dumps(payload), content_type="application/json")
+    for i, f in enumerate(files):
+        form.add_field(f"files[{i}]", f.fp, filename=f.filename)
+
+    await msg._state.http.request(route, multipart=form)
+    if view:
+        msg._state.store_view(view, msg.id)
+
+
+async def channel_send_with_files(
+    channel: discord.abc.Messageable,
+    *components: dict,
+    files: list[discord.File],
+    view: discord.ui.View | None = None,
+    content: str | None = None,
+) -> discord.Message:
+    """Metin kanalına V2 mesaj + dosya eki gönderir."""
+    import json as _json
+    try:
+        from aiohttp import FormData
+    except ImportError:
+        raise ImportError("channel_send_with_files requires aiohttp")
+
+    state = channel._state  # type: ignore[attr-defined]
+    route = Route("POST", "/channels/{channel_id}/messages", channel_id=channel.id)  # type: ignore[attr-defined]
+
+    payload: dict = {
+        "flags": _V2,
+        "components": _build(components, view),
+        "attachments": [{"id": str(i), "filename": f.filename} for i, f in enumerate(files)],
+    }
+    if content:
+        payload["content"] = content
+
+    form = FormData()
+    form.add_field("payload_json", _json.dumps(payload), content_type="application/json")
+    for i, f in enumerate(files):
+        form.add_field(f"files[{i}]", f.fp, filename=f.filename)
+
+    data = await state.http.request(route, multipart=form)
+    msg = discord.Message(state=state, channel=channel, data=data)  # type: ignore[arg-type]
+    if view:
+        state.store_view(view, msg.id)
+    return msg

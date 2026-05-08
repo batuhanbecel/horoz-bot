@@ -131,7 +131,7 @@ def platform_label(platform: str) -> str:
 
 
 def now_playing_card(track: Track, player: GuildPlayer) -> dict:
-    """Müzik çalar kartı: thumbnail + başlık + meta. Player state'ine göre dinamik."""
+    """Müzik çalar kartı: thumbnail + başlık + meta + badges. Player state'ine göre dinamik."""
     thumb = yt_thumbnail(track.webpage_url) or str(track.requester.display_avatar.url)
     duration = duration_fmt(track.duration)
     loop_str = "🔂 Açık" if player.loop else "➡️ Kapalı"
@@ -144,7 +144,15 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
         title = "▶️ Şimdi Çalıyor"
         color = COLORS.MUSIC
 
-    # Platform göstergesi — Spotify'dan geldiyse hem orijinal hem stream linki olur
+    # Platform badge
+    source_badge = platform_label(track.platform).replace(" ", " · ")
+    badges = [source_badge]
+    if player.loop:
+        badges.append("🔂 Döngü")
+    if track.platform == "spotify":
+        badges.append("🟢 Spotify Bridge")
+
+    # Platform göstergesi
     platform_line = f"🎧 **Kaynak:** {platform_label(track.platform)}"
     if track.platform == "spotify" and track.source_url:
         platform_line += f"  ·  [Spotify]({track.source_url})"
@@ -154,6 +162,8 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
             c_text(f"## {title}\n### [{track.title}]({track.webpage_url})"),
             accessory=c_thumbnail(thumb),
         ),
+        c_separator(),
+        c_text(" · ".join(badges)),
         c_separator(),
         c_text(
             f"⏱️ **Süre:** `{duration}`\n"

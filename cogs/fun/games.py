@@ -224,7 +224,7 @@ _KELIMELER = [
     "ŞEHİR", "ÜLKE", "DÜNYA", "UZAY", "GEZEGEN", "GALAKSİ",
 ]
 
-_TR_NORM: dict[str, str] = {"I": "İ", "İ": "I"}
+_TR_NORM: dict[str, str] = {"I": "İ", "İ": "I", "ı": "i", "i": "ı"}
 
 
 class HarfModal(discord.ui.Modal):
@@ -452,12 +452,16 @@ class Games(commands.Cog):
         await interaction.response.defer()
         sonuç = random.choice(["Yazı", "Tura"])
 
+        # Spin animation: try Giphy first, else use Unicode spinner
+        spin_gif = await giphy("coin flip spinning")
+        spin_visual = f"![spin]({spin_gif})" if spin_gif else "🪙 **Para dönüyor...**"
+
         spin_card = c_container(
             c_section(
                 c_text(
                     f"## 🪙 Yazı mı Tura mı?\n"
                     f"{interaction.user.mention} parayı havaya fırlattı!\n\n"
-                    f"<a:spinning_para:1500895448968331468>"
+                    f"{spin_visual}"
                 ),
                 accessory=c_thumbnail(interaction.user.display_avatar.url),
             ),
@@ -465,14 +469,16 @@ class Games(commands.Cog):
         )
         msg_id = await followup(interaction, spin_card)
 
+        # Fetch result GIF while spinning
         tag = "coin flip heads" if sonuç == "Yazı" else "coin flip tails"
-        gif, _ = await asyncio.gather(giphy(tag), asyncio.sleep(2))
+        result_gif, _ = await asyncio.gather(giphy(tag), asyncio.sleep(2))
 
+        # Unicode emoji fallback — works in every server
         if sonuç == "Tura":
-            emoji_str = "<:tura:1500895527242563837>"
+            emoji_str = "👑"
             color     = _C_GOLD
         else:
-            emoji_str = "<:yazi:1500895591129944194>"
+            emoji_str = "📄"
             color     = 0xC0C0C0
 
         items: list[dict] = [
@@ -486,9 +492,9 @@ class Games(commands.Cog):
                 f"🎯 **Sonuç:** {emoji_str} **{sonuç}**"
             ),
         ]
-        if gif:
+        if result_gif:
             items.append(c_separator())
-            items.append(c_media(gif))
+            items.append(c_media(result_gif))
 
         await edit_followup(interaction, msg_id, c_container(*items, color=color))
 

@@ -291,6 +291,42 @@ class Social(commands.Cog):
     ):
         await interaction.response.send_modal(EtkinlikModal(başlık, kanal, duyuru_yap, resim))
 
+    @app_commands.command(name="anket-hızlı", description="Discord'un yerel anket sistemiyle hızlı oylama.")
+    @app_commands.describe(
+        soru="Anket sorusu",
+        seçenek1="1. seçenek",
+        seçenek2="2. seçenek",
+        seçenek3="3. seçenek (isteğe bağlı)",
+        seçenek4="4. seçenek (isteğe bağlı)",
+        seçenek5="5. seçenek (isteğe bağlı)",
+    )
+    @app_commands.choices(süre=[
+        app_commands.Choice(name="1 saat", value=1),
+        app_commands.Choice(name="4 saat", value=4),
+        app_commands.Choice(name="8 saat", value=8),
+        app_commands.Choice(name="24 saat", value=24),
+        app_commands.Choice(name="3 gün", value=72),
+        app_commands.Choice(name="7 gün", value=168),
+    ])
+    async def anket_hizli(
+        self,
+        interaction: discord.Interaction,
+        soru: str,
+        seçenek1: str,
+        seçenek2: str,
+        seçenek3: str | None = None,
+        seçenek4: str | None = None,
+        seçenek5: str | None = None,
+        süre: int = 24,
+    ):
+        opts = [discord.PollAnswer(text=s) for s in [seçenek1, seçenek2, seçenek3, seçenek4, seçenek5] if s]
+        poll = discord.Poll(
+            question=soru,
+            answers=opts,
+            duration=timedelta(hours=süre),
+        )
+        await interaction.response.send_message(poll=poll)
+
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         msg = "Bu komutu kullanmak için gerekli yetkiye sahip değilsiniz." \
             if isinstance(error, app_commands.MissingPermissions) else str(error)

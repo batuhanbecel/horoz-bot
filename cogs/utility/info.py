@@ -3,8 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import timezone, datetime
 from .._v2 import (
-    COLORS, c_card, c_info_card, c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
-    c_progress, respond, edit_original, error_response,
+    COLORS, c_card, c_info_card, c_rich_card, c_text, c_thumbnail, c_separator, c_section, c_container, c_media,
+    c_progress, c_badge, c_status_indicator, respond, edit_original, error_response,
 )
 
 
@@ -66,7 +66,7 @@ class Info(commands.Cog):
             color=color,
         ))
 
-    # /bot ─ rich info card with grouped stats
+    # /bot ─ rich info card with badge stats
     @app_commands.command(name="bot", description="Bot hakkında bilgi verir.")
     async def horoz_info(self, interaction: discord.Interaction):
         delta = datetime.now(timezone.utc) - self._start_time
@@ -76,27 +76,31 @@ class Info(commands.Cog):
         uptime = f"{d}g {h}sa {m}dk {s}sn" if d else f"{h}sa {m}dk {s}sn"
 
         members = sum(g.member_count or 0 for g in self.bot.guilds)
+        ws = round(self.bot.latency * 1000)
+        ping_color = "🟢" if ws < 100 else "🟡" if ws < 200 else "🔴"
 
-        await respond(interaction, c_info_card(
+        await respond(interaction, c_rich_card(
             "🐓 Horoz Bot",
+            subtitle="Türkçe Discord Bot · v1.2+",
             thumbnail=str(self.bot.user.display_avatar.url),
-            groups=[
-                [
-                    ("🌐 Sunucu", f"`{len(self.bot.guilds)}`"),
-                    ("👥 Toplam Üye", f"`{members:,}`"),
-                    ("📡 Gecikme", f"`{round(self.bot.latency * 1000)} ms`"),
-                ],
-                [
-                    ("⏱️ Çalışma Süresi", uptime),
-                    ("🐍 discord.py", f"`{discord.__version__}`"),
-                    ("📦 Repo", "[batuhanbecel/horoz-bot](https://github.com/batuhanbecel/horoz-bot)"),
-                ],
+            badges=[
+                c_badge(f"discord.py {discord.__version__}", "🐍"),
+                c_badge(f"{len(self.bot.guilds)} sunucu", "🌐"),
+                c_badge(f"{members:,} üye", "👥"),
+                c_badge(f"{ws}ms", ping_color),
             ],
-            footer="Components V2 · 8top tarzı arayüz",
+            body="\n".join([
+                c_status_indicator("ok", f"**Çalışma Süresi:** `{uptime}`"),
+                c_status_indicator("info", f"**Gecikme:** `{ws} ms` {ping_color}"),
+                c_status_indicator("info", f"**Repo:** [batuhanbecel/horoz-bot](https://github.com/batuhanbecel/horoz-bot)"),
+                "",
+                "**Komutlar:** /yardım ile tüm komutları görebilirsin.",
+            ]),
+            footer="Components V2 · V2 Modern",
             color=COLORS.PRIMARY,
         ))
 
-    # /profil ─ multi-section profile card
+    # /profil ─ rich profile card with badge stats
     @app_commands.command(name="profil", description="Bir kullanıcı hakkında bilgi verir.")
     @app_commands.describe(üye="Bilgi alınacak üye (boş = kendiniz)")
     async def profil(self, interaction: discord.Interaction, üye: discord.Member = None):
@@ -104,40 +108,42 @@ class Info(commands.Cog):
         color = target.color.value if isinstance(target, discord.Member) and target.color != discord.Color.default() else COLORS.PRIMARY
 
         created = target.created_at.replace(tzinfo=timezone.utc)
-        identity = [
-            ("👤 Kullanıcı Adı", f"`{target}`"),
-            ("🆔 ID", f"`{target.id}`"),
-            ("🤖 Bot", "Evet ✅" if target.bot else "Hayır ❌"),
-            ("📅 Hesap Oluşturuldu", f"<t:{int(created.timestamp())}:F>\n┗ <t:{int(created.timestamp())}:R>"),
+        badges: list[str] = [
+            c_badge("Bot" if target.bot else "Kullanıcı", "🤖" if target.bot else "👤"),
+            c_badge(f"ID: {target.id}", "🆔"),
         ]
-        groups: list = [identity]
 
+        body_lines: list[str] = [
+            c_status_indicator("info", f"**Hesap Oluşturuldu:** <t:{int(created.timestamp())}:F>"),
+        ]
+
+        roles: list[str] = []
         if isinstance(target, discord.Member):
-            member_group: list[tuple[str, str]] = []
-            if target.joined_at:
-                joined = target.joined_at.replace(tzinfo=timezone.utc)
-                member_group.append(("📥 Sunucuya Katılım", f"<t:{int(joined.timestamp())}:F>\n┗ <t:{int(joined.timestamp())}:R>"))
+            roles = [r.mention for r in reversed(target.roles) if r.name != "@everyone"]
+            badges.append(c_badge(f"{len(roles)} rol", "🏷️"))
             if target.premium_since:
                 boost = target.premium_since.replace(tzinfo=timezone.utc)
-                member_group.append(("✨ Boost Veriyor", f"<t:{int(boost.timestamp())}:R>"))
-            roles = [r.mention for r in reversed(target.roles) if r.name != "@everyone"]
-            member_group.append(("🏷️ En Yüksek Rol", target.top_role.mention if target.top_role.name != "@everyone" else "_Yok_"))
-            member_group.append(("📊 Rol Sayısı", f"`{len(roles)}`"))
-            if member_group:
-                groups.append(member_group)
+                badges.append(c_badge("Nitro Boost", "✨"))
+            if target.joined_at:
+                joined = target.joined_at.replace(tzinfo=timezone.utc)
+                body_lines.append(c_status_indicator("ok", f"**Sunucuya Katılım:** <t:{int(joined.timestamp())}:F>"))
+            body_lines.append("")
+            body_lines.append(f"**En Yüksek Rol:** {target.top_role.mention if target.top_role.name != '@everyone' else '_Yok_'}")
             if roles:
                 role_list = ", ".join(roles[:15]) + (f" `+{len(roles)-15}`" if len(roles) > 15 else "")
-                groups.append(f"**🏷️ Roller**\n{role_list}")
+                body_lines.append(f"**Roller:** {role_list}")
 
-        await respond(interaction, c_info_card(
+        await respond(interaction, c_rich_card(
             f"👤 {target.display_name}",
+            subtitle=f"`{target}`",
             thumbnail=str(target.display_avatar.url),
-            groups=groups,
+            badges=badges,
+            body="\n".join(body_lines),
             footer=f"Profil görüntüleyici · {target}",
             color=color,
         ))
 
-    # /sunucu ─ rich server info card with banner
+    # /sunucu ─ rich server info card with badges
     @app_commands.command(name="sunucu", description="Sunucu hakkında bilgi verir.")
     @app_commands.guild_only()
     async def sunucu(self, interaction: discord.Interaction):
@@ -146,50 +152,34 @@ class Info(commands.Cog):
             return await error_response(interaction, "Bu komut sadece sunucuda çalışır.")
         created = guild.created_at.replace(tzinfo=timezone.utc)
 
-        # Member cache yoksa member_count'u kullan, fallback ile bot/insan bilgisi yaklaşık
         cached = list(guild.members)
         toplam = guild.member_count or len(cached)
-        humans = sum(1 for m in cached if not m.bot)
-        bot_count = sum(1 for m in cached if m.bot)
-        if len(cached) < toplam:
-            # Cache eksik — humans/bot kesin değil
-            humans_str = f"`~{humans:,}`"
-            bots_str = f"`~{bot_count:,}`"
-        else:
-            humans_str = f"`{humans:,}`"
-            bots_str = f"`{bot_count:,}`"
         online = sum(1 for m in cached if m.status != discord.Status.offline)
 
-        identity = [
-            ("👑 Sahip", guild.owner.mention if guild.owner else "_Bilinmiyor_"),
-            ("🆔 ID", f"`{guild.id}`"),
-            ("📅 Kuruluş", f"<t:{int(created.timestamp())}:F>\n┗ <t:{int(created.timestamp())}:R>"),
-            ("🔒 Doğrulama", f"`{str(guild.verification_level).title()}`"),
-        ]
-        members = [
-            ("👥 Toplam Üye", f"`{toplam:,}`"),
-            ("🧑 İnsan", humans_str),
-            ("🤖 Bot", bots_str),
-            ("🟢 Aktif", f"`{online:,}`"),
-        ]
-        channels = [
-            ("💬 Metin Kanalı", f"`{len(guild.text_channels)}`"),
-            ("🔊 Ses Kanalı", f"`{len(guild.voice_channels)}`"),
-            ("📁 Kategori", f"`{len(guild.categories)}`"),
-            ("🧵 Thread", f"`{len(guild.threads)}`"),
-        ]
-        extras = [
-            ("🏷️ Rol", f"`{len(guild.roles)}`"),
-            ("😀 Emoji", f"`{len(guild.emojis)}/{guild.emoji_limit}`"),
-            ("🏷️ Sticker", f"`{len(guild.stickers)}/{guild.sticker_limit}`"),
-            ("✨ Boost", f"Seviye `{guild.premium_tier}` · `{guild.premium_subscription_count}` boost"),
+        verification = str(guild.verification_level).title()
+        verif_emoji = "🔒" if guild.verification_level != discord.VerificationLevel.none else "🔓"
+
+        badges = [
+            c_badge(f"{toplam:,} üye", "👥"),
+            c_badge(f"{online:,} aktif", "🟢"),
+            c_badge(f"Seviye {guild.premium_tier} Boost", "✨"),
+            c_badge(verification, verif_emoji),
         ]
 
-        await respond(interaction, c_info_card(
+        body_lines = [
+            c_status_indicator("info", f"**Sahip:** {guild.owner.mention if guild.owner else '_Bilinmiyor_'}"),
+            c_status_indicator("info", f"**Kuruluş:** <t:{int(created.timestamp())}:F>"),
+            "",
+            f"**Kanallar:** 💬 `{len(guild.text_channels)}` · 🔊 `{len(guild.voice_channels)}` · 📁 `{len(guild.categories)}` · 🧵 `{len(guild.threads)}`",
+            f"**Roller & Emoji:** 🏷️ `{len(guild.roles)}` · 😀 `{len(guild.emojis)}/{guild.emoji_limit}` · 🏷️ `{len(guild.stickers)}/{guild.sticker_limit}`",
+        ]
+
+        await respond(interaction, c_rich_card(
             f"🏠 {guild.name}",
+            subtitle=f"`{guild.id}`",
             thumbnail=str(guild.icon.url) if guild.icon else None,
-            groups=[identity, members, channels, extras],
-            media=str(guild.banner.with_size(1024).url) if guild.banner else None,
+            badges=badges,
+            body="\n".join(body_lines),
             footer=f"Sunucu bilgisi · {guild.name}",
             color=COLORS.INFO,
         ))

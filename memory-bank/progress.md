@@ -1,61 +1,80 @@
 # Progress
 
-## Çalışan Özellikler (v1.1)
+## Çalışan Özellikler (v1.2+)
 
 ### ✅ Temel Altyapı
 - Bot başlatma, cog yükleme, slash command sync
 - SQLite async veritabanı (WAL mode)
 - .env ile güvenli token yönetimi
 - Logging (konsol + bot.log)
+- Components V2 raw-API renderer (`cogs/_v2.py`)
 
-### ✅ Moderasyon (`/moderatör`)
-- temizle, at, yasakla, sustur, sustu-kaldır
-- ihlaller, ihlal-temizle
-- Role hiyerarşi kontrolü, infraction DB kaydı
+### ✅ Moderasyon
+- `/kanal temizle`, `/kanal yavaşmod`, `/kanal kilitle`, `/kanal kilit-aç`
+- `/üye uyar`, `/üye at`, `/üye yasakla`, `/üye sustur`, `/üye sus-kaldır`
+- `/ihlal listele`, `/ihlal sil`
+- Role hiyerarşi kontrolü, infraction DB kaydı, audit-log bazlı loglar
 
-### ✅ Müzik (`/müzik`) — v1.1 güncellendi
-- çal: tekil şarkı (URL veya arama) + YouTube playlist desteği
-- ara: 5 sonuç listele, buton ile seç
-- atla, duraklat, devam, dur
-- ses (0-200%), sıra (ilk 10 + footer), sıra-temizle, döngü
-- şimdi-çalıyor: mevcut şarkı + döngü/ses durumu
-- Lazy stream URL resolution (süresi dolmuş URL otomatik yenilenir)
-- Playlist: max 100 şarkı, flat extraction + lazy resolve
+### ✅ Müzik
+- `/müzik çal`: tekil şarkı, YouTube playlist, Spotify track/album/playlist → YouTube bridge
+- `/müzik ara`: 5 sonuç listele, SearchView buton seçimi
+- `/müzik atla`, `duraklat`, `devam`, `dur`, `ses`, `sıra`, `sıra-sil`, `karıştır`, `döngü`, `şimdi`
+- Lazy stream URL resolution, loop'ta URL yenileme
+- PlayerView butonları: yeniden-çal, duraklat/devam, atla, dur, döngü, ses+/-, karıştır, sözler, sıra
 
-### ✅ Eğlence
-- yazıtura, zar (özelleştirilebilir)
-- anket (max 5 seçenek, butonlu, canlı sonuç)
-- etkinlik (tarih/saat/konum, katılım butonu)
+### ✅ Eğlence / Oyunlar
+- `/yazıtura`, `/zar`, `/8top`, `/kaccm`
+- `/tkm` — PvP veya bot, ilk 2 galibiyet
+- `/adamasmaca` — modal harf/kelime tahmini
+- `/arena` — PvP dövüş (Kılıç/Büyü/Kalkan, 150 HP, max 20 tur)
+- `/isimşehir`, `/vampirköylü`, `/rusruleti`
+
+### ✅ Sosyal
+- `/anket` — butonlu, canlı barlı
+- `/etkinlik` — scheduled event + duyuru kanalı
 
 ### ✅ Özel Komutlar
-- komutyarat, komutlistele, komutsil, komut
-- Autocomplete desteği, guild izolasyonu
+- `/komut-yarat`, `/komut-liste`, `/komut-sil`, `/komut` (autocomplete)
 
-### ✅ Araçlar — v1.1 güncellendi
-- yardım, kullanici-bilgi, sunucu-bilgi
-- ping (WebSocket latency + renk)
-- avatar (PNG/JPG/WEBP format linkleri)
-- bot-bilgi (uptime, sunucu/üye sayısı, gecikme)
-- komuttazele (administrator → manuel slash sync)
+### ✅ Yayın & Mesajlaşma
+- `/yaz` — kanala bot mesajı (modal)
+- `/embed` — V2 embed (renk seçimli, modal)
+- `/duyuru` — duyuru + ping (modal)
+- `/hatırlat` — DM hatırlatma (1-1440 dk, async task)
+
+### ✅ Yönetim
+- `/tazele` — slash sync (administrator)
+- `/restart` — bot yeniden başlatma
+
+### ✅ Araçlar
+- `/yardım`, `/ping`, `/profil`, `/sunucu`, `/avatar`, `/bot`
+
+### ✅ Spor — Trendyol Süper Lig (`/lig`)
+- `sıralama`, `takvim`, `sonuçlar`, `canlı`
+- api-football.com, 5dk cache (canlı 60s)
+
+### ✅ Sunucu Araçları
+- `/emoji-ekle` — başka sunucudan özel emoji çalar (`<:isim:ID>`)
+- `/oto-emoji` — yabancı emojileri otomatik ekleme (aç/kapa, `guild_settings` tabanlı)
+- Sağ tık context menu: **Emojileri Ekle**, **Sticker'ı Ekle**
+
+### ✅ Loglar
+- Sunucu logları: kanal/rol oluşturma-silme, sunucu güncelleme, davet, emoji/sticker
+- Üye logları: katılma/ayrılma, ban/unban, timeout, rol değişimi, nick değişimi
+- Mesaj logları: silme, düzenleme
+- Ses logları: kanala katılma/ayrılma, değiştirme, mute/deafen
+- Log kanalı env tabanlı (`LOG_CHANNEL_ID`)
 
 ### ✅ Dokümantasyon
 - README.md: Windows + Ubuntu kurulum kılavuzu
-- memory-bank: AGENTS.md uyumlu tam dokümantasyon
-
-### ✅ Spor — Trendyol Süper Lig (`/lig`) — v1.2
-- `/lig sıralama` — tam puan tablosu (sıra, puan, G/B/M, averaj, zon rengi, form)
-- `/lig takvim` — önümüzdeki 30 gündeki maçlar, hafta gruplu, Discord timestamp
-- `/lig sonuçlar` — son 15 tamamlanmış maç, hafta gruplu, kazanan kalın
-- `/lig canlı` — devam eden maçlar ve anlık skor (60s cache)
-- API: api-football.com (FOOTBALL_API_KEY env), 5dk cache (canlı 60s)
+- memory-bank: AGENTS.md uyumlu dokümantasyon
 
 ## Yapılmadı / Planlı Değil
 - Levels / XP sistemi
 - Economy sistemi
 - Web dashboard
-- Spotify / SoundCloud
 
 ## Bilinen Kısıtlar
 - Playlist desteği sadece YouTube (yt-dlp genel URL desteği var ama test edilmedi)
 - Sıra görünümü 10 şarkı ile sınırlı (pagination yok)
-- Moderasyon log kanalı yok
+- Spotify entegrasyonu sadece metadata → YouTube bridge (direkt çalma yok)

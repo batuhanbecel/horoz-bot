@@ -5,7 +5,7 @@ from datetime import timedelta
 from database import db
 from ._shared import hierarchy_ok, parse_duration
 from .._v2 import (
-    COLORS, c_card, c_action_card, respond, channel_send, error_response,
+    COLORS, c_card, c_action_card, c_rich_card, c_status_indicator, c_badge, respond, channel_send, error_response,
 )
 
 
@@ -51,15 +51,17 @@ class MemberMod(commands.Cog):
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "warn")
         rows = await db.get_infractions(interaction.guild_id, üye.id)
 
-        await respond(interaction, c_action_card(
+        await respond(interaction, c_rich_card(
             "⚠️ Uyarı Verildi",
-            target_avatar=str(üye.display_avatar.url),
-            fields=[
-                ("👤 Üye", üye.mention),
-                ("👮 Moderatör", interaction.user.mention),
-                ("📊 Toplam İhlal", f"`{len(rows)}`"),
-                ("📝 Sebep", sebep),
-            ],
+            subtitle=üye.display_name,
+            thumbnail=str(üye.display_avatar.url),
+            badges=[c_badge("İhlal", "🟡"), c_badge(f"#{len(rows)}", "🔴")],
+            body="\n".join([
+                c_status_indicator("warn", f"**Üye:** {üye.mention}"),
+                c_status_indicator("info", f"**Moderatör:** {interaction.user.mention}"),
+                c_status_indicator("warn", f"**Toplam İhlal:** `{len(rows)}`"),
+                c_status_indicator("critical", f"**Sebep:** {sebep}"),
+            ]),
             footer=f"Sunucu: {interaction.guild.name}",
             color=COLORS.WARNING,
         ))
@@ -98,15 +100,16 @@ class MemberMod(commands.Cog):
 
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "kick")
 
-        await respond(interaction, c_action_card(
+        await respond(interaction, c_rich_card(
             "👢 Üye Atıldı",
-            target_avatar=str(üye.display_avatar.url),
-            fields=[
-                ("👤 Üye", f"{üye.mention} (`{üye}`)"),
-                ("🆔 ID", f"`{üye.id}`"),
-                ("👮 Moderatör", interaction.user.mention),
-                ("📝 Sebep", sebep),
-            ],
+            subtitle=f"{üye} · `{üye.id}`",
+            thumbnail=str(üye.display_avatar.url),
+            badges=[c_badge("KICK", "🟠"), c_badge("Moderasyon", "🔴")],
+            body="\n".join([
+                c_status_indicator("error", f"**Üye:** {üye.mention}"),
+                c_status_indicator("info", f"**Moderatör:** {interaction.user.mention}"),
+                c_status_indicator("warn", f"**Sebep:** {sebep}"),
+            ]),
             footer=f"Sunucu: {interaction.guild.name}",
             color=COLORS.MOD,
         ))
@@ -143,16 +146,17 @@ class MemberMod(commands.Cog):
 
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "ban")
 
-        await respond(interaction, c_action_card(
+        await respond(interaction, c_rich_card(
             "🔨 Üye Yasaklandı",
-            target_avatar=str(üye.display_avatar.url),
-            fields=[
-                ("👤 Üye", f"{üye.mention} (`{üye}`)"),
-                ("🆔 ID", f"`{üye.id}`"),
-                ("👮 Moderatör", interaction.user.mention),
-                ("🗑️ Silinen Mesajlar", f"{mesaj_sil} gün"),
-                ("📝 Sebep", sebep),
-            ],
+            subtitle=f"{üye} · `{üye.id}`",
+            thumbnail=str(üye.display_avatar.url),
+            badges=[c_badge("BAN", "🔴"), c_badge(f"{mesaj_sil}g silindi", "🟠")],
+            body="\n".join([
+                c_status_indicator("critical", f"**Üye:** {üye.mention}"),
+                c_status_indicator("info", f"**Moderatör:** {interaction.user.mention}"),
+                c_status_indicator("warn", f"**Silinen Mesajlar:** `{mesaj_sil}` gün"),
+                c_status_indicator("critical", f"**Sebep:** {sebep}"),
+            ]),
             footer=f"Sunucu: {interaction.guild.name}",
             color=COLORS.DANGER,
         ))
@@ -192,15 +196,17 @@ class MemberMod(commands.Cog):
 
         await db.add_infraction(interaction.guild_id, üye.id, interaction.user.id, sebep, "mute")
 
-        await respond(interaction, c_action_card(
+        await respond(interaction, c_rich_card(
             "🔇 Üye Susturuldu",
-            target_avatar=str(üye.display_avatar.url),
-            fields=[
-                ("👤 Üye", üye.mention),
-                ("⏱️ Süre", f"`{süre}`"),
-                ("👮 Moderatör", interaction.user.mention),
-                ("📝 Sebep", sebep),
-            ],
+            subtitle=üye.display_name,
+            thumbnail=str(üye.display_avatar.url),
+            badges=[c_badge("TIMEOUT", "🟡"), c_badge(süre, "🟠")],
+            body="\n".join([
+                c_status_indicator("warn", f"**Üye:** {üye.mention}"),
+                c_status_indicator("info", f"**Süre:** `{süre}`"),
+                c_status_indicator("info", f"**Moderatör:** {interaction.user.mention}"),
+                c_status_indicator("warn", f"**Sebep:** {sebep}"),
+            ]),
             footer=f"Sunucu: {interaction.guild.name}",
             color=COLORS.WARNING,
         ))
@@ -229,13 +235,15 @@ class MemberMod(commands.Cog):
                 ephemeral=True,
             )
 
-        await respond(interaction, c_action_card(
+        await respond(interaction, c_rich_card(
             "🔊 Susturma Kaldırıldı",
-            target_avatar=str(üye.display_avatar.url),
-            fields=[
-                ("👤 Üye", üye.mention),
-                ("👮 Moderatör", interaction.user.mention),
-            ],
+            subtitle=üye.display_name,
+            thumbnail=str(üye.display_avatar.url),
+            badges=[c_badge("UNMUTE", "🟢")],
+            body="\n".join([
+                c_status_indicator("ok", f"**Üye:** {üye.mention}"),
+                c_status_indicator("info", f"**Moderatör:** {interaction.user.mention}"),
+            ]),
             color=COLORS.SUCCESS,
         ))
 

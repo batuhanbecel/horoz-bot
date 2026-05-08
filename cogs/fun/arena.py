@@ -22,8 +22,10 @@ class Fighter:
     member: discord.Member
     hp: int = 100
     max_hp: int = 100
-    ep: int = 50
+    ep: int = 50          # ⚡ Enerji: Kılıç (+10) ve Kalkan (–10)
     max_ep: int = 50
+    mp: int = 50          # 💠 Mana: Büyü (–20)
+    max_mp: int = 50
     potions_left: int = 2
     shield_active: bool = False
     is_bot: bool = False
@@ -113,15 +115,15 @@ class ArenaGame:
 
     def action_spell(self) -> str | None:
         """
-        🔮 25–40 hasar verir. Bedeli 20 EP.
-        Yeterli enerji yoksa None döner (tur geçişi olmaz).
+        🔮 25–40 hasar verir. Bedeli 20 MP (Mana).
+        Yeterli mana yoksa None döner (tur geçişi olmaz).
         Kalkan etkisi kılıç ile aynıdır.
         """
         attacker = self.current
-        if attacker.ep < 20:
+        if attacker.mp < 20:
             return None
 
-        attacker.ep -= 20
+        attacker.mp -= 20
         base_dmg = random.randint(25, 40)
         msg = f"🔮 **{attacker.member.display_name}**: Büyü ile `{base_dmg}` hasar verdi"
 
@@ -167,7 +169,7 @@ class ArenaGame:
     def action_potion(self) -> str | None:
         """
         🧪 20–30 HP yeniler. Maç başına 2 kullanım hakkı.
-        Enerji harcamaz. Maksimum 100 HP'yi geçemez.
+        Enerji / Mana harcamaz. Maksimum 100 HP'yi geçemez.
         Hakkı bittiyse None döner.
         """
         attacker = self.current
@@ -302,15 +304,17 @@ class BattleView(discord.ui.View):
         p1, p2 = g.challenger, g.opponent
 
         def _player_block(player: Fighter, color_emoji: str) -> str:
-            """Tek bir savaşçının HP/EP/İksir bilgisini formatlar."""
-            hp_bar = c_progress(player.hp, player.max_hp, length=12)
-            ep_bar = c_progress(player.ep, player.max_ep, length=12)
+            """Tek bir savaşçının HP/EP/MP/İksir bilgisini formatlar."""
+            hp_bar = c_progress(player.hp, player.max_hp, length=10)
+            ep_bar = c_progress(player.ep, player.max_ep, length=10)
+            mp_bar = c_progress(player.mp, player.max_mp, length=10)
             pots = "●" * player.potions_left + "○" * (2 - player.potions_left)
             shield = "\n🛡️ **Kalkan aktif!**" if player.shield_active else ""
             return (
                 f"### {color_emoji} {player.member.display_name}{shield}\n"
                 f"**❤️ HP**  `{hp_bar}`  `{player.hp}/{player.max_hp}`\n"
                 f"**⚡ EP**  `{ep_bar}`  `{player.ep}/{player.max_ep}`\n"
+                f"**💠 MP**  `{mp_bar}`  `{player.mp}/{player.max_mp}`\n"
                 f"**🧪 İksir** `{pots}` `({player.potions_left}/2)`"
             )
 
@@ -378,21 +382,21 @@ class BattleView(discord.ui.View):
         if bot.hp <= 25 and bot.potions_left > 0:
             return "potion"
 
-        # 2. Rakibi öldürebilirsek güçlü hamle kullan
+        # 2. Rakibi öldürebilirsek güçlü hamle kullan (Büyü mana gerektirir)
         if opp.hp <= 18:
-            if bot.ep >= 20:
+            if bot.mp >= 20:
                 return "spell"
             return "sword"
 
-        # 3. Yeterli enerji varsa büyü (yüksek hasar)
-        if bot.ep >= 20 and opp.hp >= 30:
+        # 3. Yeterli mana varsa büyü (yüksek hasar)
+        if bot.mp >= 20 and opp.hp >= 30:
             return "spell"
 
         # 4. EP azaldıysa kılıçla enerji topla
         if bot.ep < 15:
             return "sword"
 
-        # 5. Pot yoksa ve can düşükse, ara sıra kalkan kullan
+        # 5. Pot yoksa ve can düşükse, ara sıra kalkan kullan (EP gerektirir)
         if bot.ep >= 10 and bot.potions_left == 0 and bot.hp < 50 and random.random() < 0.35:
             return "shield"
 
@@ -410,10 +414,10 @@ class BattleView(discord.ui.View):
         current = g.current
 
         # ── Kaynak kontrolü (yetersizse tur geçişi olmaz) ──────────────────────
-        if action == "spell" and current.ep < 20:
+        if action == "spell" and current.mp < 20:
             if interaction:
                 await interaction.response.send_message(
-                    "🔮 Büyü kullanmak için `20` EP gerekli!", ephemeral=True
+                    "🔮 Büyü kullanmak için `20` MP (Mana) gerekli!", ephemeral=True
                 )
             return
 
@@ -512,11 +516,11 @@ class BattleView(discord.ui.View):
     async def spell_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self._execute_action("spell", interaction)
 
-    @discord.ui.button(label="Kalkan", emoji="🛡️", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Kalkan", emoji="🛡️", style=discord.ButtonStyle.secondary, row=0)
     async def shield_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self._execute_action("shield", interaction)
 
-    @discord.ui.button(label="İksir", emoji="🧪", style=discord.ButtonStyle.success, row=1)
+    @discord.ui.button(label="İksir", emoji="🧪", style=discord.ButtonStyle.success, row=0)
     async def potion_btn(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self._execute_action("potion", interaction)
 

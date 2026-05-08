@@ -6,6 +6,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from .._v2 import (
+    COLORS, c_text, c_section, c_thumbnail, c_separator, c_container, c_progress,
+    update, msg_edit, channel_send, respond,
+)
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 #  ArenaGame — Oyun Durumu & Kurallar
@@ -60,12 +65,6 @@ class ArenaGame:
         """Sırayı diğer oyuncuya geçirir ve tur sayacını artırır."""
         self.turn_index = 1 - self.turn_index
         self.turn_count += 1
-
-    def _hp_bar(self, value: int, maximum: int, length: int = 10) -> str:
-        """Metin tabanlı bir ilerleme çubuğu üretir (█/░)."""
-        ratio = value / maximum if maximum > 0 else 0
-        filled = max(0, min(length, int(ratio * length)))
-        return f"{'█' * filled}{'░' * (length - filled)}"
 
     def _log(self, line: str) -> None:
         """Savaş günlüğüne bir satır ekler (son 8 satır tutulur)."""
@@ -255,9 +254,10 @@ class ChallengeView(discord.ui.View):
         # Oyunu ve savaş View'ini oluştur
         game = ArenaGame(self.challenger, self.opponent)
         battle_view = BattleView(game, self.cog)
-        embed = battle_view.build_embed()
 
-        msg = await interaction.followup.send(embed=embed, view=battle_view)
+        if interaction.channel is None:
+            return
+        msg = await channel_send(interaction.channel, battle_view.build_card(), view=battle_view)
         battle_view.message = msg
 
     @discord.ui.button(label="Reddet", style=discord.ButtonStyle.danger, emoji="❌")
@@ -278,13 +278,13 @@ class ChallengeView(discord.ui.View):
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-#  BattleView — Savaş Arayüzü (4 Aksiyon Butonu)
+#  BattleView — Savaş Arayüzü (V2 Components + 4 Aksiyon Butonu)
 # ────────────────────────────────────────────────────────────────────────────────
 
 class BattleView(discord.ui.View):
     """
-    Savaşın ana arayüzüdür. 4 aksiyon butonu, durum embed'i ve
-    bot sırasıysa otomatik hamle mekanizmasını barındırır.
+    Savaşın ana arayüzüdür. Tamamen V2 component sistemiyle çalışır.
+    4 aksiyon butonu, temiz durum kartları ve bot otomatik hamlesini barındırır.
     """
 
     def __init__(self, game: ArenaGame, cog: "Arena"):
@@ -294,76 +294,75 @@ class BattleView(discord.ui.View):
         self.message: discord.Message | None = None
         self._bot_task: asyncio.Task | None = None
 
-    # ── Embed Oluşturucu ──────────────────────────────────────────────────────
+    # ── V2 Kart Oluşturucu ──────────────────────────────────────────────────────
 
-    def build_embed(self) -> discord.Embed:
+    def build_card(self) -> dict:
+        """Arena durumunu modern V2 container + section + thumbnail ile üretir."""
         g = self.game
         p1, p2 = g.challenger, g.opponent
 
+        def _player_block(player: Fighter, color_emoji: str) -> str:
+            """Tek bir savaşçının HP/EP/İksir bilgisini formatlar."""
+            hp_bar = c_progress(player.hp, player.max_hp, length=12)
+            ep_bar = c_progress(player.ep, player.max_ep, length=12)
+            pots = "●" * player.potions_left + "○" * (2 - player.potions_left)
+            shield = "\n🛡️ **Kalkan aktif!**" if player.shield_active else ""
+            return (
+                f"### {color_emoji} {player.member.display_name}{shield}\n"
+                f"**❤️ HP**  `{hp_bar}`  `{player.hp}/{player.max_hp}`\n"
+                f"**⚡ EP**  `{ep_bar}`  `{player.ep}/{player.max_ep}`\n"
+                f"**🧪 İksir** `{pots}` `({player.potions_left}/2)`"
+            )
+
+        items: list[dict] = []
+
+        # Başlık
         if g.finished and g.winner:
-            embed = discord.Embed(
-                title=f"🏆 {g.winner.member.display_name} Kazandı!",
-                color=discord.Color.gold(),
-            )
+            items.append(c_text(f"## 🏆 {g.winner.member.display_name} Kazandı!"))
         else:
-            embed = discord.Embed(
-                title=f"⚔️ Arena Savaşı — Tur {g.turn_count}",
-                color=0xB41E1E,
-            )
+            items.append(c_text(f"## ⚔️ Arena Savaşı\n-# Tur **{g.turn_count}**"))
 
-        def bar(val: int, max_val: int, length: int = 10) -> str:
-            ratio = val / max_val if max_val else 0
-            filled = max(0, min(length, int(ratio * length)))
-            return f"{'█' * filled}{'░' * (length - filled)}"
+        items.append(c_separator())
 
-        # Meydan okuyan (P1) durum kartı
-        p1_lines = [
-            f"❤️ HP: {bar(p1.hp, p1.max_hp)} `{p1.hp}/{p1.max_hp}`",
-            f"⚡ EP: {bar(p1.ep, p1.max_ep)} `{p1.ep}/{p1.max_ep}`",
-            f"🧪 İksir: `{'🟢' * p1.potions_left}{'⚫' * (2 - p1.potions_left)}`  ({p1.potions_left}/2)",
-        ]
-        if p1.shield_active:
-            p1_lines.append("🛡️ **Kalkan aktif!**")
+        # Oyuncu 1 — thumbnail sağda (Discord V2 section standardı)
+        items.append(c_section(
+            c_text(_player_block(p1, "🔵")),
+            accessory=c_thumbnail(str(p1.member.display_avatar.url))
+        ))
 
-        # Rakip (P2) durum kartı
-        p2_lines = [
-            f"❤️ HP: {bar(p2.hp, p2.max_hp)} `{p2.hp}/{p2.max_hp}`",
-            f"⚡ EP: {bar(p2.ep, p2.max_ep)} `{p2.ep}/{p2.max_ep}`",
-            f"🧪 İksir: `{'🟢' * p2.potions_left}{'⚫' * (2 - p2.potions_left)}`  ({p2.potions_left}/2)",
-        ]
-        if p2.shield_active:
-            p2_lines.append("🛡️ **Kalkan aktif!**")
+        # VS ayıracı
+        items.append(c_separator(spacing=1))
+        items.append(c_text("### ⚔️  VS  ⚔️"))
+        items.append(c_separator(spacing=1))
 
-        embed.add_field(
-            name=f"🟢 {p1.member.display_name}",
-            value="\n".join(p1_lines),
-            inline=True,
-        )
-        embed.add_field(name="VS", value="⚔️", inline=True)
-        embed.add_field(
-            name=f"🔴 {p2.member.display_name}",
-            value="\n".join(p2_lines),
-            inline=True,
-        )
+        # Oyuncu 2
+        items.append(c_section(
+            c_text(_player_block(p2, "🔴")),
+            accessory=c_thumbnail(str(p2.member.display_avatar.url))
+        ))
+
+        items.append(c_separator())
 
         # Sıra göstergesi
         if not g.finished:
             turn_emoji = "🤖" if g.current.is_bot else "🎯"
-            embed.add_field(
-                name="🎲 Sıra",
-                value=f"{turn_emoji} **{g.current.member.display_name}** hamle yapıyor...",
-                inline=False,
-            )
+            items.append(c_text(
+                f"🎲 **Sıra:** {turn_emoji} **{g.current.member.display_name}** hamle yapıyor..."
+            ))
+            items.append(c_separator())
 
-        # Savaş günlüğü (son 5 kayıt)
+        # Savaş günlüğü
         if g.log:
             log_text = "\n".join(f"> *{line}*" for line in g.log[-5:])
         else:
             log_text = "> *Savaş alanına hoş geldiniz... İlk hamle meydan okuyana ait!*"
-        embed.add_field(name="📜 Savaş Günlüğü", value=log_text, inline=False)
+        items.append(c_text(f"**📜 Savaş Günlüğü**\n{log_text}"))
 
-        embed.set_footer(text="Sıranı bekle • Her aksiyon bir tur harcar • 3 dakika süre sınırı")
-        return embed
+        items.append(c_separator())
+        items.append(c_text("-# Sıranı bekle • Her aksiyon bir tur harcar • 3 dk süre sınırı"))
+
+        color = 0xB41E1E if not g.finished else 0xF1C40F
+        return c_container(*items, color=color)
 
     # ── Bot AI ────────────────────────────────────────────────────────────────
 
@@ -404,7 +403,7 @@ class BattleView(discord.ui.View):
 
     async def _execute_action(self, action: str, interaction: discord.Interaction | None) -> None:
         """
-        Bir aksiyonu çalıştırır, embed'i günceller ve oyun bittiğini kontrol eder.
+        Bir aksiyonu çalıştırır, V2 kartını günceller ve oyun bittiğini kontrol eder.
         interaction=None ise bot hamlesidir; mesaj doğrudan editlenir.
         """
         g = self.game
@@ -447,19 +446,19 @@ class BattleView(discord.ui.View):
             for child in self.children:
                 child.disabled = True
             self.stop()
-            embed = self.build_embed()
+            card = self.build_card()
             if interaction and not interaction.response.is_done():
-                await interaction.response.edit_message(embed=embed, view=self)
+                await update(interaction, card, view=self)
             elif self.message:
-                await self.message.edit(embed=embed, view=self)
+                await msg_edit(self.message, card, view=self)
             return
 
         # ── Normal güncelleme ───────────────────────────────────────────────────
-        embed = self.build_embed()
+        card = self.build_card()
         if interaction and not interaction.response.is_done():
-            await interaction.response.edit_message(embed=embed, view=self)
+            await update(interaction, card, view=self)
         elif self.message:
-            await self.message.edit(embed=embed, view=self)
+            await msg_edit(self.message, card, view=self)
 
         # ── Sıradaki bot mu? Otomatik hamle tetikle ─────────────────────────────
         if g.current.is_bot and not g.finished:
@@ -474,9 +473,8 @@ class BattleView(discord.ui.View):
         # Bot düşünürken butonları geçici olarak pasifleştir (spam koruması)
         for child in self.children:
             child.disabled = True
-        embed = self.build_embed()
         if self.message:
-            await self.message.edit(embed=embed, view=self)
+            await msg_edit(self.message, self.build_card(), view=self)
 
         await asyncio.sleep(0.8)
         if self.game.finished or self.is_finished():
@@ -489,9 +487,8 @@ class BattleView(discord.ui.View):
         if not self.game.finished:
             for child in self.children:
                 child.disabled = False
-            embed = self.build_embed()
             if self.message:
-                await self.message.edit(embed=embed, view=self)
+                await msg_edit(self.message, self.build_card(), view=self)
 
     # ── View Callback'leri ──────────────────────────────────────────────────────
 
@@ -529,10 +526,12 @@ class BattleView(discord.ui.View):
         for child in self.children:
             child.disabled = True
         if self.message:
-            embed = self.build_embed()
-            embed.title = "⏰ Süre Doldu — Savaş Sonlandırıldı"
-            embed.color = discord.Color.dark_grey()
-            await self.message.edit(embed=embed, view=self)
+            items = [
+                c_text("## ⏰ Süre Doldu — Savaş Sonlandırıldı"),
+                c_separator(),
+                c_text("Dövüş süresi içinde tamamlanmadı, oyun iptal edildi."),
+            ]
+            await msg_edit(self.message, c_container(*items, color=0x95A5A6), view=self)
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -559,10 +558,9 @@ class Arena(commands.Cog):
             bot_member = interaction.guild.me
             game = ArenaGame(interaction.user, bot_member, is_vs_bot=True)
             view = BattleView(game, self)
-            embed = view.build_embed()
 
-            await interaction.response.send_message(embed=embed, view=view)
-            view.message = await interaction.original_response()
+            msg = await respond(interaction, view.build_card(), view=view)
+            view.message = msg
             return
 
         # ── Kendine savaş kontrolü ─────────────────────────────────────────────

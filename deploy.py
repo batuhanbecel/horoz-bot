@@ -89,11 +89,18 @@ def deploy() -> int:
     print("[✓] Kod güncellendi.\n")
 
     # 2) Servisi yeniden başlat (ama rate limit varsa durdur)
+    # Önce unmask et (önceki başarısız deploy'da maskelenmiş olabilir)
+    print(f"[→] Servis unmask ediliyor...")
+    run_remote(client, f"systemctl unmask {SERVICE}")
+    run_remote(client, f"systemctl enable {SERVICE}")
+    
     print(f"[→] systemctl restart {SERVICE}")
     ec, out, err = run_remote(client, f"systemctl restart {SERVICE}")
     if ec != 0:
         print(f"[✗] Restart başarısız (exit {ec})")
         print(f"    stderr: {err}")
+        # Başarısızsa auto-restart'i önlemek için mask'la
+        run_remote(client, f"systemctl mask {SERVICE}")
         client.close()
         return 1
     print("[✓] Servis restart edildi.\n")
@@ -103,9 +110,10 @@ def deploy() -> int:
     ec2, out2, err2 = run_remote(client, f"systemctl is-active {SERVICE}")
     if "inactive" in out2.lower() or "failed" in out2.lower():
         print("[!] Servis başlatılamadı — muhtemel rate limit.")
-        print("[→] Servis durduruluyor (rate limit'in kalkması için)...")
+        print("[→] Servis durduruluyor ve mask'leniyor (auto-restart'i önlemek için)...")
         run_remote(client, f"systemctl stop {SERVICE}")
-        print("[✓] Servis durduruldu. Lütfen 5-10 dakika bekleyip tekrar deploy edin.")
+        run_remote(client, f"systemctl mask {SERVICE}")
+        print("[✓] Servis durduruldu. Lütfen 20-30 dakika bekleyip tekrar deploy edin.")
         client.close()
         return 1
 

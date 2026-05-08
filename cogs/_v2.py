@@ -20,6 +20,24 @@ MEDIA     = 12
 SEPARATOR = 14
 
 
+# ── Color palette ─────────────────────────────────────────────────────────────
+# Önce tanımlanmalı — aşağıdaki builder fonksiyonlarının default argümanları
+# bu sınıfa referans verir (forward-reference hatası önlenir).
+
+class COLORS:
+    """Tutarlı renk paleti — komut türüne göre ayrılmış."""
+    PRIMARY = 0x5865F2  # Discord blurple — info/default
+    SUCCESS = 0x57F287  # green — onay, başarı
+    DANGER  = 0xED4245  # red — hata, ban
+    WARNING = 0xFEE75C  # yellow — uyarı, mute
+    INFO    = 0x3498DB  # mavi — bilgi kartları
+    MOD     = 0xE67E22  # turuncu — moderasyon (kick)
+    MUSIC   = 0x9B59B6  # mor — müzik
+    EVENT   = 0xE91E63  # pembe — etkinlik
+    GAME    = 0xF1C40F  # altın — oyunlar
+    NEUTRAL = 0x2B2D31  # discord card bg
+
+
 # ── Builders ──────────────────────────────────────────────────────────────────
 
 def c_text(content: str) -> dict:
@@ -128,46 +146,6 @@ def c_rich_card(
         items.append(c_text(f"-# {footer}"))
 
     return c_container(*items, color=color)
-
-
-# ── Internals ─────────────────────────────────────────────────────────────────
-
-def _build(components: tuple[dict, ...], view: discord.ui.View | None) -> list[dict]:
-    result = list(components)
-    if view:
-        result.extend(view.to_components())
-    return result
-
-
-def _flags(ephemeral: bool) -> int:
-    return _V2 | (_EPH if ephemeral else 0)
-
-
-def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None:
-    # discord.py < 2.5 uses _responded: bool, newer versions use _response_type: int
-    try:
-        resp._responded = True  # type: ignore[attr-defined]
-    except AttributeError:
-        try:
-            resp._response_type = type_id  # type: ignore[attr-defined]
-        except AttributeError:
-            pass
-
-
-# ── Color palette ─────────────────────────────────────────────────────────────
-
-class COLORS:
-    """Tutarlı renk paleti — komut türüne göre ayrılmış."""
-    PRIMARY = 0x5865F2  # Discord blurple — info/default
-    SUCCESS = 0x57F287  # green — onay, başarı
-    DANGER  = 0xED4245  # red — hata, ban
-    WARNING = 0xFEE75C  # yellow — uyarı, mute
-    INFO    = 0x3498DB  # mavi — bilgi kartları
-    MOD     = 0xE67E22  # turuncu — moderasyon (kick)
-    MUSIC   = 0x9B59B6  # mor — müzik
-    EVENT   = 0xE91E63  # pembe — etkinlik
-    GAME    = 0xF1C40F  # altın — oyunlar
-    NEUTRAL = 0x2B2D31  # discord card bg
 
 
 # ── Convenience card builders ─────────────────────────────────────────────────
@@ -306,6 +284,30 @@ async def error_response(interaction: discord.Interaction, msg: str) -> None:
         await followup(interaction, card, ephemeral=True)
     else:
         await respond(interaction, card, ephemeral=True)
+
+
+# ── Internals ─────────────────────────────────────────────────────────────────
+
+def _build(components: tuple[dict, ...], view: discord.ui.View | None) -> list[dict]:
+    result = list(components)
+    if view:
+        result.extend(view.to_components())
+    return result
+
+
+def _flags(ephemeral: bool) -> int:
+    return _V2 | (_EPH if ephemeral else 0)
+
+
+def _mark_responded(resp: discord.InteractionResponse, type_id: int = 4) -> None:
+    # discord.py < 2.5 uses _responded: bool, newer versions use _response_type: int
+    try:
+        resp._responded = True  # type: ignore[attr-defined]
+    except AttributeError:
+        try:
+            resp._response_type = type_id  # type: ignore[attr-defined]
+        except AttributeError:
+            pass
 
 
 # ── Interaction response helpers ──────────────────────────────────────────────

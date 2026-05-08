@@ -39,7 +39,6 @@ class HorozBot(commands.Bot):
             command_prefix=commands.when_mentioned,
             intents=intents,
             allowed_mentions=discord.AllowedMentions.none(),
-            command_sync_flag=commands.CommandSyncFlag.sync,
             max_messages=10000,
         )
         self._app_info: discord.AppInfo | None = None

@@ -319,12 +319,10 @@ class Social(commands.Cog):
         seçenek5: str | None = None,
         süre: int = 24,
     ):
-        opts = [discord.PollAnswer(poll_media=discord.PollMedia(text=s)) for s in [seçenek1, seçenek2, seçenek3, seçenek4, seçenek5] if s]
-        poll = discord.Poll(
-            question=soru,
-            answers=opts,
-            duration=timedelta(hours=süre),
-        )
+        poll = discord.Poll(question=soru, duration=timedelta(hours=süre))
+        for s in [seçenek1, seçenek2, seçenek3, seçenek4, seçenek5]:
+            if s:
+                poll.add_answer(text=s)
         await interaction.response.send_message(poll=poll)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

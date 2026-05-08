@@ -258,7 +258,7 @@ def _serialize(items: tuple[Any, ...]) -> list[dict]:
     result: list[dict] = []
     for item in items:
         if isinstance(item, discord.ui.Container):
-            result.extend(item.to_components())
+            result.append(item.to_component_dict())
         elif isinstance(item, discord.ui.LayoutView):
             result.extend(item.to_components())
         elif hasattr(item, "to_component_dict"):

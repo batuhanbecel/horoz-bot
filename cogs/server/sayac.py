@@ -57,6 +57,8 @@ async def _update_guild(guild: discord.Guild) -> None:
 class Sayac(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    async def cog_load(self) -> None:
         self.update_loop.start()
 
     def cog_unload(self) -> None:

@@ -86,7 +86,7 @@ class KelimeZinciri(commands.Cog):
                     "**Nasıl oynanır?**\n"
                     "• Her kelime, bir öncekinin **son harfiyle** başlamalı.\n"
                     "• Aynı kelime iki kez kullanılamaz.\n"
-                    "• En az **2 harf** içermeli, sadece Türkçe harf.\n\n"
+                    "• En az **2 harf** içermeli, sadece Türkçe karakterler.\n\n"
                     "İlk kelimeyi yaz ve zinciri başlat!"
                 ),
                 c_separator(),
@@ -178,7 +178,7 @@ class KelimeZinciri(commands.Cog):
         # Validate Turkish characters
         if not _is_valid_word(word):
             try:
-                await message.reply("❌ Geçersiz kelime! Sadece Türkçe harf kullanabilirsin ve en az 2 harf olmalı.")
+                await message.reply("❌ Geçersiz kelime! Sadece Türkçe karakterler kullanabilirsin ve en az 2 harf olmalı.")
             except discord.HTTPException:
                 pass
             return

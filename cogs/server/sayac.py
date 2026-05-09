@@ -8,7 +8,10 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext import tasks
 from database import db as database
-from .._v2 import c_text, c_section, c_separator, c_container, c_action_card, respond, error_response
+from .._v2 import (
+    c_text, c_separator, c_container, c_action_card,
+    edit_original, error_response,
+)
 
 _KEYS = ("sayac_member_ch", "sayac_bot_ch", "sayac_online_ch")
 
@@ -32,10 +35,10 @@ async def _update_guild(guild: discord.Guild) -> None:
     if not any(ids.values()):
         return
 
-    cached  = list(guild.members)
-    total   = guild.member_count or len(cached)
-    bots    = sum(1 for m in cached if m.bot)
-    online  = sum(1 for m in cached if m.status != discord.Status.offline)
+    cached = list(guild.members)
+    total  = guild.member_count or len(cached)
+    bots   = sum(1 for m in cached if m.bot)
+    online = sum(1 for m in cached if m.status != discord.Status.offline)
 
     for key, ch_id in ids.items():
         if not ch_id:
@@ -79,30 +82,27 @@ class Sayac(commands.Cog):
         if not interaction.user.guild_permissions.manage_channels:  # type: ignore[union-attr]
             return await error_response(interaction, "**Kanalları Yönet** yetkisi gereklidir.")
 
+        await interaction.response.defer()
         guild = interaction.guild  # type: ignore[assignment]
 
-        # Immediate response — channel creation may take a moment
-        await respond(interaction, c_container(c_text("⏳ Kanallar oluşturuluyor...")))
-
-        ids = await _load_channel_ids(guild.id)
-        if any(ids.values()):
-            from .._v2 import edit_original
-            await edit_original(
-                interaction,
-                c_container(
-                    c_text("## ⚠️ Zaten Kurulu"),
-                    c_separator(),
-                    c_text("Sayaç kanalları zaten var. Önce `/sayaç kaldır` komutunu kullan."),
-                ),
-            )
-            return
-
         try:
+            ids = await _load_channel_ids(guild.id)
+            if any(ids.values()):
+                await edit_original(
+                    interaction,
+                    c_container(
+                        c_text("## ⚠️ Zaten Kurulu"),
+                        c_separator(),
+                        c_text("Sayaç kanalları zaten var. Önce `/sayaç kaldır` komutunu kullan."),
+                    ),
+                )
+                return
+
             overwrites = {guild.default_role: discord.PermissionOverwrite(connect=False)}
-            category   = await guild.create_category("📊 İstatistikler")
-            member_ch  = await guild.create_voice_channel("⏳ Yükleniyor...", category=category, overwrites=overwrites)
-            bot_ch     = await guild.create_voice_channel("⏳ Yükleniyor...", category=category, overwrites=overwrites)
-            online_ch  = await guild.create_voice_channel("⏳ Yükleniyor...", category=category, overwrites=overwrites)
+            category  = await guild.create_category("📊 İstatistikler")
+            member_ch = await guild.create_voice_channel("⏳ Yükleniyor...", category=category, overwrites=overwrites)
+            bot_ch    = await guild.create_voice_channel("⏳ Yükleniyor...", category=category, overwrites=overwrites)
+            online_ch = await guild.create_voice_channel("⏳ Yükleniyor...", category=category, overwrites=overwrites)
 
             await database.set_setting(guild.id, "sayac_member_ch", str(member_ch.id))
             await database.set_setting(guild.id, "sayac_bot_ch",    str(bot_ch.id))
@@ -111,7 +111,6 @@ class Sayac(commands.Cog):
 
             await _update_guild(guild)
 
-            from .._v2 import edit_original
             await edit_original(
                 interaction,
                 c_action_card(
@@ -123,12 +122,19 @@ class Sayac(commands.Cog):
                     footer="Kaldırmak için /sayaç kaldır",
                 ),
             )
-        except discord.HTTPException as ex:
-            from .._v2 import edit_original
-            await edit_original(
-                interaction,
-                c_container(c_text("## ❌ Hata"), c_separator(), c_text(f"```{ex}```")),
-            )
+
+        except Exception as ex:
+            try:
+                await edit_original(
+                    interaction,
+                    c_container(
+                        c_text("## ❌ Hata"),
+                        c_separator(),
+                        c_text(f"```{ex}```"),
+                    ),
+                )
+            except Exception:
+                pass
 
     @sayac_group.command(name="kaldır", description="İstatistik ses kanallarını kaldırır.")
     @app_commands.guild_only()
@@ -136,41 +142,54 @@ class Sayac(commands.Cog):
         if not interaction.user.guild_permissions.manage_channels:  # type: ignore[union-attr]
             return await error_response(interaction, "**Kanalları Yönet** yetkisi gereklidir.")
 
+        await interaction.response.defer()
         guild = interaction.guild  # type: ignore[assignment]
-        await respond(interaction, c_container(c_text("⏳ Kanallar kaldırılıyor...")))
 
-        ids       = await _load_channel_ids(guild.id)
-        cat_val   = await database.get_setting(guild.id, "sayac_category")
-        deleted   = 0
+        try:
+            ids     = await _load_channel_ids(guild.id)
+            cat_val = await database.get_setting(guild.id, "sayac_category")
+            deleted = 0
 
-        for key, ch_id in ids.items():
-            if ch_id:
-                ch = guild.get_channel(ch_id)
-                if ch:
+            for key, ch_id in ids.items():
+                if ch_id:
+                    ch = guild.get_channel(ch_id)
+                    if ch:
+                        try:
+                            await ch.delete()
+                            deleted += 1
+                        except discord.HTTPException:
+                            pass
+                await database.set_setting(guild.id, key, "")
+
+            if cat_val:
+                cat = guild.get_channel(int(cat_val))
+                if cat:
                     try:
-                        await ch.delete()
-                        deleted += 1
+                        await cat.delete()
                     except discord.HTTPException:
                         pass
-            await database.set_setting(guild.id, key, "")
+                await database.set_setting(guild.id, "sayac_category", "")
 
-        if cat_val:
-            cat = guild.get_channel(int(cat_val))
-            if cat:
-                try:
-                    await cat.delete()
-                except discord.HTTPException:
-                    pass
-            await database.set_setting(guild.id, "sayac_category", "")
+            await edit_original(
+                interaction,
+                c_action_card(
+                    "✅ Sayaç Kanalları Kaldırıldı",
+                    fields=[("🗑️ Silinen Kanal", str(deleted))],
+                ),
+            )
 
-        from .._v2 import edit_original
-        await edit_original(
-            interaction,
-            c_action_card(
-                "✅ Sayaç Kanalları Kaldırıldı",
-                fields=[("🗑️ Silinen Kanal", str(deleted))],
-            ),
-        )
+        except Exception as ex:
+            try:
+                await edit_original(
+                    interaction,
+                    c_container(
+                        c_text("## ❌ Hata"),
+                        c_separator(),
+                        c_text(f"```{ex}```"),
+                    ),
+                )
+            except Exception:
+                pass
 
 
 async def setup(bot: commands.Bot):

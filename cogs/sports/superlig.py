@@ -250,23 +250,6 @@ class SuperLig(commands.Cog):
             table_lines.append(f" {pos}  {name} {p}  {w}  {d}  {l}  {gfga}  {gd}  {pts}")
         table_block = "```\n" + "\n".join(table_lines) + "\n```"
 
-        # Zone gruplandırması — alt kısımda özet
-        groups: dict[str, list[str]] = {"🔵": [], "🟠": [], "🟢": [], "🔴": []}
-        for t in teams:
-            z = _zone(t["qualification"])
-            if z in groups:
-                groups[z].append(t["name"])
-
-        legend_lines: list[str] = []
-        if groups["🔵"]:
-            legend_lines.append(f"🔵 **Şampiyonlar Ligi** · {', '.join(groups['🔵'])}")
-        if groups["🟠"]:
-            legend_lines.append(f"🟠 **Avrupa Ligi** · {', '.join(groups['🟠'])}")
-        if groups["🟢"]:
-            legend_lines.append(f"🟢 **Konferans Ligi** · {', '.join(groups['🟢'])}")
-        if groups["🔴"]:
-            legend_lines.append(f"🔴 **Küme Düşme** · {', '.join(groups['🔴'])}")
-
         items: list[dict] = [
             c_text(f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n-# {season_label}"),
             c_separator(),

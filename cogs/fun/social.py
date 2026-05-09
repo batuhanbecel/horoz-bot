@@ -65,14 +65,13 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
                     "## ❌ Geçersiz Tarih/Saat",
                     body="Desteklenen formatlar:\n• `25.05.2026`  `20:00` veya `20.00`\n• `25 Mayıs 2026`  `20:00`",
                     thumbnail=thumb,
-                    color=0xED4245,
                 ),
                 ephemeral=True,
             )
 
         if start_time <= discord.utils.utcnow():
             return await v2_followup(interaction,
-                c_card("## ❌ Hata", body="Başlangıç zamanı geçmişte olamaz.", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body="Başlangıç zamanı geçmişte olamaz.", thumbnail=thumb),
                 ephemeral=True,
             )
 
@@ -81,7 +80,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
             end_time = parse_datetime(self.tarih.value, self.bitis.value)
             if end_time is None:
                 return await v2_followup(interaction,
-                    c_card("## ❌ Hata", body="Bitiş saati formatı tanınamadı.", thumbnail=thumb, color=0xED4245),
+                    c_card("## ❌ Hata", body="Bitiş saati formatı tanınamadı.", thumbnail=thumb),
                     ephemeral=True,
                 )
 
@@ -92,7 +91,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
         if self.e_resim:
             if not (self.e_resim.content_type and self.e_resim.content_type.startswith("image/")):
                 return await v2_followup(interaction,
-                    c_card("## ❌ Hata", body="Yüklenen dosya bir resim olmalıdır.", thumbnail=thumb, color=0xED4245),
+                    c_card("## ❌ Hata", body="Yüklenen dosya bir resim olmalıdır.", thumbnail=thumb),
                     ephemeral=True,
                 )
             image_bytes = await self.e_resim.read()
@@ -121,7 +120,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
             ev = await interaction.guild.create_scheduled_event(**event_kwargs)
         except discord.HTTPException as exc:
             return await v2_followup(interaction,
-                c_card("## ❌ Hata", body=f"Etkinlik oluşturulamadı: {exc}", thumbnail=thumb, color=0xED4245),
+                c_card("## ❌ Hata", body=f"Etkinlik oluşturulamadı: {exc}", thumbnail=thumb),
                 ephemeral=True,
             )
 
@@ -150,7 +149,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
             items.append(c_separator())
             items.append(c_media(self.e_resim.url))
 
-        await v2_followup(interaction, c_container(*items, color=0x57F287), ephemeral=True)
+        await v2_followup(interaction, c_container(*items), ephemeral=True)
 
         if self.e_duyuru:
             duyuru_lines = [
@@ -175,7 +174,7 @@ class EtkinlikModal(discord.ui.Modal, title="Etkinlik Detayları"):
                 duyuru_items.append(c_media(self.e_resim.url))
 
             try:
-                await channel_send(self.e_duyuru, c_container(*duyuru_items, color=0x9B59B6))
+                await channel_send(self.e_duyuru, c_container(*duyuru_items))
             except discord.Forbidden:
                 pass
 

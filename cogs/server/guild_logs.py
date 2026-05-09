@@ -12,7 +12,7 @@ class GuildLogs(LogBase):
         lines = [f"**📁 {ch_type} Kanalı Oluşturuldu**\n", f"📌 **Kanal:** {channel.mention} `{channel.name}`"]
         if entry:
             lines.append(f"👮 **Oluşturan:** {entry.user.mention}")
-        await self.log(channel.guild, c_container(c_text("\n".join(lines)), color=0x57F287))
+        await self.log(channel.guild, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
@@ -21,7 +21,7 @@ class GuildLogs(LogBase):
         lines = [f"**🗑️ {ch_type} Kanalı Silindi**\n", f"📌 **Kanal Adı:** `{channel.name}`"]
         if entry:
             lines.append(f"👮 **Silen:** {entry.user.mention}")
-        await self.log(channel.guild, c_container(c_text("\n".join(lines)), color=0xED4245))
+        await self.log(channel.guild, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role: discord.Role):
@@ -29,7 +29,7 @@ class GuildLogs(LogBase):
         lines = [f"**🟢 Rol Oluşturuldu**\n", f"🏷️ **Rol:** {role.mention} `{role.name}`"]
         if entry:
             lines.append(f"👮 **Oluşturan:** {entry.user.mention}")
-        await self.log(role.guild, c_container(c_text("\n".join(lines)), color=0x57F287))
+        await self.log(role.guild, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role: discord.Role):
@@ -37,7 +37,7 @@ class GuildLogs(LogBase):
         lines = [f"**🔴 Rol Silindi**\n", f"🏷️ **Rol Adı:** `{role.name}`"]
         if entry:
             lines.append(f"👮 **Silen:** {entry.user.mention}")
-        await self.log(role.guild, c_container(c_text("\n".join(lines)), color=0xED4245))
+        await self.log(role.guild, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
@@ -54,7 +54,7 @@ class GuildLogs(LogBase):
         lines = ["**⚙️ Sunucu Güncellendi**\n"] + changes
         if entry:
             lines.append(f"\n👮 **Güncelleyen:** {entry.user.mention}")
-        await self.log(after, c_container(c_text("\n".join(lines)), color=0x5865F2))
+        await self.log(after, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_invite_create(self, invite: discord.Invite):
@@ -69,7 +69,6 @@ class GuildLogs(LogBase):
                 f"📌 **Kanal:** {invite.channel.mention if invite.channel else 'Bilinmiyor'}\n"
                 f"🔢 **Kullanım:** {uses} · ⏰ **Süre:** {expires}"
             ),
-            color=0x9B59B6,
         ))
 
     @commands.Cog.listener()
@@ -80,7 +79,7 @@ class GuildLogs(LogBase):
         lines = [f"**🗑️ Davet Linki Silindi**\n", f"🔗 **Link:** {invite.url}"]
         if entry:
             lines.append(f"👮 **Silen:** {entry.user.mention} `{entry.user}`")
-        await self.log(invite.guild, c_container(c_text("\n".join(lines)), color=0xED4245))
+        await self.log(invite.guild, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_guild_emojis_update(self, guild: discord.Guild, before: list, after: list):
@@ -95,13 +94,13 @@ class GuildLogs(LogBase):
             if em.url:
                 from .._v2 import c_section, c_thumbnail as _th
                 card_items = [c_section(c_text("\n".join(lines)), accessory=_th(str(em.url)))]
-            await self.log(guild, c_container(*card_items, color=0x57F287))
+            await self.log(guild, c_container(*card_items))
         for em in removed:
             entry = await get_audit(guild, discord.AuditLogAction.emoji_delete, em.id)
             lines = [f"**🗑️ Emoji Silindi**\n", f"📛 **Emoji Adı:** `:{em.name}:`"]
             if entry:
                 lines.append(f"👮 **Silen:** {entry.user.mention}")
-            await self.log(guild, c_container(c_text("\n".join(lines)), color=0xED4245))
+            await self.log(guild, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_guild_stickers_update(self, guild: discord.Guild, before: list, after: list):
@@ -110,12 +109,10 @@ class GuildLogs(LogBase):
         for s in added:
             await self.log(guild, c_container(
                 c_text(f"**🎫 Sticker Eklendi**\n\n🎫 **Sticker:** `{s.name}`"),
-                color=0x57F287,
             ))
         for s in removed:
             await self.log(guild, c_container(
                 c_text(f"**🗑️ Sticker Silindi**\n\n📛 **Sticker:** `{s.name}`"),
-                color=0xED4245,
             ))
 
 

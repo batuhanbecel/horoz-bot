@@ -22,7 +22,7 @@ class Messaging(commands.Cog):
     async def yaz(self, interaction: discord.Interaction, kanal: discord.TextChannel):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
         await interaction.response.send_modal(MesajModal(kanal))
@@ -43,7 +43,7 @@ class Messaging(commands.Cog):
     async def embed_gonder(self, interaction: discord.Interaction, kanal: discord.TextChannel, renk: str = "mavi"):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
         await interaction.response.send_modal(EmbedModal(kanal, RENK_MAP.get(renk, 0x3498DB)))
@@ -60,7 +60,7 @@ class Messaging(commands.Cog):
     async def duyuru(self, interaction: discord.Interaction, kanal: discord.TextChannel, ping: str = ""):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
         await interaction.response.send_modal(DuyuruModal(kanal, ping))
@@ -85,7 +85,6 @@ class Messaging(commands.Cog):
                 ("📝 Mesaj", f"> {mesaj}"),
             ],
             footer="DM kapalıysa hatırlatma ulaşmayacaktır.",
-            color=COLORS.GAME,
         ), ephemeral=True)
 
         guild_name = interaction.guild.name if interaction.guild else "DM"
@@ -100,7 +99,6 @@ class Messaging(commands.Cog):
                     c_text(f"📝 {mesaj}"),
                     c_separator(),
                     c_text(f"-# {dakika} dk önce **{guild_name}** sunucusunda ayarlandı."),
-                    color=COLORS.GAME,
                 ))
             except (discord.Forbidden, discord.HTTPException):
                 pass

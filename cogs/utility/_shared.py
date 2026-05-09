@@ -38,16 +38,15 @@ class MesajModal(discord.ui.Modal):
                     ("👤 Gönderen", interaction.user.mention),
                     ("📝 Önizleme", f"```{preview}```"),
                 ],
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
         except discord.Forbidden:
             await respond(interaction,
-                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
+                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok."),
                 ephemeral=True,
             )
         except discord.HTTPException as ex:
             await respond(interaction,
-                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=f"```{ex}```"),
                 ephemeral=True,
             )
 
@@ -83,16 +82,15 @@ class EmbedModal(discord.ui.Modal):
                     ("📰 Başlık", f"`{self.başlık_f.value}`"),
                     ("👤 Gönderen", interaction.user.mention),
                 ],
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
         except discord.Forbidden:
             await respond(interaction,
-                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
+                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok."),
                 ephemeral=True,
             )
         except discord.HTTPException as ex:
             await respond(interaction,
-                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=f"```{ex}```"),
                 ephemeral=True,
             )
 
@@ -130,7 +128,7 @@ class DuyuruModal(discord.ui.Modal):
             ])
             await channel_send(
                 self.kanal,
-                c_container(*duyuru_items, color=COLORS.GAME),
+                c_container(*duyuru_items),
                 content=self.ping or None,
             )
             await respond(interaction, c_action_card(
@@ -140,15 +138,14 @@ class DuyuruModal(discord.ui.Modal):
                     ("🔔 Ping", f"`{self.ping}`" if self.ping else "_Yok_"),
                     ("👤 Duyuran", interaction.user.mention),
                 ],
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
         except discord.Forbidden:
             await respond(interaction,
-                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok.", color=COLORS.DANGER),
+                c_card("## ❌ Yetki Hatası", body=f"{self.kanal.mention} kanalına yazma iznim yok."),
                 ephemeral=True,
             )
         except discord.HTTPException as ex:
             await respond(interaction,
-                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=f"```{ex}```"),
                 ephemeral=True,
             )

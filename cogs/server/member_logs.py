@@ -38,7 +38,6 @@ class MemberLogs(LogBase):
                 ),
                 accessory=c_thumbnail(str(member.display_avatar.url)),
             ),
-            color=0x57F287,
         ))
 
         ch = await self._welcome_channel(member.guild)
@@ -62,7 +61,6 @@ class MemberLogs(LogBase):
                 f"📝 **Sebep:** {kick_entry.reason or 'Belirtilmedi'}\n"
                 f"🆔 **ID:** `{member.id}`"
             )
-            color = 0xE67E22
         else:
             roles = [r.mention for r in member.roles if r.name != "@everyone"]
             text = (
@@ -71,7 +69,6 @@ class MemberLogs(LogBase):
                 + (f"🏷️ **Rolleri:** {', '.join(roles[:10])}\n" if roles else "")
                 + f"🆔 **ID:** `{member.id}`"
             )
-            color = 0x95A5A6
 
         await self.log(member.guild, c_container(
             c_section(c_text(text), accessory=c_thumbnail(str(member.display_avatar.url))),
@@ -95,7 +92,6 @@ class MemberLogs(LogBase):
             lines.append(f"📝 **Sebep:** {entry.reason or 'Belirtilmedi'}")
         await self.log(guild, c_container(
             c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(user.display_avatar.url))),
-            color=0xED4245,
         ))
 
     @commands.Cog.listener()
@@ -110,7 +106,6 @@ class MemberLogs(LogBase):
             lines.append(f"👮 **Kaldıran Yetkili:** {entry.user.mention} `{entry.user}`")
         await self.log(guild, c_container(
             c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(user.display_avatar.url))),
-            color=0x57F287,
         ))
 
     @commands.Cog.listener()
@@ -131,7 +126,6 @@ class MemberLogs(LogBase):
                 if entry:
                     lines.append(f"👮 **Yetkili:** {entry.user.mention}")
                     lines.append(f"📝 **Sebep:** {entry.reason or 'Belirtilmedi'}")
-                color = 0xED4245
             else:
                 entry = await get_audit(guild, discord.AuditLogAction.member_update, after.id)
                 lines = [
@@ -141,7 +135,6 @@ class MemberLogs(LogBase):
                 ]
                 if entry:
                     lines.append(f"👮 **Yetkili:** {entry.user.mention}")
-                color = 0x57F287
             await self.log(guild, c_container(
                 c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(after.display_avatar.url))),
                 color=color,
@@ -164,7 +157,6 @@ class MemberLogs(LogBase):
                         ),
                         accessory=c_thumbnail(str(after.display_avatar.url)),
                     ),
-                    color=0x3498DB,
                 ))
             if removed:
                 await self.log(guild, c_container(
@@ -177,7 +169,6 @@ class MemberLogs(LogBase):
                         ),
                         accessory=c_thumbnail(str(after.display_avatar.url)),
                     ),
-                    color=0xE67E22,
                 ))
             return
 
@@ -193,7 +184,6 @@ class MemberLogs(LogBase):
                 lines.append(f"👮 **Yetkili:** {entry.user.mention}")
             await self.log(guild, c_container(
                 c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(after.display_avatar.url))),
-                color=0x5865F2,
             ))
 
 

@@ -29,7 +29,7 @@ class InfractionMod(commands.Cog):
     async def listele(self, interaction: discord.Interaction, üye: discord.Member):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
 
@@ -40,7 +40,6 @@ class InfractionMod(commands.Cog):
                     "## ✅ Temiz Geçmiş",
                     body=f"{üye.mention} için kayıtlı ihlal bulunamadı.",
                     thumbnail=str(üye.display_avatar.url),
-                    color=COLORS.SUCCESS,
                 ),
                 ephemeral=True,
             )
@@ -64,7 +63,6 @@ class InfractionMod(commands.Cog):
             rows=lines,
             thumbnail=str(üye.display_avatar.url),
             footer=footer,
-            color=COLORS.MOD,
         ), ephemeral=True)
 
     # /ihlal sil
@@ -73,7 +71,7 @@ class InfractionMod(commands.Cog):
     async def sil(self, interaction: discord.Interaction, üye: discord.Member):
         if not interaction.user.guild_permissions.administrator:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Yönetici** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Yönetici** yetkisi gereklidir."),
                 ephemeral=True,
             )
         rows = await db.get_infractions(interaction.guild_id, üye.id)
@@ -87,7 +85,6 @@ class InfractionMod(commands.Cog):
                 ("👮 Moderatör", interaction.user.mention),
                 ("🧹 Silinen Kayıt", f"`{len(rows)}`"),
             ],
-            color=COLORS.SUCCESS,
         ), ephemeral=True)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

@@ -13,7 +13,6 @@ def _no_perm(label: str) -> dict:
     return c_card(
         "## ❌ Yetersiz Yetki",
         body=f"**{label}** yetkisi gereklidir.",
-        color=COLORS.DANGER,
     )
 
 
@@ -21,12 +20,11 @@ def _bot_no_perm(label: str) -> dict:
     return c_card(
         "## ❌ Botun Yetkisi Yok",
         body=f"Botun **{label}** yetkisi bulunmuyor veya hedefin rolü botun rolünden yüksek.",
-        color=COLORS.DANGER,
     )
 
 
 def _hierarchy_err(msg: str) -> dict:
-    return c_card("## ❌ Hiyerarşi Hatası", body=msg, color=COLORS.DANGER)
+    return c_card("## ❌ Hiyerarşi Hatası", body=msg)
 
 
 class MemberMod(commands.Cog):
@@ -63,7 +61,6 @@ class MemberMod(commands.Cog):
                 c_status_indicator("critical", f"**Sebep:** {sebep}"),
             ]),
             footer=f"Sunucu: {interaction.guild.name}",
-            color=COLORS.WARNING,
         ))
 
         # DM bilgilendirme — başarısız olabilir, sessizce geç
@@ -92,7 +89,7 @@ class MemberMod(commands.Cog):
             return await respond(interaction, _bot_no_perm("Üye At"), ephemeral=True)
         except discord.HTTPException as ex:
             return await respond(interaction,
-                c_card("## ❌ Atma Başarısız", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Atma Başarısız", body=f"```{ex}```"),
                 ephemeral=True,
             )
 
@@ -109,7 +106,6 @@ class MemberMod(commands.Cog):
                 c_status_indicator("warn", f"**Sebep:** {sebep}"),
             ]),
             footer=f"Sunucu: {interaction.guild.name}",
-            color=COLORS.MOD,
         ))
 
     # /üye yasakla
@@ -136,7 +132,7 @@ class MemberMod(commands.Cog):
             return await respond(interaction, _bot_no_perm("Üye Yasakla"), ephemeral=True)
         except discord.HTTPException as ex:
             return await respond(interaction,
-                c_card("## ❌ Yasaklama Başarısız", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Yasaklama Başarısız", body=f"```{ex}```"),
                 ephemeral=True,
             )
 
@@ -154,7 +150,6 @@ class MemberMod(commands.Cog):
                 c_status_indicator("critical", f"**Sebep:** {sebep}"),
             ]),
             footer=f"Sunucu: {interaction.guild.name}",
-            color=COLORS.DANGER,
         ))
 
     # /üye sustur
@@ -169,12 +164,12 @@ class MemberMod(commands.Cog):
         delta = parse_duration(süre)
         if not delta:
             return await respond(interaction,
-                c_card("## ❌ Geçersiz Süre", body="Format: `10m` · `2h` · `1d` · `30s`", color=COLORS.DANGER),
+                c_card("## ❌ Geçersiz Süre", body="Format: `10m` · `2h` · `1d` · `30s`"),
                 ephemeral=True,
             )
         if delta > timedelta(days=28):
             return await respond(interaction,
-                c_card("## ❌ Hata", body="Maksimum susturma süresi **28 gün**dür.", color=COLORS.DANGER),
+                c_card("## ❌ Hata", body="Maksimum susturma süresi **28 gün**dür."),
                 ephemeral=True,
             )
 
@@ -184,7 +179,7 @@ class MemberMod(commands.Cog):
             return await respond(interaction, _bot_no_perm("Üyeleri Yönet"), ephemeral=True)
         except discord.HTTPException as ex:
             return await respond(interaction,
-                c_card("## ❌ Susturma Başarısız", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Susturma Başarısız", body=f"```{ex}```"),
                 ephemeral=True,
             )
 
@@ -202,7 +197,6 @@ class MemberMod(commands.Cog):
                 c_status_indicator("warn", f"**Sebep:** {sebep}"),
             ]),
             footer=f"Sunucu: {interaction.guild.name}",
-            color=COLORS.WARNING,
         ))
 
     # /üye sus-kaldır
@@ -213,7 +207,7 @@ class MemberMod(commands.Cog):
     async def sus_kaldir(self, interaction: discord.Interaction, üye: discord.Member):
         if not üye.is_timed_out():
             return await respond(interaction,
-                c_card("## ⚠️ Hata", body="Bu üye zaten susturulmuş değil.", color=COLORS.WARNING),
+                c_card("## ⚠️ Hata", body="Bu üye zaten susturulmuş değil."),
                 ephemeral=True,
             )
 
@@ -223,7 +217,7 @@ class MemberMod(commands.Cog):
             return await respond(interaction, _bot_no_perm("Üyeleri Yönet"), ephemeral=True)
         except discord.HTTPException as ex:
             return await respond(interaction,
-                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=f"```{ex}```"),
                 ephemeral=True,
             )
 
@@ -236,7 +230,6 @@ class MemberMod(commands.Cog):
                 c_status_indicator("ok", f"**Üye:** {üye.mention}"),
                 c_status_indicator("info", f"**Moderatör:** {interaction.user.mention}"),
             ]),
-            color=COLORS.SUCCESS,
         ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

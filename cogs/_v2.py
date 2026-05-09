@@ -164,11 +164,11 @@ def c_card(
 
 
 def c_error(msg: str, thumbnail: str | None = None) -> discord.ui.Container:
-    return c_card("## ❌ Hata", body=msg, thumbnail=thumbnail, color=COLORS.DANGER)
+    return c_card("## ❌ Hata", body=msg, thumbnail=thumbnail)
 
 
 def c_success(msg: str, thumbnail: str | None = None) -> discord.ui.Container:
-    return c_card("## ✅ Başarılı", body=msg, thumbnail=thumbnail, color=COLORS.SUCCESS)
+    return c_card("## ✅ Başarılı", body=msg, thumbnail=thumbnail)
 
 
 def c_action_card(

@@ -36,7 +36,7 @@ class ErrorHandler(commands.Cog):
         if interaction.response.is_done():
             await error_response(interaction, msg)
         else:
-            await respond(interaction, c_card("## ❌ Hata", body=msg, color=COLORS.DANGER), ephemeral=True)
+            await respond(interaction, c_card("## ❌ Hata", body=msg), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

@@ -184,7 +184,6 @@ class PlayerView(discord.ui.View):
                         f"`{p.current.title}` için sözler alınamadı.\n\n"
                         f"-# Çalışan: lyrics.ovh · Bazı şarkılar veritabanında yok."
                     ),
-                    color=COLORS.WARNING,
                 ),
                 ephemeral=True,
             )
@@ -200,7 +199,6 @@ class PlayerView(discord.ui.View):
             c_text(lyrics),
             c_separator(),
             c_text("-# 🎵 Sözler: lyrics.ovh"),
-            color=COLORS.MUSIC,
         ), ephemeral=True)
 
     @discord.ui.button(emoji="📋", style=discord.ButtonStyle.secondary, row=1)
@@ -229,7 +227,7 @@ class PlayerView(discord.ui.View):
                 sections.append(c_separator())
                 sections.append(c_text(f"-# ve `{len(p.queue) - 10}` şarkı daha..."))
 
-        await v2_respond(interaction, c_container(*sections, color=COLORS.MUSIC), ephemeral=True)
+        await v2_respond(interaction, c_container(*sections), ephemeral=True)
 
 
 class SearchButton(discord.ui.Button):
@@ -280,7 +278,6 @@ class SearchButton(discord.ui.Button):
                 ),
                 c_separator(),
                 c_text(f"⏱️ `{duration_fmt(track.duration)}` · 👤 {interaction.user.mention} · 📋 `#{len(player.queue)}`"),
-                color=COLORS.MUSIC,
             ), ephemeral=True)
         else:
             player.queue.appendleft(track)
@@ -292,7 +289,6 @@ class SearchButton(discord.ui.Button):
                 ),
                 c_separator(),
                 c_text(f"⏱️ `{duration_fmt(track.duration)}` · 👤 {interaction.user.mention}"),
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
         self.view.stop()
 

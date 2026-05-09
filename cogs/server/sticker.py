@@ -32,12 +32,12 @@ class StickerStealer(commands.Cog):
         try:
             if not interaction.user.guild_permissions.manage_emojis_and_stickers:
                 return await v2_followup(interaction,
-                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir."),
                     ephemeral=True,
                 )
             if not message.stickers:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Sticker Bulunamadı", body="Bu mesajda sticker yok.", color=COLORS.WARNING),
+                    c_card("## ⚠️ Sticker Bulunamadı", body="Bu mesajda sticker yok."),
                     ephemeral=True,
                 )
 
@@ -45,7 +45,7 @@ class StickerStealer(commands.Cog):
 
             if sticker.format == discord.StickerFormatType.lottie:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Desteklenmiyor", body="**Lottie** animasyonlu sticker'lar eklenemez.", color=COLORS.WARNING),
+                    c_card("## ⚠️ Desteklenmiyor", body="**Lottie** animasyonlu sticker'lar eklenemez."),
                     ephemeral=True,
                 )
 
@@ -53,7 +53,7 @@ class StickerStealer(commands.Cog):
             data = await fetch_bytes(str(sticker.url))
             if not data:
                 return await v2_followup(interaction,
-                    c_card("## ❌ İndirme Hatası", body="Sticker indirilemedi.", color=COLORS.DANGER),
+                    c_card("## ❌ İndirme Hatası", body="Sticker indirilemedi."),
                     ephemeral=True,
                 )
 
@@ -75,17 +75,16 @@ class StickerStealer(commands.Cog):
                     ("📊 Slot Kullanımı", slot),
                     ("👮 Ekleyen", interaction.user.mention),
                 ],
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
 
         except discord.HTTPException as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=f"```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=f"```{ex}```"),
                 ephemeral=True,
             )
         except Exception as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=str(ex), color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=str(ex)),
                 ephemeral=True,
             )
 

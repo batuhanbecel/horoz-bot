@@ -19,10 +19,9 @@ class Info(commands.Cog):
         ws = round(self.bot.latency * 1000)
 
         before = discord.utils.utcnow()
-        await respond(interaction, c_card("## 🏓 Pong!", body="`▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱` Ölçülüyor...", color=COLORS.PRIMARY))
+        await respond(interaction, c_card("## 🏓 Pong!", body="`▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱` Ölçülüyor..."))
         rt = round((discord.utils.utcnow() - before).total_seconds() * 1000)
 
-        ws_color = COLORS.SUCCESS if ws < 100 else COLORS.WARNING if ws < 200 else COLORS.DANGER
         ws_status = "🟢 Mükemmel" if ws < 100 else "🟡 Normal" if ws < 200 else "🔴 Yüksek"
         rt_status = "🟢 Mükemmel" if rt < 200 else "🟡 Normal" if rt < 500 else "🔴 Yüksek"
 
@@ -39,7 +38,6 @@ class Info(commands.Cog):
                 f"🔄 **Roundtrip**\n"
                 f"┗ `{rt} ms` · {rt_status}"
             ),
-            color=ws_color,
         ))
 
     # /avatar ─ section header + full-size media
@@ -97,7 +95,6 @@ class Info(commands.Cog):
                 "**Komutlar:** /yardım ile tüm komutları görebilirsin.",
             ]),
             footer="Components V2 · V2 Modern",
-            color=COLORS.PRIMARY,
         ))
 
     # /profil ─ rich profile card with badge stats
@@ -181,7 +178,6 @@ class Info(commands.Cog):
             badges=badges,
             body="\n".join(body_lines),
             footer=f"Sunucu bilgisi · {guild.name}",
-            color=COLORS.INFO,
         ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

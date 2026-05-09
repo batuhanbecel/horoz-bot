@@ -52,7 +52,6 @@ class Admin(commands.Cog):
                 tools,
             ],
             footer="Tüm komutlar slash (/) ile kullanılır · Components V2",
-            color=COLORS.PRIMARY,
         ), ephemeral=True)
 
     # /tazele
@@ -74,7 +73,6 @@ class Admin(commands.Cog):
             ),
             c_separator(),
             c_text("-# Komutların görünmesi 1-2 dakika sürebilir."),
-            color=COLORS.SUCCESS,
         ), ephemeral=True)
 
     # /restart
@@ -88,7 +86,6 @@ class Admin(commands.Cog):
                 f"⏳ Bot kapatılıyor, birkaç saniye sonra geri dönecek.\n"
                 f"🛡️ **Yetkili:** {interaction.user.mention}"
             ),
-            color=COLORS.WARNING,
         ), ephemeral=True)
         await self.bot.close()
         os.execv(sys.executable, [sys.executable] + sys.argv)

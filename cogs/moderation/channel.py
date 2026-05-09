@@ -22,7 +22,7 @@ class ChannelMod(commands.Cog):
     async def temizle(self, interaction: discord.Interaction, miktar: app_commands.Range[int, 1, 100]):
         if not interaction.user.guild_permissions.manage_messages:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Mesajları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
 
@@ -30,7 +30,7 @@ class ChannelMod(commands.Cog):
         channel = interaction.guild.get_channel(interaction.channel_id) if interaction.guild else interaction.channel
         if not isinstance(channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
             return await respond(interaction,
-                c_card("## ❌ Geçersiz Kanal", body="Bu komut sadece metin kanallarında çalışır.", color=COLORS.DANGER),
+                c_card("## ❌ Geçersiz Kanal", body="Bu komut sadece metin kanallarında çalışır."),
                 ephemeral=True,
             )
 
@@ -42,7 +42,6 @@ class ChannelMod(commands.Cog):
                 c_card(
                     "## ❌ Botun Yetkisi Yok",
                     body=f"Botun {channel.mention} kanalında **Mesajları Yönet** + **Mesaj Geçmişini Oku** yetkisi gerekiyor.",
-                    color=COLORS.DANGER,
                 ),
                 ephemeral=True,
             )
@@ -57,12 +56,12 @@ class ChannelMod(commands.Cog):
             )
         except discord.Forbidden:
             return await v2_followup(interaction,
-                c_card("## ❌ Erişim Reddedildi", body="Mesajları silme izni reddedildi.", color=COLORS.DANGER),
+                c_card("## ❌ Erişim Reddedildi", body="Mesajları silme izni reddedildi."),
                 ephemeral=True,
             )
         except discord.HTTPException as e:
             return await v2_followup(interaction,
-                c_card("## ❌ Silme Hatası", body=f"```{e}```", color=COLORS.DANGER),
+                c_card("## ❌ Silme Hatası", body=f"```{e}```"),
                 ephemeral=True,
             )
 
@@ -76,7 +75,6 @@ class ChannelMod(commands.Cog):
                         f"• Tüm mesajlar **14 günden eski** (toplu silme limiti)\n"
                         f"• Ek izin sorunu"
                     ),
-                    color=COLORS.WARNING,
                 ),
                 ephemeral=True,
             )
@@ -88,7 +86,6 @@ class ChannelMod(commands.Cog):
                 ("🗑️ Silinen", f"`{len(deleted)}` / `{miktar}` mesaj"),
                 ("👮 Moderatör", interaction.user.mention),
             ],
-            color=COLORS.SUCCESS,
         ), ephemeral=True)
 
     # /kanal yavaşmod
@@ -102,7 +99,7 @@ class ChannelMod(commands.Cog):
     ):
         if not interaction.user.guild_permissions.manage_channels:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
         target = kanal or interaction.channel
@@ -110,7 +107,7 @@ class ChannelMod(commands.Cog):
             await target.edit(slowmode_delay=saniye)
         except discord.Forbidden:
             return await respond(interaction,
-                c_card("## ❌ Botun Yetkisi Yok", body=f"Botun {target.mention} kanalını düzenleme yetkisi yok.", color=COLORS.DANGER),
+                c_card("## ❌ Botun Yetkisi Yok", body=f"Botun {target.mention} kanalını düzenleme yetkisi yok."),
                 ephemeral=True,
             )
 
@@ -121,7 +118,6 @@ class ChannelMod(commands.Cog):
                     ("📌 Kanal", target.mention),
                     ("👮 Moderatör", interaction.user.mention),
                 ],
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
         else:
             await respond(interaction, c_action_card(
@@ -131,7 +127,6 @@ class ChannelMod(commands.Cog):
                     ("⏱️ Süre", f"`{saniye}` saniye"),
                     ("👮 Moderatör", interaction.user.mention),
                 ],
-                color=COLORS.WARNING,
             ), ephemeral=True)
 
     # /kanal kilitle
@@ -140,7 +135,7 @@ class ChannelMod(commands.Cog):
     async def kilitle(self, interaction: discord.Interaction, kanal: discord.TextChannel = None, sebep: str = "Belirtilmedi"):
         if not interaction.user.guild_permissions.manage_channels:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
         target = kanal or interaction.channel
@@ -150,7 +145,7 @@ class ChannelMod(commands.Cog):
             await target.set_permissions(interaction.guild.default_role, overwrite=ow, reason=f"{interaction.user}: {sebep}")
         except discord.Forbidden:
             return await respond(interaction,
-                c_card("## ❌ Botun Yetkisi Yok", body=f"Botun {target.mention} kanalında izin düzenleme yetkisi yok.", color=COLORS.DANGER),
+                c_card("## ❌ Botun Yetkisi Yok", body=f"Botun {target.mention} kanalında izin düzenleme yetkisi yok."),
                 ephemeral=True,
             )
 
@@ -161,7 +156,6 @@ class ChannelMod(commands.Cog):
                 ("👮 Moderatör", interaction.user.mention),
                 ("📝 Sebep", sebep),
             ],
-            color=COLORS.DANGER,
         ))
 
     # /kanal kilit-aç
@@ -170,7 +164,7 @@ class ChannelMod(commands.Cog):
     async def kilit_ac(self, interaction: discord.Interaction, kanal: discord.TextChannel = None):
         if not interaction.user.guild_permissions.manage_channels:
             return await respond(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="**Kanalları Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
         target = kanal or interaction.channel
@@ -180,7 +174,7 @@ class ChannelMod(commands.Cog):
             await target.set_permissions(interaction.guild.default_role, overwrite=ow)
         except discord.Forbidden:
             return await respond(interaction,
-                c_card("## ❌ Botun Yetkisi Yok", body=f"Botun {target.mention} kanalında izin düzenleme yetkisi yok.", color=COLORS.DANGER),
+                c_card("## ❌ Botun Yetkisi Yok", body=f"Botun {target.mention} kanalında izin düzenleme yetkisi yok."),
                 ephemeral=True,
             )
 
@@ -190,7 +184,6 @@ class ChannelMod(commands.Cog):
                 ("📌 Kanal", target.mention),
                 ("👮 Moderatör", interaction.user.mention),
             ],
-            color=COLORS.SUCCESS,
         ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

@@ -139,10 +139,8 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
     # Durum (paused / playing) — başlık ve renk değişir
     if player.paused:
         title = "⏸️ Duraklatıldı"
-        color = COLORS.WARNING
     else:
         title = "▶️ Şimdi Çalıyor"
-        color = COLORS.MUSIC
 
     # Platform badge
     source_badge = platform_label(track.platform).replace(" ", " · ")
@@ -184,4 +182,4 @@ def now_playing_card(track: Track, player: GuildPlayer) -> dict:
 
 
 def stopped_card() -> dict:
-    return c_card("## ⏹️ Müzik Durduruldu", body="Kuyruk bitti veya bot kanaldan ayrıldı.", color=COLORS.DANGER)
+    return c_card("## ⏹️ Müzik Durduruldu", body="Kuyruk bitti veya bot kanaldan ayrıldı.")

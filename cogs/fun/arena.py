@@ -365,8 +365,7 @@ class BattleView(discord.ui.View):
         items.append(c_separator())
         items.append(c_text("-# Sıranı bekle • Her aksiyon bir tur harcar • 3 dk süre sınırı"))
 
-        color = 0xB41E1E if not g.finished else 0xF1C40F
-        return c_container(*items, color=color)
+        return c_container(*items)
 
     # ── Bot AI ────────────────────────────────────────────────────────────────
 
@@ -535,7 +534,7 @@ class BattleView(discord.ui.View):
                 c_separator(),
                 c_text("Dövüş süresi içinde tamamlanmadı, oyun iptal edildi."),
             ]
-            await msg_edit(self.message, c_container(*items, color=0x95A5A6), view=self)
+            await msg_edit(self.message, c_container(*items), view=self)
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -588,7 +587,6 @@ class Arena(commands.Cog):
             content=f"🎯 {rakip.mention}, **{interaction.user.display_name}** seni arena savaşına davet ediyor!",
             embed=discord.Embed(
                 description="Aşağıdaki butonlardan birini seç.",
-                color=0xB41E1E,
             ),
             view=view,
         )

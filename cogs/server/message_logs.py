@@ -19,7 +19,7 @@ class MessageLogs(LogBase):
             lines.append(f"💬 **İçerik:** {content}")
         if message.attachments:
             lines.append(f"📎 **Ekler:** {', '.join(a.filename for a in message.attachments)}")
-        await self.log(message.guild, c_container(c_text("\n".join(lines)), color=0xED4245))
+        await self.log(message.guild, c_container(c_text("\n".join(lines))))
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
@@ -37,7 +37,6 @@ class MessageLogs(LogBase):
                 f"**Önceki:** {old}\n"
                 f"**Sonraki:** {new}"
             ),
-            color=0xFEE75C,
         ))
 
 

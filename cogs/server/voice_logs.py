@@ -13,21 +13,16 @@ class VoiceLogs(LogBase):
 
         if before.channel is None and after.channel is not None:
             text = f"**🔊 Ses Kanalına Katıldı**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {after.channel.mention}"
-            color = 0x57F287
         elif before.channel is not None and after.channel is None:
             text = f"**🔇 Ses Kanalından Ayrıldı**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {before.channel.mention}"
-            color = 0xED4245
         elif before.channel != after.channel:
             text = f"**🔀 Ses Kanalı Değiştirdi**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Önceki:** {before.channel.mention}\n📌 **Yeni:** {after.channel.mention}"
-            color = 0xFEE75C
         elif before.self_mute != after.self_mute:
             action = "Kendini Susturdu 🔇" if after.self_mute else "Sesini Açtı 🔊"
             text = f"**🎙️ {action}**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {(after.channel or before.channel).mention}"
-            color = 0x95A5A6
         elif before.mute != after.mute:
             action = "Sunucu Tarafından Susturuldu" if after.mute else "Susturma Kaldırıldı"
             text = f"**🎙️ {action}**\n\n👤 **Kullanıcı:** {member.mention} `{member}`\n📌 **Kanal:** {(after.channel or before.channel).mention}"
-            color = 0xE67E22
         else:
             return
 

@@ -139,7 +139,7 @@ class IsimSehirLobiView(discord.ui.View):
                 c.disabled = True
             if self.msg:
                 try:
-                    await msg_edit(self.msg, *self._card(kapanis="⏰ **Lobi süresi doldu.**", color=0x95A5A6), view=self)
+                    await msg_edit(self.msg, *self._card(kapanis="⏰ **Lobi süresi doldu.**"), view=self)
                 except discord.HTTPException:
                     pass
 
@@ -177,7 +177,7 @@ class IsimSehirLobiView(discord.ui.View):
             c.disabled = True
         await interaction.response.defer()
         assert self.msg
-        await msg_edit(self.msg, *self._card(kapanis="▶️ **Oyun başlıyor...**", color=COLORS.SUCCESS), view=self)
+        await msg_edit(self.msg, *self._card(kapanis="▶️ **Oyun başlıyor...**"), view=self)
         oyun = IsimSehirOyunu(list(self.oyuncular), interaction.channel)  # type: ignore[arg-type]
         await oyun.yeni_tur()
 
@@ -190,7 +190,7 @@ class IsimSehirLobiView(discord.ui.View):
         for c in self.children:
             c.disabled = True
         await update(interaction,
-            c_card("## 🚫 Lobi İptal Edildi", body=f"{interaction.user.mention} lobiyi iptal etti.", color=0x95A5A6),
+            c_card("## 🚫 Lobi İptal Edildi", body=f"{interaction.user.mention} lobiyi iptal etti."),
             view=self,
         )
 
@@ -259,7 +259,6 @@ class IsimSehirOyunu:
             ),
             c_separator(),
             c_text(f"-# ✏️ **Cevaplarımı Gir** butonuna bas · ⏱️ {TUR_SURESI}sn · 🎯 Eşsiz=10p, Ortak=5p"),
-            color=0xF0A030,
         )
 
     async def yeni_tur(self):
@@ -289,7 +288,6 @@ class IsimSehirOyunu:
                 "## ✅ Cevaplar Kaydedildi",
                 body=cevap_satırları,
                 thumbnail=thumb,
-                color=COLORS.SUCCESS,
             ),
             ephemeral=True,
         )
@@ -350,7 +348,6 @@ class IsimSehirOyunu:
             c_text(f"## 📊 Tur {self.tur} Sonuçları\n-# Harf: `{self.harf}`"),
             c_separator(),
             c_text("\n\n".join(oyuncu_blokları)),
-            color=COLORS.SUCCESS,
         )
         await channel_send(self.kanal, result_card)
 
@@ -391,7 +388,7 @@ class IsimSehirOyunu:
             items.append(c_separator())
             items.append(c_media(gif))
 
-        son_kart = (c_container(*items, color=COLORS.GAME),)
+        son_kart = (c_container(*items),)
         tekrar = IsimSehirTekrarView(self.oyuncular, son_kart)
         msg    = await channel_send(self.kanal, *son_kart, view=tekrar)
         tekrar.msg = msg

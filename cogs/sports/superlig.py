@@ -18,7 +18,6 @@ from discord import app_commands
 from discord.ext import commands
 
 from .._v2 import (
-    COLORS,
     c_card,
     c_container,
     c_separator,
@@ -134,7 +133,6 @@ def _loading() -> dict:
     return c_card(
         "## 🏆 Trendyol Süper Lig",
         body="`─────────────────` Yükleniyor...",
-        color=0xE32429,
     )
 
 
@@ -196,7 +194,6 @@ class SuperLig(commands.Cog):
             c_text("## ❌ Hata"),
             c_separator(),
             c_text(msg),
-            color=COLORS.DANGER,
         )
 
     # ── Command group ──────────────────────────────────────────────────────────
@@ -250,6 +247,23 @@ class SuperLig(commands.Cog):
             table_lines.append(f" {pos}  {name} {p}  {w}  {d}  {l}  {gfga}  {gd}  {pts}")
         table_block = "```\n" + "\n".join(table_lines) + "\n```"
 
+        # Zone gruplandırması — alt kısımda özet
+        groups: dict[str, list[str]] = {"🔵": [], "🟠": [], "🟢": [], "🔴": []}
+        for t in teams:
+            z = _zone(t["qualification"])
+            if z in groups:
+                groups[z].append(t["name"])
+
+        legend_lines: list[str] = []
+        if groups["🔵"]:
+            legend_lines.append(f"**Şampiyonlar Ligi** · {', '.join(groups['🔵'])}")
+        if groups["🟠"]:
+            legend_lines.append(f"**Avrupa Ligi** · {', '.join(groups['🟠'])}")
+        if groups["🟢"]:
+            legend_lines.append(f"**Konferans Ligi** · {', '.join(groups['🟢'])}")
+        if groups["🔴"]:
+            legend_lines.append(f"**Küme Düşme** · {', '.join(groups['🔴'])}")
+
         items: list[dict] = [
             c_text(f"## 🏆 Trendyol Süper Lig — Puan Tablosu\n-# {season_label}"),
             c_separator(),
@@ -259,7 +273,7 @@ class SuperLig(commands.Cog):
             items += [c_separator(), c_text("\n".join(legend_lines))]
         items += [c_separator(), c_text("-# Kaynak: Wikipedia")]
 
-        await edit_original(interaction, c_container(*items, color=0xE32429))
+        await edit_original(interaction, c_container(*items))
 
     # /lig takvim ───────────────────────────────────────────────────────────────
 
@@ -280,7 +294,6 @@ class SuperLig(commands.Cog):
                     c_text("## 📅 Maç Takvimi"),
                     c_separator(),
                     c_text("Yaklaşan maç bulunamadı. Sezon tamamlanmış olabilir."),
-                    color=COLORS.INFO,
                 ),
             )
             return
@@ -316,7 +329,6 @@ class SuperLig(commands.Cog):
                 c_text("\n\n".join(sections)),
                 c_separator(),
                 c_text("-# Saatler yerel saatinizde gösterilir · Kaynak: TheSportsDB"),
-                color=COLORS.INFO,
             ),
         )
 
@@ -339,7 +351,6 @@ class SuperLig(commands.Cog):
                     c_text("## 📊 Son Sonuçlar"),
                     c_separator(),
                     c_text("Tamamlanmış maç bulunamadı."),
-                    color=COLORS.INFO,
                 ),
             )
             return
@@ -385,7 +396,6 @@ class SuperLig(commands.Cog):
                 c_text("\n\n".join(sections)),
                 c_separator(),
                 c_text("-# 🟩 Kazanan kalın · 🟨 Beraberlik · Kaynak: TheSportsDB"),
-                color=COLORS.SUCCESS,
             ),
         )
 
@@ -403,7 +413,6 @@ class SuperLig(commands.Cog):
                     "Canlı skor özelliği şu an aktif değil.\n"
                     "-# Ücretsiz veri kaynaklarımızda canlı skor mevcut değil."
                 ),
-                color=COLORS.NEUTRAL,
             ),
         )
 

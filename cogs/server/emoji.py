@@ -39,7 +39,7 @@ class EmojiStealer(commands.Cog):
 
         if not interaction.user.guild_permissions.manage_emojis_and_stickers:
             return await v2_followup(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
 
@@ -49,7 +49,6 @@ class EmojiStealer(commands.Cog):
                 c_card(
                     "## ❌ Geçersiz Emoji",
                     body="Özel emoji formatında girin:\n`<:isim:123456>` veya `<a:isim:123456>`",
-                    color=COLORS.DANGER,
                 ),
                 ephemeral=True,
             )
@@ -61,7 +60,7 @@ class EmojiStealer(commands.Cog):
 
         if not data:
             return await v2_followup(interaction,
-                c_card("## ❌ İndirme Hatası", body="Emoji CDN'den indirilemedi.", color=COLORS.DANGER),
+                c_card("## ❌ İndirme Hatası", body="Emoji CDN'den indirilemedi."),
                 ephemeral=True,
             )
 
@@ -78,11 +77,10 @@ class EmojiStealer(commands.Cog):
                     ("🎬 Animasyon", "Evet" if animated else "Hayır"),
                     ("📊 Slot Kullanımı", slot_kullanim),
                 ],
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
         except discord.HTTPException as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=f"Emoji eklenemedi:\n```{ex}```", color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=f"Emoji eklenemedi:\n```{ex}```"),
                 ephemeral=True,
             )
 
@@ -93,7 +91,7 @@ class EmojiStealer(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.manage_emojis_and_stickers:
             return await v2_followup(interaction,
-                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                c_card("## ❌ Yetersiz Yetki", body="Bu komut için **Emojileri Yönet** yetkisi gereklidir."),
                 ephemeral=True,
             )
 
@@ -110,7 +108,6 @@ class EmojiStealer(commands.Cog):
                     ("👮 Yetkili", interaction.user.mention),
                 ],
                 footer="⚠️ Emoji limiti dolduğunda yeni eklemeler atlanır.",
-                color=COLORS.SUCCESS,
             ), ephemeral=True)
         else:
             await v2_followup(interaction, c_action_card(
@@ -119,7 +116,6 @@ class EmojiStealer(commands.Cog):
                     ("⚙️ Durum", "🔴 Kapalı"),
                     ("👮 Yetkili", interaction.user.mention),
                 ],
-                color=COLORS.WARNING,
             ), ephemeral=True)
 
     # Sağ tık → Emojileri Ekle
@@ -128,7 +124,7 @@ class EmojiStealer(commands.Cog):
         try:
             if not interaction.user.guild_permissions.manage_emojis_and_stickers:
                 return await v2_followup(interaction,
-                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir.", color=COLORS.DANGER),
+                    c_card("## ❌ Yetersiz Yetki", body="Bu işlem için **Emojileri Yönet** yetkisi gereklidir."),
                     ephemeral=True,
                 )
 
@@ -140,7 +136,7 @@ class EmojiStealer(commands.Cog):
 
             if not matches:
                 return await v2_followup(interaction,
-                    c_card("## ⚠️ Emoji Bulunamadı", body="Bu mesajda bu sunucuya ait olmayan özel emoji yok.", color=COLORS.WARNING),
+                    c_card("## ⚠️ Emoji Bulunamadı", body="Bu mesajda bu sunucuya ait olmayan özel emoji yok."),
                     ephemeral=True,
                 )
 
@@ -163,17 +159,14 @@ class EmojiStealer(commands.Cog):
                 rows.append(f"**✅ Eklenen ({len(added)})**\n{' '.join(added)}")
             if failed:
                 rows.append(f"**❌ Başarısız ({len(failed)})**\n{', '.join(f'`{n}`' for n in failed)}")
-            color = COLORS.SUCCESS if added else COLORS.DANGER
-
             await v2_followup(interaction, c_list_card(
                 "✨ Emoji Ekleme Sonucu",
                 rows=rows or ["Hiçbir emoji eklenemedi."],
                 footer=f"Slot: {len(interaction.guild.emojis)}/{interaction.guild.emoji_limit}",
-                color=color,
             ), ephemeral=True)
         except Exception as ex:
             await v2_followup(interaction,
-                c_card("## ❌ Hata", body=str(ex), color=COLORS.DANGER),
+                c_card("## ❌ Hata", body=str(ex)),
                 ephemeral=True,
             )
 

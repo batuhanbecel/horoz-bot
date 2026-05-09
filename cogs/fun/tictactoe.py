@@ -23,7 +23,6 @@ _LINES = [
     (0, 4, 8), (2, 4, 6),
 ]
 
-
 # ── Oyun Motoru ───────────────────────────────────────────────────────────────
 
 def _check_winner(board: list[str | None]) -> str | None:
@@ -94,16 +93,35 @@ class TTTGame:
 
 
 # ── Hücre Butonu ─────────────────────────────────────────────────────────────
+# Boş hücreler: gri (secondary), tıklanabilir
+# X konulmuş:   kırmızı (danger), beyaz "X" yazısı — görünür
+# O konulmuş:   mavi (primary), beyaz "O" yazısı — görünür
+
+_EMPTY_LABEL = "ᅠ"   # hangul filler — boş görünen tek karakter
 
 class CellButton(discord.ui.Button["TTTView"]):
     def __init__(self, pos: int, cell: str | None, disabled: bool):
         if cell == X:
-            style, emoji = discord.ButtonStyle.danger,   "❌"
+            super().__init__(
+                style=discord.ButtonStyle.danger,
+                label="X",
+                row=pos // 3,
+                disabled=True,
+            )
         elif cell == O:
-            style, emoji = discord.ButtonStyle.primary,  "⭕"
+            super().__init__(
+                style=discord.ButtonStyle.primary,
+                label="O",
+                row=pos // 3,
+                disabled=True,
+            )
         else:
-            style, emoji = discord.ButtonStyle.secondary, "⬜"
-        super().__init__(style=style, emoji=emoji, row=pos // 3, disabled=disabled)
+            super().__init__(
+                style=discord.ButtonStyle.secondary,
+                label=_EMPTY_LABEL,
+                row=pos // 3,
+                disabled=disabled,
+            )
         self.pos = pos
 
     async def callback(self, interaction: discord.Interaction) -> None:
@@ -120,45 +138,50 @@ class TTTView(discord.ui.View):
         self.msg: discord.Message | None = None
         self._sync_buttons()
 
-    def _sync_buttons(self) -> None:
+    def _sync_buttons(self, all_disabled: bool = False) -> None:
         self.clear_items()
         g = self.game
         for i in range(9):
-            disabled = (g.board[i] is not None) or g.finished
-            self.add_item(CellButton(i, g.board[i], disabled))
+            cell     = g.board[i]
+            disabled = all_disabled or (cell is not None) or g.finished
+            self.add_item(CellButton(i, cell, disabled))
 
     def build_card(self, note: str = "") -> discord.ui.Container:
         g      = self.game
+        x_name = g.player_x.display_name
         o_name = g.player_o.display_name if g.player_o else "🤖 Bot"
 
         if g.finished:
             if g.winner == "draw":
                 title = "## 🤝 Berabere!"
-                sub   = f"❌ {g.player_x.display_name}  vs  ⭕ {o_name}"
+                body  = "İki taraf da kazanamadı."
             elif g.winner == X:
-                title = f"## 🏆 {g.player_x.display_name} Kazandı!"
-                sub   = "❌ birinci oldu"
+                title = f"## 🏆 {x_name} Kazandı!"
+                body  = f"**X** ilk üçlüyü tamamladı."
             else:
                 title = f"## 🏆 {o_name} Kazandı!"
-                sub   = "⭕ birinci oldu"
+                body  = f"**O** ilk üçlüyü tamamladı."
             avatar = str(g.player_x.display_avatar.url)
         else:
-            sym      = "❌" if g.current == X else "⭕"
-            cur_name = g.player_x.display_name if g.current == X else o_name
+            cur_name = x_name if g.current == X else o_name
+            sym      = "X" if g.current == X else "O"
             title    = "## ❌⭕ XOX"
-            sub      = f"Sıra: {sym} **{cur_name}**"
+            body     = f"Sıra: **{sym} — {cur_name}**"
             cur_m    = g.player_x if g.current == X else g.player_o
-            avatar   = str(cur_m.display_avatar.url) if cur_m else str(g.player_x.display_avatar.url)
+            avatar   = (
+                str(cur_m.display_avatar.url)
+                if cur_m
+                else str(g.player_x.display_avatar.url)
+            )
 
         items: list[discord.ui.Item] = [
             c_section(
-                c_text(
-                    f"{title}\n"
-                    f"-# {sub}\n"
-                    f"-# ❌ {g.player_x.display_name}  vs  ⭕ {o_name}"
-                ),
+                c_text(title),
+                c_text(f"-# X: {x_name}  ·  O: {o_name}"),
                 accessory=c_thumbnail(avatar),
             ),
+            c_separator(),
+            c_text(body),
         ]
         if note:
             items.append(c_separator())
@@ -169,15 +192,19 @@ class TTTView(discord.ui.View):
     async def handle_move(self, interaction: discord.Interaction, pos: int) -> None:
         g = self.game
 
-        # Sıra ve sahiplik kontrolü
+        # Sıra / sahiplik kontrolü
         if g.vs_bot:
             if interaction.user.id != g.player_x.id:
-                await interaction.response.send_message("⛔ Bu oyun sana ait değil!", ephemeral=True)
+                await interaction.response.send_message(
+                    "⛔ Bu oyun sana ait değil!", ephemeral=True
+                )
                 return
         else:
             expected = g.player_x if g.current == X else g.player_o
             if interaction.user.id != expected.id:
-                await interaction.response.send_message("⛔ Şu an sıra sende değil!", ephemeral=True)
+                await interaction.response.send_message(
+                    "⛔ Şu an sıra sende değil!", ephemeral=True
+                )
                 return
 
         if not g.place(pos, g.current):
@@ -198,8 +225,7 @@ class TTTView(discord.ui.View):
 
         # Bot hamlesi
         if g.vs_bot:
-            for btn in self.children:
-                btn.disabled = True
+            self._sync_buttons(all_disabled=True)
             await update(interaction, self.build_card("🤖 Bot düşünüyor..."), view=self)
 
             await asyncio.sleep(0.7)
@@ -263,10 +289,10 @@ class TTTRematchView(discord.ui.View):
         self.stop()
         await update(interaction, self.son_kart, view=self)
 
-        new_game      = TTTGame(g.player_x, g.player_o, vs_bot=g.vs_bot)
-        new_view      = TTTView(new_game)
-        msg           = await channel_send(interaction.channel, new_view.build_card(), view=new_view)
-        new_view.msg  = msg
+        new_game     = TTTGame(g.player_x, g.player_o, vs_bot=g.vs_bot)
+        new_view     = TTTView(new_game)
+        msg          = await channel_send(interaction.channel, new_view.build_card(), view=new_view)  # type: ignore[arg-type]
+        new_view.msg = msg
 
 
 # ── Davet View (PvP) ──────────────────────────────────────────────────────────
@@ -305,7 +331,7 @@ class TTTChallengeView(discord.ui.View):
 
         game     = TTTGame(self.challenger, self.opponent, vs_bot=False)
         view     = TTTView(game)
-        msg      = await channel_send(interaction.channel, view.build_card(), view=view)
+        msg      = await channel_send(interaction.channel, view.build_card(), view=view)  # type: ignore[arg-type]
         view.msg = msg
 
     @discord.ui.button(label="Reddet", style=discord.ButtonStyle.danger, emoji="❌")

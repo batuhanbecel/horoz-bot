@@ -355,6 +355,8 @@ async def update(
         json={"type": 7, "data": {"flags": _V2, "components": components}},
     )
     _mark_responded(interaction.response, 7)
+    if view and getattr(interaction, "message", None):
+        interaction._state.store_view(view, interaction.message.id)
 
 
 async def followup(

@@ -188,27 +188,34 @@ class PZServer(commands.Cog):
             c_text(body),
         ), ephemeral=False)
 
-    @app_commands.command(name="pz-info", description="Discord entegrasyonu hakkında bilgi verir.")
+    @app_commands.command(name="pz-info", description="Project Zomboid sunucusu bağlantı bilgilerini gösterir.")
     async def pz_info(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
-        info_text = (
-            "**Discord Token** ne işe yarar?\n\n"
-            "Project Zomboid sunucusu, bir Discord bot token'ı kullanarak **oyun içi sohbeti**, "
-            "**oyuncu giriş/çıkış loglarını** ve **sunucu olaylarını** doğrudan bir Discord kanalına gönderebilir.\n\n"
-            "Ayarlamak için `servertest.ini` dosyasındaki şu alanları doldurun:\n"
-            "```ini\n"
-            "DiscordEnable=true\n"
-            "DiscordToken=YOUR_BOT_TOKEN\n"
-            "DiscordChatChannel=sohbet\n"
-            "DiscordLogChannel=loglar\n"
-            "```\n\n"
-            "Not: Bu token, Discord Developer Portal'dan oluşturduğunuz bir **bot token'ı** olmalıdır. "
-            "Bot, sunucuya davet edilmeli ve ilgili kanallara yazma yetkisi verilmelidir."
+        a2s_data = await self._query_a2s()
+        server_name = a2s_data["name"] if a2s_data else "Tavuk Çiftliği"
+        password_status = "Şifreli" if (a2s_data and a2s_data.get("password")) else "Şifresiz"
+        body = (
+            f"**Sunucu Adı:** `{server_name}`\n"
+            f"**IP Adresi:** `{self.host}`\n"
+            f"**Port:** `{self.game_port}`\n"
+            f"**Versiyon:** `Build 42.17`\n"
+            f"**Şifre Durumu:** `{password_status}`\n"
+            f"**Admin Şifresi:** `botadmin123`\n\n"
+            f"**Nasıl Bağlanılır?**\n"
+            f"1. Project Zomboid'yi açın\n"
+            f"2. Ana menüden **Join** seçin\n"
+            f"3. **IP** alanına: `{self.host}`\n"
+            f"4. **Port** alanına: `{self.game_port}`\n"
+            f"5. **Account** alanına: kullanıcı adınız\n"
+            f"6. **Password** alanına: şifre (varsa)\n"
+            f"7. **Save**'e basın, sonra **Connect** ile bağlanın\n\n"
+            f"**Admin Olma (oyun içi):**\n"
+            f"Sohbete `/setaccesslevel KULLANICI_ADIN admin` yazın veya `admin` şifresiyle direkt giriş yapın."
         )
         await v2_followup(interaction, c_container(
-            c_text("## ℹ️ Discord Entegrasyonu"),
+            c_text("## ℹ️ Sunucu Bilgileri"),
             c_separator(),
-            c_text(info_text),
+            c_text(body),
         ), ephemeral=False)
 
     @app_commands.command(name="pz-baglanti", description="Project Zomboid sunucusuna nasıl bağlanılacağını gösterir.")

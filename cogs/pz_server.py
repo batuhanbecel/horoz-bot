@@ -4,6 +4,7 @@ from discord.ext import commands
 import os
 import asyncio
 import paramiko
+import a2s
 from ._v2 import (
     COLORS, c_card, c_info_card, c_text, c_separator, c_container,
     respond, followup as v2_followup, error_response,
@@ -19,6 +20,7 @@ class PZServer(commands.Cog):
         self.password = "XM2KZ51f6aj7tNl"
         self.remote_dir = "/opt/pz-server"
         self.jar_name = "ProjectZomboid64"
+        self.game_port = 16261
 
     def _exec_sync(self, cmd: str) -> tuple[int, str, str]:
         client = paramiko.SSHClient()
@@ -44,6 +46,25 @@ class PZServer(commands.Cog):
 
     async def _run_remote(self, cmd: str) -> tuple[int, str, str]:
         return await asyncio.to_thread(self._exec_sync, cmd)
+
+    async def _query_a2s(self) -> dict | None:
+        try:
+            info = await asyncio.to_thread(
+                a2s.info, (self.host, self.game_port), timeout=5
+            )
+            players = await asyncio.to_thread(
+                a2s.players, (self.host, self.game_port), timeout=5
+            )
+            return {
+                "name": info.server_name,
+                "map": info.map_name,
+                "players": info.player_count,
+                "max_players": info.max_players,
+                "password": info.password_protected,
+                "player_list": [p.name for p in players[:20]] if players else [],
+            }
+        except Exception:
+            return None
 
     def _is_running(self, stdout: str) -> bool:
         return "ProjectZomboid" in stdout
@@ -140,13 +161,54 @@ class PZServer(commands.Cog):
         rc, out, err = await self._run_remote(f"bash {self.remote_dir}/start_server.sh status")
         ok = "ONLINE" in out
         status = "🟢 Çalışıyor" if ok else "🔴 Kapalı"
-        body = f"**Host:** `{self.host}:{self.port}`\n**Dizin:** `{self.remote_dir}`"
-        if out:
-            body += f"\n**Çıktı:** `{out}`"
+
+        body_lines = [
+            f"**Host:** `{self.host}:{self.game_port}`",
+            f"**Dizin:** `{self.remote_dir}`",
+            f"**Status:** `{out}`" if out else "",
+        ]
+
+        if ok:
+            a2s_data = await self._query_a2s()
+            if a2s_data:
+                body_lines.append(f"**Sunucu Adı:** `{a2s_data['name']}`")
+                body_lines.append(f"**Harita:** `{a2s_data['map']}`")
+                body_lines.append(f"**Oyuncular:** `{a2s_data['players']}/{a2s_data['max_players']}`")
+                if a2s_data["player_list"]:
+                    names = ", ".join(a2s_data["player_list"])
+                    body_lines.append(f"**Online:** `{names}`")
+                body_lines.append(f"**Şifre:** `{'Evet' if a2s_data['password'] else 'Hayır'}`")
+            else:
+                body_lines.append("*Steam query yanıt vermiyor — sunucu başlatma aşamasında olabilir.*")
+
+        body = "\n".join(line for line in body_lines if line)
         await v2_followup(interaction, c_container(
             c_text(f"## {status}"),
             c_separator(),
             c_text(body),
+        ), ephemeral=False)
+
+    @app_commands.command(name="pz-info", description="Discord entegrasyonu hakkında bilgi verir.")
+    async def pz_info(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=False)
+        info_text = (
+            "**Discord Token** ne işe yarar?\n\n"
+            "Project Zomboid sunucusu, bir Discord bot token'ı kullanarak **oyun içi sohbeti**, "
+            "**oyuncu giriş/çıkış loglarını** ve **sunucu olaylarını** doğrudan bir Discord kanalına gönderebilir.\n\n"
+            "Ayarlamak için `servertest.ini` dosyasındaki şu alanları doldurun:\n"
+            "```ini\n"
+            "DiscordEnable=true\n"
+            "DiscordToken=YOUR_BOT_TOKEN\n"
+            "DiscordChatChannel=sohbet\n"
+            "DiscordLogChannel=loglar\n"
+            "```\n\n"
+            "Not: Bu token, Discord Developer Portal'dan oluşturduğunuz bir **bot token'ı** olmalıdır. "
+            "Bot, sunucuya davet edilmeli ve ilgili kanallara yazma yetkisi verilmelidir."
+        )
+        await v2_followup(interaction, c_container(
+            c_text("## ℹ️ Discord Entegrasyonu"),
+            c_separator(),
+            c_text(info_text),
         ), ephemeral=False)
 
     @app_commands.command(name="pz-logs", description="Project Zomboid sunucusunun son loglarını gösterir.")

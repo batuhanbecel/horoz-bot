@@ -7,11 +7,90 @@ import paramiko
 import a2s
 from ._v2 import (
     COLORS, c_card, c_info_card, c_text, c_separator, c_container,
-    respond, followup as v2_followup, error_response,
+    respond, followup as v2_followup, error_response, edit_original,
 )
 
 
 class PZServer(commands.Cog):
+    class ModRemoveView(discord.ui.View):
+        def __init__(self, cog: "PZServer", mods: list[str], timeout: int = 180):
+            super().__init__(timeout=timeout)
+            self.cog = cog
+            self.mods = mods
+            for mod_id in mods:
+                btn = discord.ui.Button(
+                    label=f"🗑️ {mod_id[:20]}",
+                    style=discord.ButtonStyle.danger,
+                    custom_id=f"remove_mod_{mod_id}",
+                )
+                btn.callback = self._make_remove_callback(mod_id)
+                self.add_item(btn)
+
+        def _make_remove_callback(self, mod_id: str):
+            async def callback(interaction: discord.Interaction):
+                await interaction.response.defer(ephemeral=False)
+
+                ini_path = "/root/Zomboid/Server/servertest.ini"
+                rc, out, err = await self.cog._run_remote(
+                    f"python3 -c \""
+                    f"import re\n"
+                    f"with open('{ini_path}') as f: c = f.read()\n"
+                    f"m = re.search(r'^Mods=(.*)$', c, re.M)\n"
+                    f"if m:\n"
+                    f"    existing = [x.strip() for x in m.group(1).split(',') if x.strip()]\n"
+                    f"    if '{mod_id}' in existing:\n"
+                    f"        existing.remove('{mod_id}')\n"
+                    f"        c = re.sub(r'^Mods=.*$', 'Mods=' + ','.join(existing), c, flags=re.M)\n"
+                    f"        with open('{ini_path}', 'w') as f: f.write(c)\n"
+                    f"        print('REMOVED')\n"
+                    f"    else:\n"
+                    f"        print('NOT_FOUND')\n"
+                    f"else:\n"
+                    f"    print('NO_MODS_KEY')\n"
+                    f"\""
+                )
+                status = out.strip()
+
+                if status == "NO_MODS_KEY":
+                    await edit_original(interaction, c_container(
+                        c_text("## 🔴 Hata"),
+                        c_separator(),
+                        c_text("`Mods=` anahtarı `servertest.ini` içinde bulunamadı."),
+                    ))
+                    return
+
+                rc2, out2, err2 = await self.cog._run_remote(
+                    f"python3 -c \""
+                    f"import re\n"
+                    f"with open('{ini_path}') as f: c = f.read()\n"
+                    f"m = re.search(r'^Mods=(.*)$', c, re.M)\n"
+                    f"if m:\n"
+                    f"    existing = [x.strip() for x in m.group(1).split(',') if x.strip()]\n"
+                    f"    print(','.join(existing))\n"
+                    f"else:\n"
+                    f"    print('')\n"
+                    f"\""
+                )
+                current_mods = [m for m in out2.strip().split(",") if m.strip()]
+
+                if current_mods:
+                    rows = [f"{i+1}. `{m}`" for i, m in enumerate(current_mods)]
+                    body = "\n".join(rows)
+                    new_view = PZServer.ModRemoveView(self.cog, current_mods)
+                    await edit_original(interaction, c_container(
+                        c_text("## 🗑️ Mod Kaldırıldı"),
+                        c_separator(),
+                        c_text(f"`{mod_id}` kaldırıldı.\n\n**Kalan Modlar:**\n{body}"),
+                    ), view=new_view)
+                else:
+                    await edit_original(interaction, c_container(
+                        c_text("## ✅ Tüm Modlar Kaldırıldı"),
+                        c_separator(),
+                        c_text(f"`{mod_id}` kaldırıldı.\nSunucuda aktif mod kalmadı."),
+                    ))
+
+            return callback
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.host = "46.235.8.120"
@@ -44,8 +123,14 @@ class PZServer(commands.Cog):
         finally:
             client.close()
 
-    async def _run_remote(self, cmd: str) -> tuple[int, str, str]:
-        return await asyncio.to_thread(self._exec_sync, cmd)
+    async def _run_remote(self, cmd: str, timeout: int = 60) -> tuple[int, str, str]:
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self._exec_sync, cmd),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            return (-1, "", "SSH bağlantısı zaman aşımına uğradı.")
 
     async def _query_a2s(self) -> dict | None:
         try:
@@ -255,47 +340,57 @@ class PZServer(commands.Cog):
         await interaction.response.defer(ephemeral=False)
         ini_path = "/root/Zomboid/Server/servertest.ini"
 
-        # --- Mods= ekle ---
-        rc, out, err = await self._run_remote(
-            f"python3 -c \""
-            f"import re\n"
-            f"with open('{ini_path}') as f: c = f.read()\n"
-            f"m = re.search(r'^Mods=(.*)$', c, re.M)\n"
-            f"if m:\n"
-            f"    existing = [x.strip() for x in m.group(1).split(',') if x.strip()]\n"
-            f"    if '{mod_id}' not in existing:\n"
-            f"        existing.append('{mod_id}')\n"
-            f"        c = re.sub(r'^Mods=.*$', 'Mods=' + ','.join(existing), c, flags=re.M)\n"
-            f"        with open('{ini_path}', 'w') as f: f.write(c)\n"
-            f"        print('ADDED_MOD')\n"
-            f"    else:\n"
-            f"        print('ALREADY_MOD')\n"
-            f"else:\n"
-            f"    print('NO_MODS_KEY')\n"
-            f"\""
-        )
-        mod_status = out.strip()
+        try:
+            # --- Mods= ekle ---
+            rc, out, err = await self._run_remote(
+                f"python3 -c \""
+                f"import re\n"
+                f"with open('{ini_path}') as f: c = f.read()\n"
+                f"m = re.search(r'^Mods=(.*)$', c, re.M)\n"
+                f"if m:\n"
+                f"    existing = [x.strip() for x in m.group(1).split(',') if x.strip()]\n"
+                f"    if '{mod_id}' not in existing:\n"
+                f"        existing.append('{mod_id}')\n"
+                f"        c = re.sub(r'^Mods=.*$', 'Mods=' + ','.join(existing), c, flags=re.M)\n"
+                f"        with open('{ini_path}', 'w') as f: f.write(c)\n"
+                f"        print('ADDED_MOD')\n"
+                f"    else:\n"
+                f"        print('ALREADY_MOD')\n"
+                f"else:\n"
+                f"    print('NO_MODS_KEY')\n"
+                f"\"",
+                timeout=60,
+            )
+            mod_status = out.strip()
 
-        # --- WorkshopItems= ekle ---
-        rc2, out2, err2 = await self._run_remote(
-            f"python3 -c \""
-            f"import re\n"
-            f"with open('{ini_path}') as f: c = f.read()\n"
-            f"m = re.search(r'^WorkshopItems=(.*)$', c, re.M)\n"
-            f"if m:\n"
-            f"    existing = [x.strip() for x in m.group(1).split(';') if x.strip()]\n"
-            f"    if '{workshop_id}' not in existing:\n"
-            f"        existing.append('{workshop_id}')\n"
-            f"        c = re.sub(r'^WorkshopItems=.*$', 'WorkshopItems=' + ';'.join(existing), c, flags=re.M)\n"
-            f"        with open('{ini_path}', 'w') as f: f.write(c)\n"
-            f"        print('ADDED_WORKSHOP')\n"
-            f"    else:\n"
-            f"        print('ALREADY_WORKSHOP')\n"
-            f"else:\n"
-            f"    print('NO_WORKSHOP_KEY')\n"
-            f"\""
-        )
-        ws_status = out2.strip()
+            # --- WorkshopItems= ekle ---
+            rc2, out2, err2 = await self._run_remote(
+                f"python3 -c \""
+                f"import re\n"
+                f"with open('{ini_path}') as f: c = f.read()\n"
+                f"m = re.search(r'^WorkshopItems=(.*)$', c, re.M)\n"
+                f"if m:\n"
+                f"    existing = [x.strip() for x in m.group(1).split(';') if x.strip()]\n"
+                f"    if '{workshop_id}' not in existing:\n"
+                f"        existing.append('{workshop_id}')\n"
+                f"        c = re.sub(r'^WorkshopItems=.*$', 'WorkshopItems=' + ';'.join(existing), c, flags=re.M)\n"
+                f"        with open('{ini_path}', 'w') as f: f.write(c)\n"
+                f"        print('ADDED_WORKSHOP')\n"
+                f"    else:\n"
+                f"        print('ALREADY_WORKSHOP')\n"
+                f"else:\n"
+                f"    print('NO_WORKSHOP_KEY')\n"
+                f"\"",
+                timeout=60,
+            )
+            ws_status = out2.strip()
+        except Exception as exc:
+            await v2_followup(interaction, c_container(
+                c_text("## 🔴 Mod Ekleme Hatası"),
+                c_separator(),
+                c_text(f"Sunucuya bağlanırken hata oluştu:\n```\n{exc}\n```"),
+            ), ephemeral=False)
+            return
 
         if mod_status == "NO_MODS_KEY" or ws_status == "NO_WORKSHOP_KEY":
             await v2_followup(interaction, c_container(
@@ -318,13 +413,11 @@ class PZServer(commands.Cog):
         ), ephemeral=False)
 
     @app_commands.command(name="pz-mod-sil", description="Project Zomboid sunucusundan mod kaldırır (Admin gerekir).")
-    @app_commands.describe(mod_id="Kaldırılacak Mod ID")
     @app_commands.checks.has_permissions(administrator=True)
-    async def pz_mod_sil(self, interaction: discord.Interaction, mod_id: str):
+    async def pz_mod_sil(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
         ini_path = "/root/Zomboid/Server/servertest.ini"
 
-        # --- Mods= sil ---
         rc, out, err = await self._run_remote(
             f"python3 -c \""
             f"import re\n"
@@ -332,51 +425,36 @@ class PZServer(commands.Cog):
             f"m = re.search(r'^Mods=(.*)$', c, re.M)\n"
             f"if m:\n"
             f"    existing = [x.strip() for x in m.group(1).split(',') if x.strip()]\n"
-            f"    if '{mod_id}' in existing:\n"
-            f"        existing.remove('{mod_id}')\n"
-            f"        c = re.sub(r'^Mods=.*$', 'Mods=' + ','.join(existing), c, flags=re.M)\n"
-            f"        with open('{ini_path}', 'w') as f: f.write(c)\n"
-            f"        print('REMOVED')\n"
-            f"    else:\n"
-            f"        print('NOT_FOUND')\n"
+            f"    print(','.join(existing))\n"
             f"else:\n"
             f"    print('NO_MODS_KEY')\n"
             f"\""
         )
-        mod_status = out.strip()
-
-        # --- WorkshopItems= sil (eşleşen workshop ID'yi bulmak zor olabilir, mod_id ile aynı olmayabilir)
-        # Basitçe: kullanıcı sadece mod_id verdi, workshop_id bilmiyor olabilir.
-        # Bu yüzden WorkshopItems listesinden sadece boş kalan modları temizleyeceğiz,
-        # veya kullanıcıya manuel temizlemesi gerektiğini söyleyeceğiz.
-
-        if mod_status == "NO_MODS_KEY":
+        raw = out.strip()
+        if raw == "NO_MODS_KEY" or not raw:
             await v2_followup(interaction, c_container(
-                c_text("## 🔴 Mod Silme Başarısız"),
+                c_text("## 🟡 Mod Yok"),
                 c_separator(),
-                c_text("`Mods=` anahtarı `servertest.ini` içinde bulunamadı."),
+                c_text("Sunucuda aktif mod bulunmuyor veya `Mods=` anahtarı eksik."),
             ), ephemeral=False)
             return
 
-        if mod_status == "NOT_FOUND":
+        mods = [m for m in raw.split(",") if m.strip()]
+        if not mods:
             await v2_followup(interaction, c_container(
-                c_text("## 🟡 Mod Bulunamadı"),
+                c_text("## 🟡 Mod Yok"),
                 c_separator(),
-                c_text(f"`{mod_id}` zaten `Mods=` listesinde yok."),
+                c_text("Sunucuda aktif mod bulunmuyor."),
             ), ephemeral=False)
             return
 
+        rows = [f"{i+1}. `{m}`" for i, m in enumerate(mods)]
+        view = PZServer.ModRemoveView(self, mods)
         await v2_followup(interaction, c_container(
-            c_text("## ✅ Mod Kaldırıldı"),
+            c_text("## 📦 Yüklü Modlar"),
             c_separator(),
-            c_text(
-                f"**Mod ID:** `{mod_id}`\n"
-                f"`Mods=` listesinden silindi.\n\n"
-                f"**WorkshopItems** temizliği için eşleşen Workshop ID'yi "
-                f"`servertest.ini` dosyasından manuel olarak kaldırabilirsiniz.\n\n"
-                f"Değişikliklerin aktif olması için `/pz-restart` komutunu kullanın."
-            ),
-        ), ephemeral=False)
+            c_text("Kaldırmak istediğiniz modun yanındaki **🗑️** butonuna basın:\n\n" + "\n".join(rows)),
+        ), view=view, ephemeral=False)
 
     @app_commands.command(name="pz-logs", description="Project Zomboid sunucusunun son loglarını gösterir.")
     @app_commands.describe(satir="Gösterilecek son satır sayısı (varsayılan: 20)")

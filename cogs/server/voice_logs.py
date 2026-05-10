@@ -28,7 +28,6 @@ class VoiceLogs(LogBase):
 
         await self.log(guild, c_container(
             c_section(c_text(text), accessory=c_thumbnail(str(member.display_avatar.url))),
-            color=color,
         ))
 
 

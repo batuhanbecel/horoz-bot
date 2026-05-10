@@ -72,7 +72,6 @@ class MemberLogs(LogBase):
 
         await self.log(member.guild, c_container(
             c_section(c_text(text), accessory=c_thumbnail(str(member.display_avatar.url))),
-            color=color,
         ))
 
         ch = await self._welcome_channel(member.guild)
@@ -137,7 +136,6 @@ class MemberLogs(LogBase):
                     lines.append(f"👮 **Yetkili:** {entry.user.mention}")
             await self.log(guild, c_container(
                 c_section(c_text("\n".join(lines)), accessory=c_thumbnail(str(after.display_avatar.url))),
-                color=color,
             ))
             return
 

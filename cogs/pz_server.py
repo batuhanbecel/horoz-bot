@@ -160,9 +160,9 @@ class PZServer(commands.Cog):
         )
         return out == "OK", out
 
-    @app_commands.command(name="pz-start", description="Project Zomboid sunucusunu başlatır (Admin gerekir).")
+    @app_commands.command(name="pz-baslat", description="Project Zomboid sunucusunu başlatır (Admin gerekir).")
     @app_commands.checks.has_permissions(administrator=True)
-    async def pz_start(self, interaction: discord.Interaction):
+    async def pz_baslat(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
 
         ok, msg = await self._ensure_binary()
@@ -199,9 +199,9 @@ class PZServer(commands.Cog):
                 c_text(f"```\n{err or out}\n```"),
             ), ephemeral=False)
 
-    @app_commands.command(name="pz-stop", description="Project Zomboid sunucusunu durdurur (Admin gerekir).")
+    @app_commands.command(name="pz-durdur", description="Project Zomboid sunucusunu durdurur (Admin gerekir).")
     @app_commands.checks.has_permissions(administrator=True)
-    async def pz_stop(self, interaction: discord.Interaction):
+    async def pz_durdur(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
         rc, out, err = await self._run_remote(f"bash {self.remote_dir}/start_server.sh stop")
         if "Sunucu çalışmıyor" in out or rc != 0:
@@ -217,9 +217,9 @@ class PZServer(commands.Cog):
                 c_text("Project Zomboid sunucusu güvenli bir şekilde kapatıldı."),
             ), ephemeral=False)
 
-    @app_commands.command(name="pz-restart", description="Project Zomboid sunucusunu yeniden başlatır (Admin gerekir).")
+    @app_commands.command(name="pz-yeniden-baslat", description="Project Zomboid sunucusunu yeniden başlatır (Admin gerekir).")
     @app_commands.checks.has_permissions(administrator=True)
-    async def pz_restart(self, interaction: discord.Interaction):
+    async def pz_yeniden_baslat(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
 
         ok, msg = await self._ensure_binary()
@@ -240,8 +240,8 @@ class PZServer(commands.Cog):
                    "Birkaç dakika içinde erişilebilir olacaktır."),
         ), ephemeral=False)
 
-    @app_commands.command(name="pz-status", description="Project Zomboid sunucusunun durumunu gösterir.")
-    async def pz_status(self, interaction: discord.Interaction):
+    @app_commands.command(name="pz-durum", description="Project Zomboid sunucusunun durumunu gösterir.")
+    async def pz_durum(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
         rc, out, err = await self._run_remote(f"bash {self.remote_dir}/start_server.sh status")
         ok = "ONLINE" in out
@@ -269,36 +269,6 @@ class PZServer(commands.Cog):
         body = "\n".join(line for line in body_lines if line)
         await v2_followup(interaction, c_container(
             c_text(f"## {status}"),
-            c_separator(),
-            c_text(body),
-        ), ephemeral=False)
-
-    @app_commands.command(name="pz-info", description="Project Zomboid sunucusu bağlantı bilgilerini gösterir.")
-    async def pz_info(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        a2s_data = await self._query_a2s()
-        server_name = a2s_data["name"] if a2s_data else "Tavuk Çiftliği"
-        password_status = "Şifreli" if (a2s_data and a2s_data.get("password")) else "Şifresiz"
-        body = (
-            f"**Sunucu Adı:** `{server_name}`\n"
-            f"**IP Adresi:** `{self.host}`\n"
-            f"**Port:** `{self.game_port}`\n"
-            f"**Versiyon:** `Build 42.17`\n"
-            f"**Şifre Durumu:** `{password_status}`\n"
-            f"**Admin Şifresi:** `botadmin123`\n\n"
-            f"**Nasıl Bağlanılır?**\n"
-            f"1. Project Zomboid'yi açın\n"
-            f"2. Ana menüden **Join** seçin\n"
-            f"3. **IP** alanına: `{self.host}`\n"
-            f"4. **Port** alanına: `{self.game_port}`\n"
-            f"5. **Account** alanına: kullanıcı adınız\n"
-            f"6. **Password** alanına: şifre (varsa)\n"
-            f"7. **Save**'e basın, sonra **Connect** ile bağlanın\n\n"
-            f"**Admin Olma (oyun içi):**\n"
-            f"Sohbete `/setaccesslevel KULLANICI_ADIN admin` yazın veya `admin` şifresiyle direkt giriş yapın."
-        )
-        await v2_followup(interaction, c_container(
-            c_text("## ℹ️ Sunucu Bilgileri"),
             c_separator(),
             c_text(body),
         ), ephemeral=False)
@@ -408,7 +378,7 @@ class PZServer(commands.Cog):
                 f"**Workshop ID:** `{workshop_id}`\n"
                 f"**Mod ID:** `{mod_id}`\n\n"
                 f"`servertest.ini` güncellendi. Değişikliklerin aktif olması için:\n"
-                f"`/pz-restart` komutunu kullanarak sunucuyu yeniden başlatın."
+                f"`/pz-yeniden-baslat` komutunu kullanarak sunucuyu yeniden başlatın."
             ),
         ), ephemeral=False)
 
@@ -456,9 +426,9 @@ class PZServer(commands.Cog):
             c_text("Kaldırmak istediğiniz modun yanındaki **🗑️** butonuna basın:\n\n" + "\n".join(rows)),
         ), view=view, ephemeral=False)
 
-    @app_commands.command(name="pz-logs", description="Project Zomboid sunucusunun son loglarını gösterir.")
+    @app_commands.command(name="pz-loglar", description="Project Zomboid sunucusunun son loglarını gösterir.")
     @app_commands.describe(satir="Gösterilecek son satır sayısı (varsayılan: 20)")
-    async def pz_logs(self, interaction: discord.Interaction, satir: int = 20):
+    async def pz_loglar(self, interaction: discord.Interaction, satir: int = 20):
         await interaction.response.defer(ephemeral=False)
         rc, out, err = await self._run_remote(
             f"bash {self.remote_dir}/start_server.sh logs {satir}"

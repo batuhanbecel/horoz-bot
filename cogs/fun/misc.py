@@ -106,30 +106,71 @@ class Eglence(commands.Cog):
     eglence = app_commands.Group(name="eglence", description="Eğlence, bilgi ve araç komutları")
 
     # ── 1. Fıkra ───────────────────────────────────────────────────────────────
-    @eglence.command(name="fikra", description="Rastgele klasik bir Türk fıkrası")
+    @eglence.command(name="fikra", description="Rastgele Türkçe fıkra")
     async def fikra(self, interaction: discord.Interaction):
-        text = random.choice(_FIKRALAR)
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
+            async with s.get("https://official-joke-api.appspot.com/random_joke?lang=tr") as r:
+                if r.status == 200:
+                    data = await r.json()
+                    text = f"{data.get('setup', '')}\n\n||{data.get('punchline', '')}||"
+                else:
+                    text = random.choice(_FIKRALAR)
         await respond(interaction, c_container(
             c_text(f"## 😂 Fıkra\n\n{text}"),
             color=COLORS.SUCCESS,
         ))
 
     # ── 2. Atasözü ───────────────────────────────────────────────────────────
-    @eglence.command(name="atasozu", description="Rastgele bir atasözü ve anlamı")
+    @eglence.command(name="atasozu", description="Rastgele bir atasözü ve anlamı (TDK)")
     async def atasozu(self, interaction: discord.Interaction):
-        soz, anlam = random.choice(_ATASOZLERI)
+        soz, anlam = "", ""
+        try:
+            letter = random.choice(string.ascii_lowercase)
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
+                async with s.get(f"https://sozluk.gov.tr/atasozu?ara={letter}") as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        results = [item for item in data if isinstance(item, dict) and item.get("turu2") == "Atasözü"]
+                        if results:
+                            item = random.choice(results)
+                            soz = item.get("sozum", "").strip()
+                            anlam = item.get("anlami", "").strip()
+        except Exception:
+            pass
+        if not soz:
+            soz, anlam = random.choice(_ATASOZLERI)
         await respond(interaction, c_rich_card(
             title="📜 Atasözü",
             body=f"**{soz}**\n\n*{anlam}*",
+            footer="Kaynak: TDK (sozluk.gov.tr)",
             color=COLORS.INFO,
         ))
 
     # ── 3. Trivia ────────────────────────────────────────────────────────────
-    @eglence.command(name="trivia", description="Rastgele bir bilgi yarışması sorusu")
+    @eglence.command(name="trivia", description="Rastgele bir bilgi yarışması sorusu (OpenTDB)")
     async def trivia(self, interaction: discord.Interaction):
-        soru = random.choice(_TRIVIA)
-        secenekler = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(soru["secenekler"]))
-        body = f"{soru['soru']}\n\n{secenekler}\n\n-# Doğru cevap: ||{soru['secenekler'][soru['dogru']]}||"
+        body = ""
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
+                async with s.get("https://opentdb.com/api.php?amount=1&encode=url3986&type=multiple") as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        results = data.get("results", [])
+                        if results:
+                            q = results[0]
+                            question = urllib.parse.unquote(q.get("question", ""))
+                            correct = urllib.parse.unquote(q.get("correct_answer", ""))
+                            incorrect = [urllib.parse.unquote(a) for a in q.get("incorrect_answers", [])]
+                            all_answers = incorrect + [correct]
+                            random.shuffle(all_answers)
+                            lines = [f"{i + 1}. {a}" for i, a in enumerate(all_answers)]
+                            body = f"**{question}**\n\n" + "\n".join(lines) + f"\n\n-# Doğru cevap: ||{correct}||\n-# Kategori: {urllib.parse.unquote(q.get('category', '?'))} | Zorluk: {q.get('difficulty', '?')}"
+        except Exception:
+            pass
+        if not body:
+            soru = random.choice(_TRIVIA)
+            secenekler = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(soru["secenekler"]))
+            body = f"{soru['soru']}\n\n{secenekler}\n\n-# Doğru cevap: ||{soru['secenekler'][soru['dogru']]}||"
         await respond(interaction, c_rich_card(
             title="❓ Trivia",
             body=body,

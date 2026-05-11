@@ -10,7 +10,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from .._v2 import c_container, c_error, c_text, respond
+from .._v2 import c_container, c_error, c_separator, c_text, respond
 
 log = logging.getLogger("horoz_bot.doviz")
 
@@ -33,12 +33,15 @@ class Doviz(commands.Cog):
             body = (
                 f"**1 USD** = {usd_try:.3f} ₺\n"
                 f"**1 EUR** = {eur_try:.3f} ₺\n"
-                f"**1 GBP** = {gbp_try:.3f} ₺\n\n"
-                f"-# Kaynak: exchangerate-api.com"
+                f"**1 GBP** = {gbp_try:.3f} ₺"
             )
         except Exception:
             return await respond(interaction, c_error("Veri formatı bozuk."), ephemeral=True)
-        await respond(interaction, c_container(c_text(f"## 💱 Döviz Kurları\n\n{body}")))
+        await respond(interaction, c_container(
+            c_text(f"## 💱 Döviz Kurları\n\n{body}"),
+            c_separator(),
+            c_text("-# Kaynak: exchangerate-api.com")
+        ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         log.error("doviz hatası: %s", error)

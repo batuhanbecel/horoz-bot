@@ -33,13 +33,7 @@ class Fikra(commands.Cog):
 
     @app_commands.command(name="fikra", description="Rastgele Türkçe fıkra")
     async def fikra(self, interaction: discord.Interaction):
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
-            async with s.get("https://official-joke-api.appspot.com/random_joke?lang=tr") as r:
-                if r.status == 200:
-                    data = await r.json()
-                    text = f"{data.get('setup', '')}\n\n||{data.get('punchline', '')}||"
-                else:
-                    text = random.choice(_FIKRALAR)
+        text = random.choice(_FIKRALAR)
         await respond(interaction, c_container(c_text(f"## 😂 Fıkra\n\n{text}")))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

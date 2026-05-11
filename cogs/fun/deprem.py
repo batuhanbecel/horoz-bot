@@ -10,7 +10,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from .._v2 import c_container, c_error, c_text, respond
+from .._v2 import c_container, c_error, c_separator, c_text, respond
 
 log = logging.getLogger("horoz_bot.deprem")
 
@@ -39,8 +39,11 @@ class Deprem(commands.Cog):
             time = item.get("time", "?")
             rows.append(f"**{loc}** — `M{mag}` — Derinlik: {depth}km — {date} {time}")
         body = "\n".join(rows) if rows else "Veri bulunamadı."
-        body += "\n\n-# Kaynak: Kandilli Rasathanesi (orhanaydogdu.com.tr)"
-        await respond(interaction, c_container(c_text(f"## 🌍 Son Depremler\n\n{body}")))
+        await respond(interaction, c_container(
+            c_text(f"## 🌍 Son Depremler\n\n{body}"),
+            c_separator(),
+            c_text("-# Kaynak: Kandilli Rasathanesi (orhanaydogdu.com.tr)")
+        ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         log.error("deprem hatası: %s", error)

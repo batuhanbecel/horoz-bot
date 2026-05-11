@@ -12,7 +12,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from .._v2 import c_container, c_text, respond
+from .._v2 import c_container, c_separator, c_text, respond
 
 log = logging.getLogger("horoz_bot.atasozu")
 
@@ -59,8 +59,12 @@ class Atasozu(commands.Cog):
             pass
         if not soz:
             soz, anlam = random.choice(_ATASOZLERI)
-        body = f"**{soz}**\n\n*{anlam}*\n\n-# Kaynak: TDK (sozluk.gov.tr)"
-        await respond(interaction, c_container(c_text(f"## 📜 Atasözü\n\n{body}")))
+        body = f"**{soz}**\n\n*{anlam}*"
+        await respond(interaction, c_container(
+            c_text(f"## 📜 Atasözü\n\n{body}"),
+            c_separator(),
+            c_text("-# Kaynak: TDK (sozluk.gov.tr)")
+        ))
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         log.error("atasozu hatası: %s", error)

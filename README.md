@@ -1,7 +1,7 @@
 # 🐓 Horoz Bot
 
 Türkçe, slash command tabanlı çok amaçlı Discord botu.  
-Moderasyon · Müzik · Eğlence / Oyunlar · Sunucu Yönetimi · Özel Komutlar
+Moderasyon · Müzik · Eğlence · Oyunlar · Spor · Sunucu Yönetimi · Özel Komutlar
 
 ---
 
@@ -13,12 +13,16 @@ Moderasyon · Müzik · Eğlence / Oyunlar · Sunucu Yönetimi · Özel Komutlar
 | 🛡️ Moderasyon — Kanal | `/kanal temizle` `yavaşmod` `kilitle` `kilit-aç` |
 | ⚠️ İhlal | `/ihlal listele` `sil` |
 | 🎵 Müzik | `/müzik çal` `ara` `atla` `duraklat` `devam` `dur` `ses` `sıra` `sıra-sil` `karıştır` `döngü` `şimdi` |
-| 🎮 Oyunlar | `/yazıtura` `/zar` `/8top` `/kaccm` `/tkm` `/adamasmaca` `/arena` `/isimşehir` `/vampirkoylu` `/rusruleti` |
-| 📊 Sosyal | `/anket` `/etkinlik` |
-| 📢 Mesajlaşma | `/yaz` `/embed` `/duyuru` `/hatırlat` |
-| ℹ️ Araçlar | `/ping` `/profil` `/sunucu` `/avatar` `/bot` `/yardım` |
+| 🎰 Eğlence — Oyunlar | `/yazıtura` `/zar` `/8top` `/kaccm` `/tkm` `/adamasmaca` `/arena` `/isimşehir` `/vampirkoylu` `/rusruleti` `/xox` `/kelime başlat` `/kelime bitir` |
+| 🎰 Eğlence — Araçlar | `/fikra` `/atasozu` `/trivia` `/babasakasi` `/qr` `/sifre` `/hava` `/doviz` `/altın` `/deprem` |
+| 🎮 League of Legends | `/lol rehber` `buyu` `ipuclari` `counter` `eslesme` |
+| 🏆 Spor | `/lig sıralama` `takvim` `sonuçlar` `canlı` |
+| 📊 Sosyal & Çekiliş | `/anket` `/etkinlik` `/çekiliş` |
+| 📢 Yayın & Araçlar | `/yaz` `/embed` `/duyuru` `/hatırlat` `/snipe` `/ping` `/profil` `/sunucu` `/avatar` `/bot` `/yardım` |
 | 😀 Emoji & Sticker | `/emoji-ekle` `/oto-emoji` · Sağ tık → Emojileri Ekle / Sticker'ı Ekle |
+| 📊 Sunucu Sayacı | `/sayaç kur` `kaldır` |
 | ⚙️ Özel Komutlar | `/komut-yarat` `/komut-liste` `/komut-sil` `/komut` |
+| 🧟 Project Zomboid Sunucu | `/pz-baslat` `dur` `yeniden-baslat` `durum` `baglanti` `mod-ekle` `mod-sil` `loglar` |
 | 🔧 Yönetim | `/tazele` `/restart` |
 
 ---

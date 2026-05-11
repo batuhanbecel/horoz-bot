@@ -17,39 +17,69 @@ class Admin(commands.Cog):
     @app_commands.command(name="yardım", description="Tüm komutları listeler.")
     async def yardım(self, interaction: discord.Interaction):
         moderation = (
+            "**🛡️ Moderasyon**\n"
             "**👤 /üye** · `uyar` `at` `yasakla` `sustur` `sus-kaldır`\n"
             "**🔒 /kanal** · `temizle` `yavaşmod` `kilitle` `kilit-aç`\n"
             "**⚠️ /ihlal** · `listele` `sil`"
         )
         music = (
-            "**🎵 /müzik** · `çal` `ara` `atla` `duraklat` `devam` `dur`\n"
+            "**🎵 Müzik**\n"
+            "**🎧 /müzik** · `çal` `ara` `atla` `duraklat` `devam` `dur`\n"
             "                 `ses` `sıra` `sıra-sil` `karıştır` `döngü` `şimdi`"
         )
-        games = (
-            "**🎮 Oyunlar**\n"
+        fun = (
+            "**🎰 Eğlence — Oyunlar**\n"
             "`/yazıtura` `/zar` `/8top` `/kaccm` `/tkm`\n"
-            "`/adamasmaca` `/arena` `/isimşehir` `/vampirkoylu` `/rusruleti`"
+            "`/adamasmaca` `/arena` `/isimşehir` `/vampirkoylu` `/rusruleti`\n"
+            "`/xox` `/kelime başlat` `/kelime bitir`\n"
+            "**🍀 Çekiliş** · `/çekiliş`\n"
+            "**📅 Sosyal** · `/anket` `/etkinlik`"
         )
-        social = "**📊 Sosyal** · `/anket` `/etkinlik`"
-        emoji = (
+        lol = (
+            "**🎮 League of Legends**\n"
+            "**⚔️ /lol** · `rehber` `buyu` `ipuclari` `counter` `eslesme`"
+        )
+        tools_fun = (
+            "**🧰 Eğlence — Araçlar**\n"
+            "`/fikra` `/atasozu` `/trivia` `/babasakasi` `/qr` `/sifre`\n"
+            "`/hava` `/doviz` `/altın` `/deprem`"
+        )
+        server = (
+            "**⚙️ Sunucu**\n"
             "**😀 Emoji & Sticker** · `/emoji-ekle` `/oto-emoji`\n"
-            "-# Sağ tık → **Emojileri Ekle** · **Sticker'ı Ekle**"
+            "-# Sağ tık → **Emojileri Ekle** · **Sticker'ı Ekle**\n"
+            "**📊 /sayaç** · `kur` `kaldır`\n"
+            "**💬 Özel Komutlar** · `/komut-yarat` `/komut-liste` `/komut-sil` `/komut`"
         )
-        custom = "**⚙️ Özel Komutlar** · `/komut-yarat` `/komut-liste` `/komut-sil` `/komut`"
-        publish = "**📢 Yayın** · `/yaz` `/embed` `/duyuru`"
-        admin = "**🛠️ Yönetim** · `/tazele` `/restart`"
-        tools = "**ℹ️ Araçlar** · `/yardım` `/ping` `/hatırlat` `/profil` `/sunucu` `/avatar` `/bot`"
+        publish = (
+            "**📢 Yayın & Araçlar**\n"
+            "`/yaz` `/embed` `/duyuru` `/hatırlat` `/snipe`\n"
+            "`/yardım` `/ping` `/profil` `/sunucu` `/avatar` `/bot`"
+        )
+        admin_pz = (
+            "**🛠️ Yönetim**\n"
+            "`/tazele` `/restart`\n"
+            "**🧟 PZ Sunucu** · `/pz-baslat` `/pz-durdur` `/pz-yeniden-baslat`\n"
+            "                     `/pz-durum` `/pz-baglanti` `/pz-mod-ekle`\n"
+            "                     `/pz-mod-sil` `/pz-loglar`"
+        )
+        sports = (
+            "**🏆 Spor**\n"
+            "**⚽ /lig** · `sıralama` `takvim` `sonuçlar` `canlı`"
+        )
 
         await respond(interaction, c_info_card(
             "🐓 Horoz Bot — Komut Listesi",
             groups=[
                 moderation,
                 music,
-                games,
-                social + "\n" + emoji,
-                custom,
-                publish + "\n" + admin,
-                tools,
+                fun,
+                lol,
+                tools_fun,
+                sports,
+                server,
+                publish,
+                admin_pz,
             ],
             footer="Tüm komutlar slash (/) ile kullanılır · Components V2",
         ), ephemeral=True)

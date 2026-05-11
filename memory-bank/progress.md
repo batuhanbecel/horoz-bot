@@ -22,12 +22,22 @@
 - Lazy stream URL resolution, loop'ta URL yenileme
 - PlayerView butonları: yeniden-çal, duraklat/devam, atla, dur, döngü, ses+/-, karıştır, sözler, sıra
 
-### ✅ Eğlence / Oyunlar
+### ✅ Eğlence — Oyunlar
 - `/yazıtura`, `/zar`, `/8top`, `/kaccm`
 - `/tkm` — PvP veya bot, ilk 2 galibiyet
 - `/adamasmaca` — modal harf/kelime tahmini
 - `/arena` — PvP dövüş (Kılıç/Büyü/Kalkan, 150 HP, max 20 tur)
-- `/isimşehir`, `/vampirköylü`, `/rusruleti`
+- `/isimşehir`, `/vampirköylü`, `/rusruleti`, `/xox`, `/çekiliş`
+- `/kelime` grubu — kelime zinciri (`başlat`, `bitir`)
+
+### ✅ Eğlence — Araçlar
+- `/fikra`, `/atasozu`, `/trivia`, `/babasakasi`, `/qr`, `/sifre`
+- `/hava`, `/doviz`, `/altın`, `/deprem`
+
+### ✅ League of Legends (`/lol`)
+- `/lol rehber`, `buyu`, `ipuclari`, `counter`, `eslesme`
+- 38 şampiyon için curated build, geri kalanı için rol bazlı varsayılan
+- Data Dragon ile dinamik patch, resim ve tooltip
 
 ### ✅ Sosyal
 - `/anket` — butonlu, canlı barlı
@@ -41,6 +51,7 @@
 - `/embed` — V2 embed (renk seçimli, modal)
 - `/duyuru` — duyuru + ping (modal)
 - `/hatırlat` — DM hatırlatma (1-1440 dk, async task)
+- `/snipe` — silinen son mesajı gösterir
 
 ### ✅ Yönetim
 - `/tazele` — slash sync (administrator)
@@ -51,12 +62,17 @@
 
 ### ✅ Spor — Trendyol Süper Lig (`/lig`)
 - `sıralama`, `takvim`, `sonuçlar`, `canlı`
-- api-football.com, 5dk cache (canlı 60s)
+- Wikipedia (standings) + TheSportsDB (fixtures), TTL cache
 
 ### ✅ Sunucu Araçları
 - `/emoji-ekle` — başka sunucudan özel emoji çalar (`<:isim:ID>`)
 - `/oto-emoji` — yabancı emojileri otomatik ekleme (aç/kapa, `guild_settings` tabanlı)
+- `/sayaç` grubu — istatistik ses kanalları (`kur`, `kaldır`)
 - Sağ tık context menu: **Emojileri Ekle**, **Sticker'ı Ekle**
+
+### ✅ Project Zomboid Sunucu (`/pz-*`)
+- `/pz-baslat`, `/pz-durdur`, `/pz-yeniden-baslat`, `/pz-durum`, `/pz-baglanti`
+- `/pz-mod-ekle`, `/pz-mod-sil`, `/pz-loglar`
 
 ### ✅ Loglar
 - Sunucu logları: kanal/rol oluşturma-silme, sunucu güncelleme, davet, emoji/sticker
@@ -66,7 +82,7 @@
 - Log kanalı env tabanlı (`LOG_CHANNEL_ID`)
 
 ### ✅ Dokümantasyon
-- README.md: Windows + Ubuntu kurulum kılavuzu
+- README.md: Windows + Ubuntu kurulum kılavuzu, güncel komut tablosu
 - memory-bank: AGENTS.md uyumlu dokümantasyon
 
 ## Yapılmadı / Planlı Değil

@@ -41,7 +41,7 @@ Tüm yanıtlar **Components V2** (native discord.py 2.7.1 `Container`, `TextDisp
 - `döngü`, `şimdi` (şu an çalan)
 - PlayerView butonları: ⏮️ yeniden-başlat, ⏯️ duraklat/devam, ⏭️ atla, ⏹️ dur, 🔁 döngü, 🔉/🔊 ses, 🔀 karıştır, 📜 sözler, 📋 sıra
 
-### Eğlence / Oyunlar
+### Eğlence — Oyunlar
 - `/yazıtura` — yazı tura (spin animasyon + GIF)
 - `/zar` — özelleştirilebilir zar (1-10 adet, 2-100 yüz)
 - `/8top` — sihirli 8-top
@@ -50,6 +50,30 @@ Tüm yanıtlar **Components V2** (native discord.py 2.7.1 `Container`, `TextDisp
 - `/kaccm` — bilimsel pipi ölçümü
 - `/arena` — PvP dövüş (Kılıç / Büyü / Kalkan, 150 HP, max 20 tur)
 - `/isimşehir`, `/vampirköylü`, `/rusruleti` — party oyunları
+- `/xox` — Tic-Tac-Toe (PvP veya bot)
+- `/kelime` grubu — kelime zinciri (`başlat`, `bitir`)
+- `/çekiliş` — çekiliş komutu
+
+### Eğlence — Araçlar
+- `/fikra` — rastgele Türkçe fıkra
+- `/atasozu` — rastgele atasözü ve anlamı (TDK)
+- `/trivia` — bilgi yarışması sorusu (interaktif butonlu)
+- `/babasakasi` — klasik baba şakası
+- `/qr` — metin/link için QR kod oluşturma
+- `/sifre` — güçlü rastgele şifre (spoiler + göster butonu)
+- `/hava` — hava durumu
+- `/doviz` — güncel döviz kurları (USD, EUR, GBP)
+- `/altın` — güncel altın fiyatları (TL + USD)
+- `/deprem` — son Kandilli depremleri
+
+### League of Legends (`/lol` grubu)
+- `rehber` — tam şampiyon rehberi (build, rün, counter, kombinasyon)
+- `buyu` — en iyi büyü seçimleri
+- `ipuclari` — ipuçları ve kombolar
+- `counter` — güçlü/zayıf eşleşmeler
+- `eslesme` — iki şampiyon arası lane analizi
+- 38+ şampiyon için curated build, geri kalanı rol bazlı varsayılan
+- Data Dragon ile dinamik patch, resim ve tooltip
 
 ### Sosyal
 - `/anket` — interaktif butonlu anket (max 5 seçenek, canlı sonuç barları)
@@ -66,6 +90,14 @@ Tüm yanıtlar **Components V2** (native discord.py 2.7.1 `Container`, `TextDisp
 - `/embed` — kanala V2 embed (renk seçimli, modal)
 - `/duyuru` — duyuru mesajı + ping (modal)
 - `/hatırlat` — DM hatırlatma (1-1440 dakika)
+- `/snipe` — silinen son mesajı gösterir
+
+### Project Zomboid Sunucu
+- `/pz-baslat`, `/pz-durdur`, `/pz-yeniden-baslat` — sunucu kontrolü (Admin)
+- `/pz-durum` — sunucu durum kartı
+- `/pz-baglanti` — bağlantı bilgisi
+- `/pz-mod-ekle`, `/pz-mod-sil` — Steam Workshop mod yönetimi
+- `/pz-loglar` — son logları gösterir
 
 ### Yönetim
 - `/tazele` — slash komut senkronizasyonu (administrator)
@@ -89,6 +121,7 @@ Tüm yanıtlar **Components V2** (native discord.py 2.7.1 `Container`, `TextDisp
 ### Sunucu Araçları
 - `/emoji-ekle` — başka sunucudan özel emoji çalar (`<:isim:ID>` formatı)
 - `/oto-emoji` — mesajlardaki yabancı emojileri otomatik ekleme (aç/kapa)
+- `/sayaç` grubu — istatistik ses kanalları (`kur`, `kaldır`)
 - Sağ tık → **Emojileri Ekle** context menu — mesajdaki tüm yabancı emojileri toplu ekle
 - Sağ tık → **Sticker'ı Ekle** context menu — mesajdaki sticker'ı sunucuya ekle (`server/sticker.py`)
 
